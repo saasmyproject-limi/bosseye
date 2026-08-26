@@ -17,9 +17,10 @@ import {
   X,
   AlertTriangle,
   BarChart3,
-  MessageSquare
+  MessageSquare,
+  ShoppingBag
 } from 'lucide-react';
-import { offlineDB } from '@/lib/offlineDB';
+import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import { Utilisateur, Etablissement } from '@/types';
 import BarSelectorModal from './BarSelectorModal';
 import OfflineBadge from './OfflineBadge';
@@ -41,8 +42,9 @@ export default function Sidebar() {
 
   const loadInfo = () => {
     try {
+      const etab = offlineDB.getEtablissement();
+      setEtablissement(etab);
       setCurrentUser(offlineDB.getCurrentUser());
-      setEtablissement(offlineDB.getEtablissement());
       setLowStockCount(offlineDB.getLowStockProducts().length);
       const factures = offlineDB.getFactures();
       const activeCredits = factures.filter((f) => f && f.statut === 'credit_encours' && (f.montant_restant || 0) > 0);
@@ -50,8 +52,11 @@ export default function Sidebar() {
     } catch (e) { console.error(e); }
   };
 
+  const term = getTerminology(etablissement?.type_activite);
+
   const navItems = [
     { href: '/dashboard', label: 'Dashboard Patron', icon: LayoutDashboard },
+    { href: '/ventes', label: term.salesScreenTitle, icon: ShoppingBag },
     { href: '/produits', label: 'Inventaire Stock', icon: Package, badge: lowStockCount > 0 ? lowStockCount : null },
     { href: '/comptabilite', label: 'Comptabilité & Marges', icon: BarChart3 },
     { href: '/credits', label: 'Crédits & Relances WA', icon: MessageSquare, badge: pendingCreditsCount > 0 ? pendingCreditsCount : null },
@@ -91,11 +96,11 @@ export default function Sidebar() {
           <div className="flex items-center justify-between pb-6 mb-4 border-b border-[#2D6A4F]">
             <Link href="/" className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-2xl bg-[#E8A33D] text-[#0F291E] flex items-center justify-center font-black text-lg shadow-md group-hover:scale-105 transition-transform">
-                🍺
+                {etablissement?.type_activite === 'boutique' ? '👗' : etablissement?.type_activite === 'bar' ? '🍺' : '🍟'}
               </div>
               <div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-[#E8A33D] bg-[#E8A33D]/20 px-2 py-0.5 rounded-full border border-[#E8A33D]/40">
-                  SaaS Stock
+                  {etablissement?.type_activite === 'boutique' ? 'SaaS Boutique' : 'SaaS Bar/Snack'}
                 </span>
                 <h2 className="font-serif font-black text-xl text-white tracking-tight">Stockia</h2>
               </div>

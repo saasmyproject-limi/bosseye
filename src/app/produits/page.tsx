@@ -1,114 +1,188 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Package, Plus, Search, Filter, AlertTriangle, Edit, Trash2, CheckCircle } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
-import { offlineDB } from '@/lib/offlineDB';
-import { Produit } from '@/types';
+import { Package, AlertTriangle, Plus, Search, Tag, Check, Layers } from 'lucide-react';
+import { offlineDB, getTerminology } from '@/lib/offlineDB';
+import { Produit, Etablissement, VarianteProduit } from '@/types';
 
 export default function ProduitsPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('Tous');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string>('tous');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Form State Nouveau Produit
+  // Formulaire d'ajout de produit
   const [nom, setNom] = useState('');
-  const [categorie, setCategorie] = useState('Bière');
-  const [casiersPleins, setCasiersPleins] = useState(5);
-  const [bouteillesVrac, setBouteillesVrac] = useState(0);
+  const [categorie, setCategorie] = useState('');
+  const [unite, setUnite] = useState<'bouteille' | 'casier' | 'piece'>('bouteille');
+  const [casiers, setCasiers] = useState<number>(0);
+  const [vrac, setVrac] = useState<number>(0);
   const [bouteillesParCasier, setBouteillesParCasier] = useState<12 | 24>(24);
-  const [prixAchatCasier, setPrixAchatCasier] = useState(6000);
-  const [prixVenteBouteille, setPrixVenteBouteille] = useState(700);
-  const [seuilAlerte, setSeuilAlerte] = useState(48);
+  const [quantiteTotalePiece, setQuantiteTotalePiece] = useState<number>(10);
+  const [seuilAlerte, setSeuilAlerte] = useState<number>(10);
+  const [prixAchatCasier, setPrixAchatCasier] = useState<number>(6000);
+  const [prixVenteBouteille, setPrixVenteBouteille] = useState<number>(600);
+  const [prixAchatUnitaire, setPrixAchatUnitaire] = useState<number>(250);
+
+  // Variantes pour Boutique (Taille / Couleur)
+  const [taillesInput, setTaillesInput] = useState<string>('S, M, L, XL');
+  const [couleursInput, setCouleursInput] = useState<string>('Noir, Blanc, Rouge');
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = () => {
-    setProduits(offlineDB.getProduits());
+    try {
+      const etab = offlineDB.getEtablissement();
+      setEtablissement(etab);
+      setProduits(offlineDB.getProduits());
+      if (etab.type_activite === 'boutique') {
+        setUnite('piece');
+        setCategorie('Vêtements');
+      } else {
+        setUnite('bouteille');
+        setCategorie('Bière');
+      }
+    } catch (e) { console.error(e); }
   };
 
-  const handleSaveProduit = (e: React.FormEvent) => {
+  const term = getTerminology(etablissement?.type_activite);
+
+  const categories = Array.from(new Set(produits.map((p) => p.categorie))).filter(Boolean);
+
+  const filteredProduits = produits.filter((p) => {
+    if (!p) return false;
+    const matchCat = filterCategory === 'tous' || p.categorie === filterCategory;
+    const matchSearch =
+      p.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.categorie.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  const handleCreateProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nom.trim()) return;
 
     const etab = offlineDB.getEtablissement();
+    const isBoutique = etab.type_activite === 'boutique';
+    const prodId = `prod-${Date.now()}`;
+
+    let generatedVariantes: VarianteProduit[] | undefined = undefined;
+
+    if (isBoutique && taillesInput.trim()) {
+      const tList = taillesInput.split(',').map((s) => s.trim()).filter(Boolean);
+      const cList = couleursInput.split(',').map((s) => s.trim()).filter(Boolean);
+
+      generatedVariantes = [];
+      let vIndex = 1;
+      tList.forEach((t) => {
+        const cArray = cList.length > 0 ? cList : ['Standard'];
+        cArray.forEach((c) => {
+          generatedVariantes!.push({
+            id: `var-${prodId}-${vIndex++}`,
+            produit_id: prodId,
+            sku_code: `${nom.slice(0, 3).toUpperCase()}-${t}-${c.slice(0, 3).toUpperCase()}`,
+            taille: t,
+            couleur: c,
+            quantite_stock: Math.floor(quantiteTotalePiece / (tList.length * cArray.length)) || 2,
+          });
+        });
+      });
+    }
+
+    const qTot = isBoutique
+      ? quantiteTotalePiece
+      : casiers * bouteillesParCasier + vrac;
+
+    const pAchatUnit = isBoutique ? prixAchatUnitaire : Math.round(prixAchatCasier / bouteillesParCasier);
+
     const newProd: Produit = {
-      id: 'prod-' + Date.now(),
+      id: prodId,
       etablissement_id: etab.id,
       nom: nom.trim(),
-      categorie,
-      unite: 'bouteille',
-      casiers_pleins: Number(casiersPleins) || 0,
-      bouteilles_vrac: Number(bouteillesVrac) || 0,
+      categorie: categorie.trim() || (isBoutique ? 'Articles' : 'Boissons'),
+      unite: isBoutique ? 'piece' : 'bouteille',
+      casiers_pleins: isBoutique ? 0 : casiers,
+      bouteilles_vrac: isBoutique ? 0 : vrac,
       bouteilles_par_casier: bouteillesParCasier,
-      quantite_totale_bouteilles: casiersPleins * bouteillesParCasier + bouteillesVrac,
-      seuil_alerte: Number(seuilAlerte) || 48,
-      prix_achat_casier: Number(prixAchatCasier) || 0,
-      prix_vente_bouteille: Number(prixVenteBouteille) || 0,
-      cout_achat_unitaire_cmp: Math.round((Number(prixAchatCasier) || 0) / bouteillesParCasier),
+      quantite_totale: qTot,
+      seuil_alerte: seuilAlerte,
+      prix_achat_casier: prixAchatCasier,
+      prix_vente_bouteille: prixVenteBouteille,
+      prix_achat_unitaire: pAchatUnit,
+      prix_vente_unitaire: prixVenteBouteille,
+      cout_achat_unitaire_cmp: pAchatUnit,
+      variantes: generatedVariantes,
       actif: true,
+      created_at: new Date().toISOString(),
     };
 
     offlineDB.saveProduits([newProd, ...produits]);
-    loadData();
-    setIsAddModalOpen(false);
     setNom('');
+    setIsModalOpen(false);
+    loadData();
   };
 
-  const filteredProduits = produits.filter((p) => {
-    const matchesSearch = p.nom.toLowerCase().includes(search.toLowerCase());
-    const matchesCat = categoryFilter === 'Tous' || p.categorie === categoryFilter;
-    return matchesSearch && matchesCat;
-  });
-
   return (
-    <div className="min-h-screen bg-[#0F1115] text-white flex">
+    <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex flex-col lg:flex-row font-sans">
       <Sidebar />
 
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 max-w-7xl mx-auto pb-24">
+      <main className="flex-1 lg:ml-64 p-4 lg:p-8 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-brand-border/60">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-brand-orange bg-brand-orangeLight px-2.5 py-1 rounded-full border border-brand-orange/30">
-              Gestion de Stock
+            <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full border border-[#B8442C]/30">
+              {term.stockLabel}
             </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-white mt-1">Catalogue Produits & Casiers</h1>
+            <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
+              Inventaire & Catalogues ({produits.length} {term.itemsLabel.toLowerCase()})
+            </h1>
           </div>
 
           <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="py-3 px-5 rounded-2xl bg-gradient-to-r from-brand-orange to-amber-500 hover:from-brand-orangeHover hover:to-amber-600 text-white font-black text-xs flex items-center gap-2 shadow-glow transition-transform active:scale-95"
+            onClick={() => setIsModalOpen(true)}
+            className="py-3 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs flex items-center justify-center gap-2 shadow-glow-brique transition-transform active:scale-95"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Ajouter un Produit</span>
+            <Plus className="w-4 h-4 text-white" />
+            <span>+ Ajouter un {term.itemLabel}</span>
           </button>
         </div>
 
-        {/* Filters & Search */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-6">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+        {/* Barre de Recherche et Filtres */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-gray-400" />
             <input
               type="text"
-              placeholder="Rechercher une boisson..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-brand-card border border-brand-border rounded-2xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-brand-orange"
+              placeholder={`Rechercher un ${term.itemLabel.toLowerCase()}...`}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-10 pr-4 py-3 text-xs font-bold text-[#1B4332] placeholder-gray-400 focus:outline-none focus:border-[#1B4332]"
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-            {['Tous', 'Bière', 'Soft', 'Nectar', 'Plat Chaud'].map((cat) => (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setFilterCategory('tous')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                filterCategory === 'tous'
+                  ? 'bg-[#1B4332] text-white shadow-sm'
+                  : 'bg-[#F3ECE0] text-[#1B4332] border border-[#E2D5C3]'
+              }`}
+            >
+              Tous
+            </button>
+            {categories.map((cat) => (
               <button
                 key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                  categoryFilter === cat
-                    ? 'bg-brand-orange text-white shadow-glow'
-                    : 'bg-brand-card border border-brand-border text-gray-400 hover:text-white'
+                onClick={() => setFilterCategory(cat)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                  filterCategory === cat
+                    ? 'bg-[#1B4332] text-white shadow-sm'
+                    : 'bg-[#F3ECE0] text-[#1B4332] border border-[#E2D5C3]'
                 }`}
               >
                 {cat}
@@ -117,156 +191,208 @@ export default function ProduitsPage() {
           </div>
         </div>
 
-        {/* Grid Products Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Liste / Grille des Produits */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProduits.map((p) => {
-            const isLow = (p.casiers_pleins * p.bouteilles_par_casier + p.bouteilles_vrac) <= p.seuil_alerte;
+            const isBoutique = etablissement?.type_activite === 'boutique';
+            const totalStock = p.quantite_totale || (p.casiers_pleins || 0) * (p.bouteilles_par_casier || 24) + (p.bouteilles_vrac || 0);
+            const isLowStock = totalStock <= (p.seuil_alerte || 10);
+            const priceVente = p.prix_vente_unitaire || p.prix_vente_bouteille || 0;
+            const coutCmp = p.cout_achat_unitaire_cmp || p.prix_achat_unitaire || 0;
+            const margeRatio = priceVente > 0 ? Math.round(((priceVente - coutCmp) / priceVente) * 100) : 0;
+
             return (
               <div
                 key={p.id}
-                className={`p-5 rounded-3xl bg-brand-card border transition-all flex flex-col justify-between shadow-card ${
-                  isLow ? 'border-red-500/50 bg-red-950/20 shadow-glow' : 'border-brand-border'
-                }`}
+                className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3 flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-[10px] font-black uppercase text-brand-orange bg-brand-black px-2 py-0.5 rounded-full border border-brand-border">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[10px] font-black uppercase text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full">
                       {p.categorie}
                     </span>
-                    {isLow && (
-                      <span className="text-[10px] font-black text-red-400 bg-red-950 px-2 py-0.5 rounded-full border border-red-500/40 animate-pulse">
-                        ⚠️ ALERTE SEUIL
+                    {isLowStock && (
+                      <span className="text-[10px] font-black text-red-700 bg-red-100 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="w-3 h-3" /> Stock Bas !
                       </span>
                     )}
                   </div>
 
-                  <h3 className="font-black text-base text-white mb-1">{p.nom}</h3>
-                  <div className="p-3 rounded-2xl bg-brand-black/70 border border-brand-border/60 my-3">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-400">Casiers pleins :</span>
-                      <span className="font-black text-amber-400">{p.casiers_pleins} ({p.bouteilles_par_casier}b/casier)</span>
+                  <h3 className="font-serif font-black text-lg text-[#1B4332]">{p.nom}</h3>
+
+                  {/* Variantes Boutique */}
+                  {p.variantes && p.variantes.length > 0 && (
+                    <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-1.5">
+                      <span className="text-[10px] font-black text-gray-500 uppercase block">
+                        Déclinaisons ({p.variantes.length} variantes) :
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {p.variantes.map((v) => (
+                          <span
+                            key={v.id}
+                            className="text-[10px] font-bold bg-[#F3ECE0] border border-[#E2D5C3] px-2 py-0.5 rounded-md text-[#1B4332]"
+                          >
+                            {v.taille} / {v.couleur} ({v.quantite_stock})
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-400">Bouteilles vrac :</span>
-                      <span className="font-black text-amber-400">{p.bouteilles_vrac} bouteilles</span>
-                    </div>
+                  )}
+
+                  {/* Détail Quantité Stock */}
+                  <div className="mt-3 text-xs space-y-1 text-gray-700 font-medium">
+                    {isBoutique ? (
+                      <div className="flex justify-between">
+                        <span>Quantité en stock :</span>
+                        <strong className="text-[#1B4332] font-black text-sm">{totalStock} pièces</strong>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between">
+                        <span>Casiers pleins :</span>
+                        <strong className="text-[#1B4332]">{p.casiers_pleins || 0} casier(s) ({p.bouteilles_vrac || 0} vrac)</strong>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-brand-border/60 flex items-center justify-between">
+                <div className="pt-3 border-t border-[#E2D5C3] flex items-center justify-between text-xs">
                   <div>
-                    <span className="text-[10px] text-gray-400 uppercase font-bold block">Prix Vente</span>
-                    <span className="text-sm font-black text-emerald-400">{p.prix_vente_bouteille.toLocaleString('fr-FR')} FCFA</span>
+                    <span className="text-[10px] text-gray-500 block">Prix de vente</span>
+                    <strong className="font-serif text-base font-black text-[#1B4332]">
+                      {priceVente.toLocaleString('fr-FR')} FCFA
+                    </strong>
                   </div>
-                  <span className="text-xs font-bold text-gray-400">Seuil: {p.seuil_alerte}b</span>
+                  <div className="text-right">
+                    <span className="text-[10px] text-emerald-800 block">Marge estimée</span>
+                    <strong className="text-emerald-700 font-bold">+{margeRatio}%</strong>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* MODAL AJOUT PRODUIT */}
-        {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-brand-card border border-brand-border rounded-3xl p-6 w-full max-w-md shadow-glow relative">
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-full bg-brand-black"
-              >
-                ✕
-              </button>
+        {/* Modal Création Produit / Article */}
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative max-h-[90vh] overflow-y-auto">
+              <h2 className="font-serif text-xl font-black text-[#1B4332] mb-1">
+                Ajouter un {term.itemLabel}
+              </h2>
+              <p className="text-xs text-gray-600 mb-4">
+                Définissez le nom, le prix et les variantes de votre produit.
+              </p>
 
-              <h2 className="text-xl font-black text-white mb-1">Nouveau Produit</h2>
-              <p className="text-xs text-gray-400 mb-4">Ajoutez une boisson ou un plat à votre inventaire.</p>
-
-              <form onSubmit={handleSaveProduit} className="space-y-3.5">
+              <form onSubmit={handleCreateProduct} className="space-y-3.5">
                 <div>
-                  <label className="text-xs font-bold text-gray-300 block mb-1">Nom du Produit *</label>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du produit *</label>
                   <input
                     type="text"
-                    placeholder="Ex: Heineken 65cl"
+                    placeholder="Ex: Robe de Soirée Soie / Beaufort 65cl"
                     value={nom}
                     onChange={(e) => setNom(e.target.value)}
-                    className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-sm focus:outline-none focus:border-brand-orange"
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">Catégorie</label>
-                    <select
-                      value={categorie}
-                      onChange={(e) => setCategorie(e.target.value)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
-                    >
-                      <option value="Bière">Bière</option>
-                      <option value="Soft">Soft / Nectar</option>
-                      <option value="Plat Chaud">Plat Chaud</option>
-                      <option value="Snack">Snack</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">Seuil Alerte (bouteilles)</label>
-                    <input
-                      type="number"
-                      value={seuilAlerte}
-                      onChange={(e) => setSeuilAlerte(parseInt(e.target.value) || 24)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
-                    />
-                  </div>
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Catégorie</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Robe, Chemise, Bière..."
+                    value={categorie}
+                    onChange={(e) => setCategorie(e.target.value)}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                  />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">Casiers Pleins</label>
-                    <input
-                      type="number"
-                      value={casiersPleins}
-                      onChange={(e) => setCasiersPleins(parseInt(e.target.value) || 0)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
-                    />
-                  </div>
+                {etablissement?.type_activite === 'boutique' ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-[#1B4332] block mb-1">Prix Vente Unitaire (FCFA)</label>
+                        <input
+                          type="number"
+                          value={prixVenteBouteille}
+                          onChange={(e) => setPrixVenteBouteille(Number(e.target.value))}
+                          className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-[#1B4332] block mb-1">Coût Achat Unitaire (FCFA)</label>
+                        <input
+                          type="number"
+                          value={prixAchatUnitaire}
+                          onChange={(e) => setPrixAchatUnitaire(Number(e.target.value))}
+                          className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                        />
+                      </div>
+                    </div>
 
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">Bouteilles Vrac</label>
-                    <input
-                      type="number"
-                      value={bouteillesVrac}
-                      onChange={(e) => setBouteillesVrac(parseInt(e.target.value) || 0)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
-                    />
+                    <div>
+                      <label className="text-xs font-bold text-[#1B4332] block mb-1">
+                        Tailles disponibles (séparées par virgules)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: S, M, L, XL ou 40, 41, 42"
+                        value={taillesInput}
+                        onChange={(e) => setTaillesInput(e.target.value)}
+                        className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-[#1B4332] block mb-1">
+                        Couleurs disponibles (séparées par virgules)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Noir, Blanc, Rouge, Bleu"
+                        value={couleursInput}
+                        onChange={(e) => setCouleursInput(e.target.value)}
+                        className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-[#1B4332] block mb-1">Prix Achat Casier (FCFA)</label>
+                      <input
+                        type="number"
+                        value={prixAchatCasier}
+                        onChange={(e) => setPrixAchatCasier(Number(e.target.value))}
+                        className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-[#1B4332] block mb-1">Prix Vente Bouteille (FCFA)</label>
+                      <input
+                        type="number"
+                        value={prixVenteBouteille}
+                        onChange={(e) => setPrixVenteBouteille(Number(e.target.value))}
+                        className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                      />
+                    </div>
                   </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
+                  >
+                    Enregistrer
+                  </button>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">Prix Achat Casier (F)</label>
-                    <input
-                      type="number"
-                      value={prixAchatCasier}
-                      onChange={(e) => setPrixAchatCasier(parseInt(e.target.value) || 0)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">Prix Vente Bouteille (F)</label>
-                    <input
-                      type="number"
-                      value={prixVenteBouteille}
-                      onChange={(e) => setPrixVenteBouteille(parseInt(e.target.value) || 0)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-brand-orange to-amber-500 text-white font-black text-base shadow-glow transition-transform active:scale-95 mt-2"
-                >
-                  Enregistrer le Produit
-                </button>
               </form>
             </div>
           </div>

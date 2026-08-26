@@ -1,15 +1,18 @@
-export type TypeEtablissement = 'bar' | 'snack_bar' | 'lounge';
+export type TypeActivite = 'bar' | 'snack' | 'boutique';
+export type TypeEtablissement = TypeActivite | 'snack_bar' | 'lounge'; // Rétrocompatibilité
 export type RoleUtilisateur = 'Patron' | 'Gérant' | 'Employé';
 export type TypeMouvement = 'entree' | 'sortie' | 'casse_perte';
 export type StatutAbonnement = 'essai' | 'actif' | 'expire';
 export type MethodePaiement = 'Orange Money' | 'MTN MoMo';
 export type ModePaiementVente = 'cash' | 'orange_money' | 'mtn_momo' | 'credit' | 'mixte';
 export type StatutFacture = 'payee' | 'credit_encours' | 'annulee';
+export type StatutTransaction = 'ouverte' | 'en_attente_caisse' | 'payee' | 'annulee';
 
 export interface Etablissement {
   id: string;
   nom: string;
   type: TypeEtablissement;
+  type_activite: TypeActivite;
   ville: string;
   adresse: string;
   plan: 'Basique' | 'Premium';
@@ -31,20 +34,33 @@ export interface Utilisateur {
   created_at?: string;
 }
 
+export interface VarianteProduit {
+  id: string;
+  produit_id: string;
+  sku_code?: string;
+  taille?: string; // Ex: 'S', 'M', 'L', 'XL', '42'
+  couleur?: string; // Ex: 'Noir', 'Rouge', 'Bleu Marine'
+  quantite_stock: number;
+  prix_vente_override?: number;
+}
+
 export interface Produit {
   id: string;
   etablissement_id: string;
   nom: string;
-  categorie: string; // Bière, Soft, Nectar, Plat, Liquide
-  unite: 'bouteille' | 'casier';
-  casiers_pleins: number;
-  bouteilles_vrac: number;
-  bouteilles_par_casier: 12 | 24;
-  quantite_totale_bouteilles: number;
-  seuil_alerte: number; // En bouteilles ou casiers
-  prix_achat_casier: number;
-  prix_vente_bouteille: number;
-  cout_achat_unitaire_cmp: number; // Coût d'achat moyen d'une bouteille (CMP)
+  categorie: string; // Bière, Soft, Vêtements, Chaussures, Plats
+  unite: 'bouteille' | 'casier' | 'piece' | 'unite';
+  casiers_pleins?: number;
+  bouteilles_vrac?: number;
+  bouteilles_par_casier?: 12 | 24;
+  quantite_totale: number; // Générique pour bouteilles ou pièces
+  seuil_alerte: number;
+  prix_achat_casier?: number;
+  prix_vente_bouteille?: number;
+  prix_achat_unitaire?: number;
+  prix_vente_unitaire?: number;
+  cout_achat_unitaire_cmp: number;
+  variantes?: VarianteProduit[]; // Déclinaisons taille/couleur pour boutique
   actif: boolean;
   created_at?: string;
 }
@@ -53,6 +69,7 @@ export interface MouvementStock {
   id: string;
   etablissement_id: string;
   produit_id: string;
+  variante_id?: string;
   type_mouvement: TypeMouvement;
   quantite_bouteilles: number;
   utilisateur_id: string;
@@ -63,6 +80,7 @@ export interface MouvementStock {
   
   // Joins pour l'affichage visuel
   produit?: Produit;
+  variante?: VarianteProduit;
   utilisateur?: Utilisateur;
 }
 
@@ -70,19 +88,58 @@ export interface Client {
   id: string;
   etablissement_id: string;
   nom: string;
-  telephone_whatsapp: string; // Ex: "237699001122" (Format international sans espace)
+  telephone_whatsapp: string; // Ex: "237699001122"
   note_quartier?: string;
+  total_dette_actuelle?: number;
   created_at: string;
+}
+
+export interface LigneTransaction {
+  id: string;
+  transaction_id: string;
+  produit_id: string;
+  variante_id?: string;
+  nom_produit: string;
+  detail_variante?: string; // Ex: "Taille M / Noir"
+  quantite: number;
+  prix_unitaire: number;
+  cout_unitaire_cmp: number;
+  sous_total: number;
+}
+
+export interface TransactionVente {
+  id: string;
+  etablissement_id: string;
+  numero_ticket: string; // Ex: "TRX-2026-0089"
+  type_activite: TypeActivite;
+  statut: StatutTransaction;
+  
+  table_numero?: string; // Utilisé pour les bars (ex: "Table 04")
+  serveur_id?: string;
+  caissier_id?: string;
+  client_id?: string;
+  
+  montant_total: number;
+  montant_paye?: number;
+  lignes: LigneTransaction[];
+  created_at: string;
+
+  // Joins UI
+  client?: Client;
+  serveur?: Utilisateur;
+  caissier?: Utilisateur;
 }
 
 export interface LigneFacture {
   id: string;
   facture_id: string;
   produit_id: string;
+  variante_id?: string;
   nom_produit: string;
+  detail_variante?: string;
   quantite_bouteilles: number;
   prix_unitaire_vente: number;
-  cout_unitaire_cmp: number; // CMP au moment de la vente
+  cout_unitaire_cmp: number;
   sous_total_vente: number;
   sous_total_cout: number;
   marge_brute: number;
@@ -92,21 +149,20 @@ export interface Facture {
   id: string;
   etablissement_id: string;
   numero_facture: string; // Ex: "FAC-2026-0042"
+  transaction_id?: string;
   client_id?: string;
-  utilisateur_id: string; // Caissier / Employé qui a encaissé
+  utilisateur_id: string;
   montant_total: number;
   montant_paye: number;
   montant_restant: number;
   mode_paiement: ModePaiementVente;
   statut: StatutFacture;
   
-  // Suivi Relances WhatsApp
   date_derniere_relance_whatsapp?: string;
   compteur_relances?: number;
   
   created_at: string;
 
-  // Joins pour l'UI
   client?: Client;
   utilisateur?: Utilisateur;
   lignes?: LigneFacture[];
@@ -122,7 +178,6 @@ export interface RemboursementCredit {
   note_reference?: string;
   created_at: string;
 
-  // Joins
   facture?: Facture;
   utilisateur?: Utilisateur;
 }
@@ -130,9 +185,9 @@ export interface RemboursementCredit {
 export interface ChargeJournaliere {
   id: string;
   etablissement_id: string;
-  motif: string; // Ex: "Loyer local", "Glace en bloc"
+  motif: string;
   montant: number;
-  date: string; // YYYY-MM-DD
+  date: string;
   created_at: string;
 }
 

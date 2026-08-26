@@ -3,85 +3,142 @@ import {
   Utilisateur,
   Produit,
   MouvementStock,
-  Paiement,
   Client,
   Facture,
-  LigneFacture,
   RemboursementCredit,
   ChargeJournaliere,
-  ModePaiementVente
+  TransactionVente,
+  LigneTransaction,
+  VarianteProduit,
+  TypeActivite,
+  TypeEtablissement,
+  MethodePaiement,
+  Paiement,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
+  SEED_ETABLISSEMENTS_LIST,
   SEED_UTILISATEURS,
   SEED_PRODUITS,
   SEED_MOUVEMENTS,
   SEED_CLIENTS,
   SEED_FACTURES,
   SEED_REMBOURSEMENTS,
-  SEED_CHARGES
+  SEED_CHARGES,
 } from './presetData';
 
-const STORAGE_KEYS = {
-  ETABLISSEMENTS: 'saas_etablissements',
-  ACTIVE_ETAB_ID: 'saas_active_etab_id',
-  CURRENT_USER_ID: 'saas_current_user_id',
-  UTILISATEURS: 'saas_utilisateurs',
-  PRODUITS: 'saas_produits',
-  MOUVEMENTS: 'saas_mouvements',
-  PAIEMENTS: 'saas_paiements',
-  OFFLINE_QUEUE: 'saas_offline_queue',
-  CLIENTS: 'saas_clients',
-  FACTURES: 'saas_factures',
-  REMBOURSEMENTS: 'saas_remboursements',
-  CHARGES: 'saas_charges',
+const KEYS = {
+  ACTIVE_ETAB_ID: 'takam_active_etab_id',
+  ETABLISSEMENTS: 'takam_etablissements',
+  UTILISATEURS: 'takam_utilisateurs',
+  CURRENT_USER_ID: 'takam_current_user_id',
+  PRODUITS: 'takam_produits',
+  MOUVEMENTS: 'takam_mouvements',
+  CLIENTS: 'takam_clients',
+  FACTURES: 'takam_factures',
+  TRANSACTIONS: 'takam_transactions_ventes',
+  REMBOURSEMENTS: 'takam_remboursements',
+  CHARGES: 'takam_charges',
+  OFFLINE_QUEUE: 'takam_offline_queue',
 };
 
+// Helper pour déterminer le vocabulaire selon le type d'activité
+export function getTerminology(type_activite?: TypeActivite) {
+  const isBoutique = type_activite === 'boutique';
+  const isBar = type_activite === 'bar';
+
+  return {
+    itemLabel: isBoutique ? 'Article' : 'Produit / Boisson',
+    itemsLabel: isBoutique ? 'Articles' : 'Boissons',
+    unitLabel: isBoutique ? 'Pièces' : 'Bouteilles',
+    unitSingular: isBoutique ? 'Pièce' : 'Bouteille',
+    stockLabel: isBoutique ? 'Stock d\'articles' : 'Stock de casiers & bouteilles',
+    sellerLabel: isBoutique ? 'Vendeuse' : isBar ? 'Serveuse' : 'Serveuse / Caissière',
+    salesScreenTitle: isBoutique ? 'Vente Comptoir' : isBar ? 'Gestion des Tables' : 'Prise de Commande & Caisse',
+    salesScreenDesc: isBoutique
+      ? 'Vente directe, encaissement immédiat et sélection des déclinaisons (tailles/couleurs).'
+      : isBar
+      ? 'Ouverture de table, accumulation de consommations et clôture avec addition.'
+      : 'Prise de commande par serveuse transmise instantanément en caisse.',
+  };
+}
+
 export const offlineDB = {
-  // --- MULTI-TENANT ETABLISSEMENTS ---
-  getEtablissements(): Etablissement[] {
-    if (typeof window === 'undefined') return [SEED_ETABLISSEMENT];
+  // --- ÉTABLISSEMENT & SECTEUR ---
+  getEtablissement(): Etablissement {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.ETABLISSEMENTS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const activeId = typeof window !== 'undefined' ? localStorage.getItem(KEYS.ACTIVE_ETAB_ID) : null;
+      const all = this.getEtablissements();
+      if (activeId) {
+        const found = all.find((e) => e && e.id === activeId);
+        if (found) return this.normalizeEtablissement(found);
+      }
+      return this.normalizeEtablissement(all[0] || SEED_ETABLISSEMENT);
+    } catch {
+      return this.normalizeEtablissement(SEED_ETABLISSEMENT);
+    }
+  },
+
+  normalizeEtablissement(e: Etablissement): Etablissement {
+    let act: TypeActivite = e.type_activite || 'snack';
+    if (!e.type_activite) {
+      if (e.type === 'boutique') act = 'boutique';
+      else if (e.type === 'bar' || e.type === 'lounge') act = 'bar';
+      else act = 'snack';
+    }
+    return {
+      ...e,
+      type_activite: act,
+    };
+  },
+
+  getEtablissements(): Etablissement[] {
+    try {
+      if (typeof window === 'undefined') return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+      const data = localStorage.getItem(KEYS.ETABLISSEMENTS);
+      if (!data) {
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
+        return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+      }
+      const parsed: Etablissement[] = JSON.parse(data);
+      return (parsed || []).map((e) => this.normalizeEtablissement(e));
+    } catch {
+      return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+    }
+  },
+
+  switchEtablissement(id: string) {
+    try {
+      if (typeof window !== 'undefined') return;
+      localStorage.setItem(KEYS.ACTIVE_ETAB_ID, id);
+      const users = this.getUtilisateurs();
+      const firstUserInEtab = users.find((u) => u && u.etablissement_id === id);
+      if (firstUserInEtab) {
+        localStorage.setItem(KEYS.CURRENT_USER_ID, firstUserInEtab.id);
       }
     } catch (e) {
-      console.error('Error reading etablissements:', e);
+      console.error(e);
     }
-    const initial = [SEED_ETABLISSEMENT];
-    try {
-      localStorage.setItem(STORAGE_KEYS.ETABLISSEMENTS, JSON.stringify(initial));
-    } catch (e) {}
-    return initial;
   },
 
-  getEtablissement(): Etablissement {
-    if (typeof window === 'undefined') return SEED_ETABLISSEMENT;
+  createEtablissement(params: {
+    nom: string;
+    type?: TypeEtablissement;
+    type_activite: TypeActivite;
+    ville: string;
+    adresse: string;
+    patronNom: string;
+    patronPin: string;
+  }): Etablissement {
     const etabs = this.getEtablissements();
-    try {
-      const activeId = localStorage.getItem(STORAGE_KEYS.ACTIVE_ETAB_ID);
-      const active = etabs.find((e) => e && e.id === activeId);
-      if (active) return active;
-    } catch (e) {}
-
-    if (etabs.length > 0) {
-      try { localStorage.setItem(STORAGE_KEYS.ACTIVE_ETAB_ID, etabs[0].id); } catch (e) {}
-      return etabs[0];
-    }
-    return SEED_ETABLISSEMENT;
-  },
-
-  createEtablissement(data: { nom: string; type: 'bar' | 'snack_bar' | 'lounge'; ville: string; adresse?: string; patronNom: string; patronPin: string }): Etablissement {
-    const list = this.getEtablissements();
-    const newId = 'etab-' + Date.now();
+    const newId = `etab-${Date.now()}`;
     const newEtab: Etablissement = {
       id: newId,
-      nom: data.nom || 'Nouveau Bar',
-      type: data.type || 'bar',
-      ville: data.ville || 'Douala',
-      adresse: data.adresse || 'Centre Ville',
+      nom: params.nom,
+      type: params.type || (params.type_activite as TypeEtablissement),
+      type_activite: params.type_activite,
+      ville: params.ville,
+      adresse: params.adresse,
       plan: 'Premium',
       statut_abonnement: 'essai',
       date_fin_essai: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
@@ -89,784 +146,685 @@ export const offlineDB = {
       created_at: new Date().toISOString(),
     };
 
-    const updated = [newEtab, ...list];
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORAGE_KEYS.ETABLISSEMENTS, JSON.stringify(updated));
-        localStorage.setItem(STORAGE_KEYS.ACTIVE_ETAB_ID, newId);
-      } catch (e) {}
-    }
-
-    // Créer le patron principal pour ce bar
     const newPatron: Utilisateur = {
-      id: 'user-patron-' + Date.now(),
+      id: `user-patron-${Date.now()}`,
       etablissement_id: newId,
-      nom: data.patronNom || 'Patron Principal',
+      nom: params.patronNom || 'Patron',
       role: 'Patron',
-      pin_code: data.patronPin || '1234',
+      pin_code: params.patronPin || '1234',
       actif: true,
       created_at: new Date().toISOString(),
     };
 
-    // Créer aussi un serveur / gérant démo pour ce bar
-    const newGerant: Utilisateur = {
-      id: 'user-gerant-' + Date.now(),
-      etablissement_id: newId,
-      nom: 'Jean-Paul (Gérant/Serveur)',
-      role: 'Gérant',
-      pin_code: '5678',
-      actif: true,
-      created_at: new Date().toISOString(),
-    };
-
-    let allUsers: Utilisateur[] = [];
-    if (typeof window !== 'undefined') {
-      try {
-        const savedUsers = localStorage.getItem(STORAGE_KEYS.UTILISATEURS);
-        allUsers = savedUsers ? JSON.parse(savedUsers) : SEED_UTILISATEURS;
-      } catch (e) { allUsers = SEED_UTILISATEURS; }
-      try {
-        localStorage.setItem(STORAGE_KEYS.UTILISATEURS, JSON.stringify([newPatron, newGerant, ...allUsers]));
-        localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, newPatron.id);
-      } catch (e) {}
-    }
-
-    const demoProds: Produit[] = SEED_PRODUITS.map((p) => ({
-      ...p,
-      id: `prod-${newId}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-      etablissement_id: newId,
-      cout_achat_unitaire_cmp: p.cout_achat_unitaire_cmp || Math.round((p.prix_achat_casier || 6000) / (p.bouteilles_par_casier || 24)),
-    }));
-
-    if (typeof window !== 'undefined') {
-      try {
-        const savedProds = localStorage.getItem(STORAGE_KEYS.PRODUITS);
-        const allProds: Produit[] = savedProds ? JSON.parse(savedProds) : SEED_PRODUITS;
-        localStorage.setItem(STORAGE_KEYS.PRODUITS, JSON.stringify([...demoProds, ...allProds]));
-      } catch (e) {}
+    const users = this.getUtilisateurs();
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify([newEtab, ...etabs]));
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify([newPatron, ...users]));
+        localStorage.setItem(KEYS.ACTIVE_ETAB_ID, newId);
+        localStorage.setItem(KEYS.CURRENT_USER_ID, newPatron.id);
+      }
+    } catch (e) {
+      console.error(e);
     }
 
     return newEtab;
   },
 
-  switchEtablissement(id: string): Etablissement | null {
+  processMobileMoneyPayment(params: {
+    plan?: 'Basique' | 'Premium';
+    methode: MethodePaiement;
+    telephone?: string;
+    telephone_payeur?: string;
+    reference?: string;
+    reference_transaction?: string;
+    montant?: number;
+  }) {
+    const etab = this.getEtablissement();
+    const now = new Date();
+    const nextPay = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const updated = {
+      ...etab,
+      plan: params.plan,
+      statut_abonnement: 'actif' as const,
+      date_prochain_paiement: nextPay,
+    };
+
+    const phone = params.telephone || params.telephone_payeur || '';
+    const ref = params.reference || params.reference_transaction || '';
+
+    const newPaiement: Paiement = {
+      id: `pay-${Date.now()}`,
+      etablissement_id: etab.id,
+      montant: params.montant || (params.plan === 'Premium' ? 25000 : 15000),
+      methode: params.methode,
+      telephone_payeur: phone,
+      reference_transaction: ref,
+      statut: 'reussi',
+      created_at: now.toISOString(),
+    };
+
     const etabs = this.getEtablissements();
-    const target = etabs.find((e) => e && e.id === id);
-    if (target && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORAGE_KEYS.ACTIVE_ETAB_ID, id);
-        // Basculer sur le premier utilisateur du bar sélectionné
-        const users = this.getUtilisateursForEtablissement(id);
-        if (users.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, users[0].id);
-        }
-      } catch (e) {}
-      return target;
-    }
-    return null;
-  },
-
-  // --- AUTHENTIFICATION PAR PIN & SÉLECTION DE RÔLE ---
-  loginWithPin(pinCode: string): { user: Utilisateur; etablissement: Etablissement } | null {
-    if (!pinCode) return null;
-    const activeEtab = this.getEtablissement();
-    const users = this.getUtilisateurs();
-    const matched = users.find((u) => u && u.pin_code && u.pin_code.toString().trim() === pinCode.toString().trim() && u.actif);
-
-    if (matched) {
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, matched.id);
-        } catch (e) {}
-      }
-      return { user: matched, etablissement: activeEtab };
-    }
-    return null;
-  },
-
-  setCurrentUserById(userId: string): Utilisateur | null {
-    const users = this.getUtilisateurs();
-    const matched = users.find((u) => u && u.id === userId);
-    if (matched && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, matched.id);
-      } catch (e) {}
-      return matched;
-    }
-    return null;
-  },
-
-  getCurrentUser(): Utilisateur {
-    const users = this.getUtilisateurs();
-    if (typeof window === 'undefined') return users[0] || SEED_UTILISATEURS[0];
+    const newEtabs = etabs.map((e) => (e.id === etab.id ? updated : e));
     try {
-      const currentId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
-      const current = users.find((u) => u && u.id === currentId);
-      if (current) return current;
-    } catch (e) {}
-    return users[0] || SEED_UTILISATEURS[0];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(newEtabs));
+      }
+    } catch (e) { console.error(e); }
+    return newPaiement;
   },
 
   // --- UTILISATEURS ---
-  getUtilisateurs(): Utilisateur[] {
-    const etab = this.getEtablissement();
-    return this.getUtilisateursForEtablissement(etab.id);
-  },
-
-  getUtilisateursForEtablissement(etabId: string): Utilisateur[] {
-    if (typeof window === 'undefined') return SEED_UTILISATEURS.filter((u) => u.etablissement_id === etabId);
-    let allUsers: Utilisateur[] = [];
+  getCurrentUser(): Utilisateur {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.UTILISATEURS);
-      if (saved) {
-        allUsers = JSON.parse(saved);
-      } else {
-        allUsers = SEED_UTILISATEURS;
-        localStorage.setItem(STORAGE_KEYS.UTILISATEURS, JSON.stringify(allUsers));
+      const users = this.getUtilisateurs();
+      const currentId = typeof window !== 'undefined' ? localStorage.getItem(KEYS.CURRENT_USER_ID) : null;
+      if (currentId) {
+        const found = users.find((u) => u && u.id === currentId);
+        if (found) return found;
       }
-    } catch (e) {
-      allUsers = SEED_UTILISATEURS;
+      return users[0] || SEED_UTILISATEURS[0];
+    } catch {
+      return SEED_UTILISATEURS[0];
     }
-
-    const filtered = allUsers.filter((u) => u && u.etablissement_id === etabId);
-    if (filtered.length > 0) return filtered;
-    
-    // Si aucun utilisateur n'existe encore pour cet établissement, générer le patron par défaut
-    const defaultUsers = SEED_UTILISATEURS.map((u) => ({ ...u, etablissement_id: etabId }));
-    try {
-      localStorage.setItem(STORAGE_KEYS.UTILISATEURS, JSON.stringify([...defaultUsers, ...allUsers]));
-    } catch (e) {}
-    return defaultUsers;
   },
 
-  addUtilisateur(user: Omit<Utilisateur, 'id' | 'etablissement_id'>): Utilisateur {
-    const etab = this.getEtablissement();
-    let allUsers: Utilisateur[] = [];
+  setCurrentUserById(id: string) {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.UTILISATEURS);
-      allUsers = saved ? JSON.parse(saved) : SEED_UTILISATEURS;
-    } catch (e) { allUsers = SEED_UTILISATEURS; }
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.CURRENT_USER_ID, id);
+    } catch (e) {
+      console.error(e);
+    }
+  },
 
+  getUtilisateurs(): Utilisateur[] {
+    try {
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.UTILISATEURS);
+      if (!data) {
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
+        return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etab.id);
+      }
+      const parsed: Utilisateur[] = JSON.parse(data);
+      return (parsed || []).filter((u) => u && u.etablissement_id === etab.id);
+    } catch {
+      return SEED_UTILISATEURS;
+    }
+  },
+
+  loginWithPin(code: string): { success: boolean; user?: Utilisateur; message?: string } {
+    const users = this.getUtilisateurs();
+    const match = users.find((u) => u && u.actif && u.pin_code === code.trim());
+    if (match) {
+      this.setCurrentUserById(match.id);
+      return { success: true, user: match };
+    }
+    return { success: false, message: 'Code PIN incorrect. Réessayez.' };
+  },
+
+  addUtilisateur(user: Partial<Utilisateur> & { nom: string; role: any; pin_code: string }): Utilisateur {
+    const etab = this.getEtablissement();
+    const allUsers = this.getAllUtilisateursGlobal();
     const newUser: Utilisateur = {
       ...user,
-      id: 'user-' + Date.now(),
+      id: `user-${Date.now()}`,
       etablissement_id: etab.id,
+      actif: user.actif ?? true,
       created_at: new Date().toISOString(),
     };
-
     const updated = [newUser, ...allUsers];
-    if (typeof window !== 'undefined') {
-      try { localStorage.setItem(STORAGE_KEYS.UTILISATEURS, JSON.stringify(updated)); } catch (e) {}
-    }
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
     return newUser;
   },
 
-  toggleUtilisateurStatus(id: string): void {
-    if (typeof window === 'undefined') return;
+  getAllUtilisateursGlobal(): Utilisateur[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.UTILISATEURS);
-      if (!saved) return;
-      const allUsers: Utilisateur[] = JSON.parse(saved);
-      const updated = allUsers.map((u) => (u && u.id === id ? { ...u, actif: !u.actif } : u));
-      localStorage.setItem(STORAGE_KEYS.UTILISATEURS, JSON.stringify(updated));
-    } catch (e) {}
+      if (typeof window === 'undefined') return SEED_UTILISATEURS;
+      const data = localStorage.getItem(KEYS.UTILISATEURS);
+      return data ? JSON.parse(data) : SEED_UTILISATEURS;
+    } catch { return SEED_UTILISATEURS; }
   },
 
-  // --- PRODUITS & CMP ---
+  toggleUtilisateurStatus(id: string) {
+    const allUsers = this.getAllUtilisateursGlobal();
+    const updated = allUsers.map((u) => (u.id === id ? { ...u, actif: !u.actif } : u));
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+  },
+
+  // --- PRODUITS & VARIANTES ---
   getProduits(): Produit[] {
-    const etab = this.getEtablissement();
-    if (typeof window === 'undefined') return SEED_PRODUITS.filter((p) => p.etablissement_id === etab.id);
-    let allProds: Produit[] = [];
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.PRODUITS);
-      if (saved) {
-        allProds = JSON.parse(saved);
-      } else {
-        allProds = SEED_PRODUITS;
-        localStorage.setItem(STORAGE_KEYS.PRODUITS, JSON.stringify(allProds));
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.PRODUITS);
+      if (!data) {
+        localStorage.setItem(KEYS.PRODUITS, JSON.stringify(SEED_PRODUITS));
+        return SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
       }
-    } catch (e) {
-      allProds = SEED_PRODUITS;
+      const parsed: Produit[] = JSON.parse(data);
+      return (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
+    } catch {
+      return SEED_PRODUITS;
     }
-
-    return allProds
-      .filter((p) => p && p.etablissement_id === etab.id)
-      .map((p) => ({
-        ...p,
-        casiers_pleins: p.casiers_pleins ?? 0,
-        bouteilles_vrac: p.bouteilles_vrac ?? 0,
-        bouteilles_par_casier: p.bouteilles_par_casier || 24,
-        quantite_totale_bouteilles: p.quantite_totale_bouteilles ?? (p.casiers_pleins * (p.bouteilles_par_casier || 24) + p.bouteilles_vrac),
-        cout_achat_unitaire_cmp: p.cout_achat_unitaire_cmp ?? Math.round((p.prix_achat_casier || 6000) / (p.bouteilles_par_casier || 24)),
-      }));
   },
 
-  saveProduits(produits: Produit[]): void {
-    const etab = this.getEtablissement();
-    if (typeof window === 'undefined') return;
+  saveProduits(produits: Produit[]) {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.PRODUITS);
-      const allProds: Produit[] = saved ? JSON.parse(saved) : SEED_PRODUITS;
-      const otherProds = allProds.filter((p) => p && p.etablissement_id !== etab.id);
-      localStorage.setItem(STORAGE_KEYS.PRODUITS, JSON.stringify([...produits, ...otherProds]));
-    } catch (e) {}
+      const etab = this.getEtablissement();
+      const allOther = this.getAllProduitsGlobal().filter((p) => p && p.etablissement_id !== etab.id);
+      const newAll = [...produits, ...allOther];
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.PRODUITS, JSON.stringify(newAll));
+    } catch (e) { console.error(e); }
+  },
+
+  getAllProduitsGlobal(): Produit[] {
+    try {
+      if (typeof window === 'undefined') return SEED_PRODUITS;
+      const data = localStorage.getItem(KEYS.PRODUITS);
+      return data ? JSON.parse(data) : SEED_PRODUITS;
+    } catch { return SEED_PRODUITS; }
   },
 
   getLowStockProducts(): Produit[] {
     const prods = this.getProduits();
     return prods.filter((p) => {
-      const totalBottles = (p.casiers_pleins || 0) * (p.bouteilles_par_casier || 24) + (p.bouteilles_vrac || 0);
-      return totalBottles <= (p.seuil_alerte || 48);
+      if (!p) return false;
+      const totalUnits = (p.casiers_pleins || 0) * (p.bouteilles_par_casier || 24) + (p.bouteilles_vrac || 0) + (p.quantite_totale || 0);
+      return totalUnits <= (p.seuil_alerte || 10);
     });
   },
 
-  // --- MOUVEMENTS DE STOCK & CMP ---
-  getMouvements(): MouvementStock[] {
-    const etab = this.getEtablissement();
-    if (typeof window === 'undefined') return SEED_MOUVEMENTS.filter((m) => m.etablissement_id === etab.id);
-    let allMvts: MouvementStock[] = [];
+  // --- TRANSACTIONS DE VENTE (MOTEUR UNIQUE) ---
+  getTransactions(): TransactionVente[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.MOUVEMENTS);
-      if (saved) {
-        allMvts = JSON.parse(saved);
-      } else {
-        allMvts = SEED_MOUVEMENTS;
-        localStorage.setItem(STORAGE_KEYS.MOUVEMENTS, JSON.stringify(allMvts));
-      }
-    } catch (e) {
-      allMvts = SEED_MOUVEMENTS;
-    }
-
-    const prods = this.getProduits();
-    const users = this.getUtilisateurs();
-
-    return allMvts
-      .filter((m) => m && m.etablissement_id === etab.id)
-      .map((m) => ({
-        ...m,
-        produit: prods.find((p) => p.id === m.produit_id),
-        utilisateur: users.find((u) => u.id === m.utilisateur_id),
-      }));
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.TRANSACTIONS);
+      const parsed: TransactionVente[] = data ? JSON.parse(data) : [];
+      return (parsed || []).filter((t) => t && t.etablissement_id === etab.id);
+    } catch { return []; }
   },
 
-  addMouvementStock(data: {
-    produit_id: string;
-    type_mouvement: 'entree' | 'sortie' | 'casse_perte';
-    quantite_bouteilles: number;
-    prix_achat_casier_nouveau?: number;
-    utilisateur_id?: string;
-    note_motif: string;
-  }): MouvementStock {
-    const etab = this.getEtablissement();
-    const currentUser = this.getCurrentUser();
-    const isOnline = typeof window !== 'undefined' ? navigator.onLine : true;
+  saveTransaction(trx: TransactionVente): TransactionVente {
+    const all = this.getAllTransactionsGlobal();
+    const existingIndex = all.findIndex((t) => t.id === trx.id);
+    let updated: TransactionVente[];
+    if (existingIndex >= 0) {
+      all[existingIndex] = trx;
+      updated = [...all];
+    } else {
+      updated = [trx, ...all];
+    }
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    return trx;
+  },
 
+  getAllTransactionsGlobal(): TransactionVente[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.TRANSACTIONS);
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
+  },
+
+  // --- MOUVEMENTS STOCK ---
+  getMouvements(): MouvementStock[] {
+    try {
+      const etab = this.getEtablissement();
+      const users = this.getAllUtilisateursGlobal();
+      const prods = this.getAllProduitsGlobal();
+      if (typeof window === 'undefined') return SEED_MOUVEMENTS.filter((m) => m && m.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.MOUVEMENTS);
+      const list: MouvementStock[] = data ? JSON.parse(data) : SEED_MOUVEMENTS;
+
+      return (list || [])
+        .filter((m) => m && m.etablissement_id === etab.id)
+        .map((m) => ({
+          ...m,
+          utilisateur: users.find((u) => u && u.id === m.utilisateur_id),
+          produit: prods.find((p) => p && p.id === m.produit_id),
+        }));
+    } catch {
+      return SEED_MOUVEMENTS;
+    }
+  },
+
+  addMouvementStock(mvt: Omit<MouvementStock, 'id' | 'etablissement_id' | 'sync_status' | 'client_timestamp' | 'created_at'>): MouvementStock {
+    const etab = this.getEtablissement();
+    const nowIso = new Date().toISOString();
     const newMvt: MouvementStock = {
-      id: 'mvt-' + Date.now(),
+      ...mvt,
+      id: `mvt-${Date.now()}`,
       etablissement_id: etab.id,
-      produit_id: data.produit_id,
-      type_mouvement: data.type_mouvement,
-      quantite_bouteilles: data.quantite_bouteilles,
-      utilisateur_id: data.utilisateur_id || currentUser.id,
-      note_motif: data.note_motif || '',
-      sync_status: isOnline ? 'synced' : 'pending_offline',
-      client_timestamp: new Date().toISOString(),
-      created_at: new Date().toISOString(),
+      sync_status: typeof navigator !== 'undefined' && !navigator.onLine ? 'pending_offline' : 'synced',
+      client_timestamp: nowIso,
+      created_at: nowIso,
     };
 
-    const delta = data.type_mouvement === 'entree' ? data.quantite_bouteilles : -data.quantite_bouteilles;
-    const produits = this.getProduits();
-    const updatedProduits = produits.map((p) => {
-      if (p.id === data.produit_id) {
-        const bpc = p.bouteilles_par_casier || 24;
-        const oldTotal = (p.casiers_pleins || 0) * bpc + (p.bouteilles_vrac || 0);
-        let totalBottles = oldTotal + delta;
-        if (totalBottles < 0) totalBottles = 0;
-
-        let newCMP = p.cout_achat_unitaire_cmp || Math.round((p.prix_achat_casier || 6000) / bpc);
-
-        if (data.type_mouvement === 'entree' && data.prix_achat_casier_nouveau) {
-          const newUnitPrice = Math.round(data.prix_achat_casier_nouveau / bpc);
-          if (oldTotal + data.quantite_bouteilles > 0) {
-            newCMP = Math.round(
-              (oldTotal * newCMP + data.quantite_bouteilles * newUnitPrice) / (oldTotal + data.quantite_bouteilles)
-            );
-          }
-        }
-
-        const casiers = Math.floor(totalBottles / bpc);
-        const vrac = totalBottles % bpc;
-
-        return {
-          ...p,
-          casiers_pleins: casiers,
-          bouteilles_vrac: vrac,
-          quantite_totale_bouteilles: totalBottles,
-          cout_achat_unitaire_cmp: newCMP,
-          prix_achat_casier: data.prix_achat_casier_nouveau || p.prix_achat_casier,
-        };
-      }
-      return p;
-    });
-    this.saveProduits(updatedProduits);
-
-    let allMvts: MouvementStock[] = [];
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.MOUVEMENTS);
-      allMvts = saved ? JSON.parse(saved) : SEED_MOUVEMENTS;
-    } catch (e) { allMvts = SEED_MOUVEMENTS; }
-
+    const allMvts = this.getAllMouvementsGlobal();
     const updatedMvts = [newMvt, ...allMvts];
-    if (typeof window !== 'undefined') {
-      try { localStorage.setItem(STORAGE_KEYS.MOUVEMENTS, JSON.stringify(updatedMvts)); } catch (e) {}
-    }
 
-    if (!isOnline) {
-      this.addToOfflineQueue(newMvt);
-    }
+    // Mise à jour du stock produit
+    const prods = this.getProduits();
+    const updatedProds = prods.map((p) => {
+      if (p.id !== mvt.produit_id) return p;
+
+      let newVrac = p.bouteilles_vrac || 0;
+      let newCasiers = p.casiers_pleins || 0;
+      let newTotale = p.quantite_totale || 0;
+
+      if (mvt.type_mouvement === 'entree') {
+        newVrac += mvt.quantite_bouteilles;
+        newTotale += mvt.quantite_bouteilles;
+      } else {
+        newVrac = Math.max(0, newVrac - mvt.quantite_bouteilles);
+        newTotale = Math.max(0, newTotale - mvt.quantite_bouteilles);
+      }
+
+      let updatedVariantes = p.variantes;
+      if (mvt.variante_id && p.variantes) {
+        updatedVariantes = p.variantes.map((v) => {
+          if (v.id !== mvt.variante_id) return v;
+          const newQty = mvt.type_mouvement === 'entree'
+            ? v.quantite_stock + mvt.quantite_bouteilles
+            : Math.max(0, v.quantite_stock - mvt.quantite_bouteilles);
+          return { ...v, quantite_stock: newQty };
+        });
+      }
+
+      return {
+        ...p,
+        bouteilles_vrac: newVrac,
+        casiers_pleins: newCasiers,
+        quantite_totale: newTotale,
+        variantes: updatedVariantes,
+      };
+    });
+
+    this.saveProduits(updatedProds);
+
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(updatedMvts));
+    } catch (e) { console.error(e); }
 
     return newMvt;
   },
 
-  // --- CLIENTS ---
-  getClients(): Client[] {
-    const etab = this.getEtablissement();
-    if (typeof window === 'undefined') return SEED_CLIENTS.filter((c) => c.etablissement_id === etab.id);
-    let allClients: Client[] = [];
+  getAllMouvementsGlobal(): MouvementStock[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CLIENTS);
-      if (saved) {
-        allClients = JSON.parse(saved);
-      } else {
-        allClients = SEED_CLIENTS;
-        localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(allClients));
-      }
-    } catch (e) {
-      allClients = SEED_CLIENTS;
-    }
-
-    const factures = this.getFactures();
-    return allClients
-      .filter((c) => c && c.etablissement_id === etab.id)
-      .map((c) => {
-        const clientFactures = factures.filter((f) => f.client_id === c.id && f.statut === 'credit_encours');
-        const totalDette = clientFactures.reduce((acc, f) => acc + (f.montant_restant || 0), 0);
-        return {
-          ...c,
-          total_dette_actuelle: totalDette,
-        };
-      });
+      if (typeof window === 'undefined') return SEED_MOUVEMENTS;
+      const data = localStorage.getItem(KEYS.MOUVEMENTS);
+      return data ? JSON.parse(data) : SEED_MOUVEMENTS;
+    } catch { return SEED_MOUVEMENTS; }
   },
 
-  addClient(data: { nom: string; telephone_whatsapp: string; note_quartier?: string }): Client {
-    const etab = this.getEtablissement();
-    let allClients: Client[] = [];
+  // --- CLIENTS ---
+  getClients(): Client[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CLIENTS);
-      allClients = saved ? JSON.parse(saved) : SEED_CLIENTS;
-    } catch (e) { allClients = SEED_CLIENTS; }
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return SEED_CLIENTS.filter((c) => c && c.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.CLIENTS);
+      if (!data) {
+        localStorage.setItem(KEYS.CLIENTS, JSON.stringify(SEED_CLIENTS));
+        return SEED_CLIENTS.filter((c) => c && c.etablissement_id === etab.id);
+      }
+      const parsed: Client[] = JSON.parse(data);
+      return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
+    } catch { return SEED_CLIENTS; }
+  },
 
-    let phone = (data.telephone_whatsapp || '').replace(/[^0-9]/g, '');
-    if (phone.length === 9) phone = '237' + phone;
-
+  addClient(c: Omit<Client, 'id' | 'etablissement_id' | 'created_at'>): Client {
+    const etab = this.getEtablissement();
     const newClient: Client = {
-      id: 'client-' + Date.now(),
+      ...c,
+      id: `client-${Date.now()}`,
       etablissement_id: etab.id,
-      nom: data.nom || 'Client Inconnu',
-      telephone_whatsapp: phone || '237600000000',
-      note_quartier: data.note_quartier || '',
+      telephone_whatsapp: c.telephone_whatsapp.replace(/[^0-9]/g, ''),
+      total_dette_actuelle: 0,
       created_at: new Date().toISOString(),
     };
-
-    const updated = [newClient, ...allClients];
-    if (typeof window !== 'undefined') {
-      try { localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(updated)); } catch (e) {}
-    }
+    const all = this.getAllClientsGlobal();
+    const updated = [newClient, ...all];
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.CLIENTS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
     return newClient;
   },
 
-  // --- FACTURATION & CRÉDITS ---
-  getFactures(): Facture[] {
-    const etab = this.getEtablissement();
-    if (typeof window === 'undefined') return SEED_FACTURES.filter((f) => f.etablissement_id === etab.id);
-    let allFacs: Facture[] = [];
+  getAllClientsGlobal(): Client[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.FACTURES);
-      if (saved) {
-        allFacs = JSON.parse(saved);
-      } else {
-        allFacs = SEED_FACTURES;
-        localStorage.setItem(STORAGE_KEYS.FACTURES, JSON.stringify(allFacs));
-      }
-    } catch (e) {
-      allFacs = SEED_FACTURES;
-    }
-
-    const clients = this.getClients();
-    const users = this.getUtilisateurs();
-
-    return allFacs
-      .filter((f) => f && f.etablissement_id === etab.id)
-      .map((f) => ({
-        ...f,
-        client: clients.find((c) => c.id === f.client_id),
-        utilisateur: users.find((u) => u.id === f.utilisateur_id),
-        lignes: (f.lignes || []).map((l) => ({
-          ...l,
-          sous_total_cout: l.sous_total_cout ?? 0,
-          marge_brute: l.marge_brute ?? (l.sous_total_vente - (l.sous_total_cout || 0)),
-        })),
-      }));
+      if (typeof window === 'undefined') return SEED_CLIENTS;
+      const data = localStorage.getItem(KEYS.CLIENTS);
+      return data ? JSON.parse(data) : SEED_CLIENTS;
+    } catch { return SEED_CLIENTS; }
   },
 
-  createFacture(data: {
+  // --- FACTURES ---
+  getFactures(): Facture[] {
+    try {
+      const etab = this.getEtablissement();
+      const users = this.getAllUtilisateursGlobal();
+      const clients = this.getAllClientsGlobal();
+      if (typeof window === 'undefined') return SEED_FACTURES.filter((f) => f && f.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.FACTURES);
+      const allFacs: Facture[] = data ? JSON.parse(data) : SEED_FACTURES;
+
+      return allFacs
+        .filter((f) => f && f.etablissement_id === etab.id)
+        .map((f) => ({
+          ...f,
+          client: clients.find((c) => c && c.id === f.client_id),
+          utilisateur: users.find((u) => u && u.id === f.utilisateur_id),
+          lignes: (f.lignes || []).map((l) => ({
+            ...l,
+            sous_total_cout: l ? (l.sous_total_cout ?? 0) : 0,
+            marge_brute: l ? (l.marge_brute ?? ((l.sous_total_vente || 0) - (l.sous_total_cout || 0))) : 0,
+          })),
+        }));
+    } catch {
+      return SEED_FACTURES;
+    }
+  },
+
+  createFacture(params: {
+    lignes: Array<{
+      produit_id: string;
+      variante_id?: string;
+      nom_produit?: string;
+      detail_variante?: string;
+      quantite?: number;
+      quantite_bouteilles?: number;
+      prix_unitaire?: number;
+      prix_unitaire_vente?: number;
+    }>;
+    mode_paiement: 'cash' | 'orange_money' | 'mtn_momo' | 'credit';
+    montant_paye?: number;
     client_id?: string;
-    mode_paiement: ModePaiementVente;
-    montant_paye: number;
-    lignes: Array<{ produit_id: string; quantite_bouteilles: number }>;
+    transaction_id?: string;
   }): Facture {
     const etab = this.getEtablissement();
     const currentUser = this.getCurrentUser();
-    const produits = this.getProduits();
-
-    const existingFactures = this.getFactures();
-    const seqNumber = existingFactures.length + 1;
-    const numStr = `FAC-${new Date().getFullYear()}-${seqNumber.toString().padStart(4, '0')}`;
+    const prods = this.getProduits();
 
     let totalVente = 0;
-    const lignesCompletes: LigneFacture[] = [];
+    let totalCout = 0;
 
-    data.lignes.forEach((item) => {
-      const p = produits.find((prod) => prod.id === item.produit_id);
-      if (p) {
-        const coutCMP = p.cout_achat_unitaire_cmp || Math.round((p.prix_achat_casier || 6000) / (p.bouteilles_par_casier || 24));
-        const sousTotalVente = item.quantite_bouteilles * (p.prix_vente_bouteille || 600);
-        const sousTotalCout = item.quantite_bouteilles * coutCMP;
-        const marge = sousTotalVente - sousTotalCout;
+    const lignesFacture = params.lignes.map((l, index) => {
+      const prod = prods.find((p) => p.id === l.produit_id);
+      const pName = l.nom_produit || prod?.nom || 'Article';
+      const coutCmp = prod ? (prod.cout_achat_unitaire_cmp || prod.prix_achat_unitaire || 0) : 0;
+      const qty = l.quantite ?? l.quantite_bouteilles ?? 1;
+      const pUnit = l.prix_unitaire ?? l.prix_unitaire_vente ?? 0;
+      const sTotalVente = qty * pUnit;
+      const sTotalCout = qty * coutCmp;
+      const marge = sTotalVente - sTotalCout;
 
-        totalVente += sousTotalVente;
+      totalVente += sTotalVente;
+      totalCout += sTotalCout;
 
-        lignesCompletes.push({
-          id: 'lig-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
-          facture_id: '',
-          produit_id: p.id,
-          nom_produit: p.nom,
-          quantite_bouteilles: item.quantite_bouteilles,
-          prix_unitaire_vente: p.prix_vente_bouteille || 600,
-          cout_unitaire_cmp: coutCMP,
-          sous_total_vente: sousTotalVente,
-          sous_total_cout: sousTotalCout,
-          marge_brute: marge,
-        });
-
+      if (prod) {
         this.addMouvementStock({
-          produit_id: p.id,
+          produit_id: prod.id,
+          variante_id: l.variante_id,
           type_mouvement: 'sortie',
-          quantite_bouteilles: item.quantite_bouteilles,
-          note_motif: `Facture ${numStr}`,
+          quantite_bouteilles: qty,
+          utilisateur_id: currentUser.id,
+          note_motif: `Vente Facture #${params.transaction_id || 'COMPTOIR'}`,
         });
       }
+
+      return {
+        id: `lig-${Date.now()}-${index}`,
+        facture_id: '',
+        produit_id: l.produit_id,
+        variante_id: l.variante_id,
+        nom_produit: pName,
+        detail_variante: l.detail_variante,
+        quantite_bouteilles: qty,
+        prix_unitaire_vente: pUnit,
+        cout_unitaire_cmp: coutCmp,
+        sous_total_vente: sTotalVente,
+        sous_total_cout: sTotalCout,
+        marge_brute: marge,
+      };
     });
 
-    const montantRestant = Math.max(0, totalVente - (data.montant_paye || 0));
-    const isCredit = data.mode_paiement === 'credit' || montantRestant > 0;
+    const mPaye = params.mode_paiement === 'credit' ? (params.montant_paye || 0) : totalVente;
+    const mRestant = Math.max(0, totalVente - mPaye);
+    const isCredit = mRestant > 0 || params.mode_paiement === 'credit';
 
-    const newFacture: Facture = {
-      id: 'fac-' + Date.now(),
+    const numSeq = Math.floor(1000 + Math.random() * 9000);
+    const newFac: Facture = {
+      id: `fac-${Date.now()}`,
       etablissement_id: etab.id,
-      numero_facture: numStr,
-      client_id: data.client_id,
+      numero_facture: `FAC-2026-${numSeq}`,
+      transaction_id: params.transaction_id,
+      client_id: params.client_id,
       utilisateur_id: currentUser.id,
       montant_total: totalVente,
-      montant_paye: data.montant_paye || 0,
-      montant_restant: montantRestant,
-      mode_paiement: data.mode_paiement,
+      montant_paye: mPaye,
+      montant_restant: mRestant,
+      mode_paiement: params.mode_paiement,
       statut: isCredit ? 'credit_encours' : 'payee',
       created_at: new Date().toISOString(),
-      lignes: lignesCompletes.map((l) => ({ ...l, facture_id: 'fac-' + Date.now() })),
+      lignes: lignesFacture,
     };
 
-    let allFacs: Facture[] = [];
+    lignesFacture.forEach((l) => (l.facture_id = newFac.id));
+
+    const allFacs = this.getAllFacturesGlobal();
+    const updatedFacs = [newFac, ...allFacs];
+
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.FACTURES);
-      allFacs = saved ? JSON.parse(saved) : SEED_FACTURES;
-    } catch (e) { allFacs = SEED_FACTURES; }
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.FACTURES, JSON.stringify(updatedFacs));
+    } catch (e) { console.error(e); }
 
-    const updated = [newFacture, ...allFacs];
-    if (typeof window !== 'undefined') {
-      try { localStorage.setItem(STORAGE_KEYS.FACTURES, JSON.stringify(updated)); } catch (e) {}
-    }
-
-    return newFacture;
+    return newFac;
   },
 
-  recordWhatsAppRelance(factureId: string): void {
-    if (typeof window === 'undefined') return;
+  getAllFacturesGlobal(): Facture[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.FACTURES);
-      const allFacs: Facture[] = saved ? JSON.parse(saved) : SEED_FACTURES;
-
-      const updated = allFacs.map((f) => {
-        if (f && f.id === factureId) {
-          return {
-            ...f,
-            date_derniere_relance_whatsapp: new Date().toISOString(),
-            compteur_relances: (f.compteur_relances || 0) + 1,
-          };
-        }
-        return f;
-      });
-
-      localStorage.setItem(STORAGE_KEYS.FACTURES, JSON.stringify(updated));
-    } catch (e) {}
+      if (typeof window === 'undefined') return SEED_FACTURES;
+      const data = localStorage.getItem(KEYS.FACTURES);
+      return data ? JSON.parse(data) : SEED_FACTURES;
+    } catch { return SEED_FACTURES; }
   },
 
-  // --- REMBOURSEMENTS DE CRÉDIT ---
-  getRemboursements(): RemboursementCredit[] {
-    const etab = this.getEtablissement();
-    if (typeof window === 'undefined') return SEED_REMBOURSEMENTS.filter((r) => r.etablissement_id === etab.id);
-    let allRembs: RemboursementCredit[] = [];
+  recordWhatsAppRelance(factureId: string) {
+    const allFacs = this.getAllFacturesGlobal();
+    const updated = allFacs.map((f) => {
+      if (f.id !== factureId) return f;
+      return {
+        ...f,
+        date_derniere_relance_whatsapp: new Date().toISOString(),
+        compteur_relances: (f.compteur_relances || 0) + 1,
+      };
+    });
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.REMBOURSEMENTS);
-      if (saved) {
-        allRembs = JSON.parse(saved);
-      } else {
-        allRembs = SEED_REMBOURSEMENTS;
-        localStorage.setItem(STORAGE_KEYS.REMBOURSEMENTS, JSON.stringify(allRembs));
-      }
-    } catch (e) {
-      allRembs = SEED_REMBOURSEMENTS;
-    }
-    return allRembs.filter((r) => r && r.etablissement_id === etab.id);
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.FACTURES, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
   },
 
-  processRemboursementCredit(data: {
+  processRemboursementCredit(params: {
     facture_id: string;
-    montant_regle: number;
+    montant?: number;
+    montant_regle?: number;
     methode: 'cash' | 'orange_money' | 'mtn_momo';
+    note?: string;
     note_reference?: string;
   }): RemboursementCredit {
     const etab = this.getEtablissement();
     const currentUser = this.getCurrentUser();
+    const nowIso = new Date().toISOString();
+
+    const amount = params.montant ?? params.montant_regle ?? 0;
 
     const newRemb: RemboursementCredit = {
-      id: 'remb-' + Date.now(),
-      facture_id: data.facture_id,
+      id: `remb-${Date.now()}`,
+      facture_id: params.facture_id,
       etablissement_id: etab.id,
-      montant_regle: data.montant_regle,
-      methode: data.methode,
+      montant_regle: amount,
+      methode: params.methode,
       utilisateur_id: currentUser.id,
-      note_reference: data.note_reference || 'Remboursement crédit client',
-      created_at: new Date().toISOString(),
+      note_reference: params.note || params.note_reference,
+      created_at: nowIso,
     };
 
-    if (typeof window !== 'undefined') {
-      try {
-        const savedRembs = localStorage.getItem(STORAGE_KEYS.REMBOURSEMENTS);
-        const allRembs: RemboursementCredit[] = savedRembs ? JSON.parse(savedRembs) : SEED_REMBOURSEMENTS;
-        localStorage.setItem(STORAGE_KEYS.REMBOURSEMENTS, JSON.stringify([newRemb, ...allRembs]));
+    const allFacs = this.getAllFacturesGlobal();
+    const updatedFacs = allFacs.map((f) => {
+      if (f.id !== params.facture_id) return f;
+      const newPaye = f.montant_paye + amount;
+      const newRestant = Math.max(0, f.montant_total - newPaye);
+      return {
+        ...f,
+        montant_paye: newPaye,
+        montant_restant: newRestant,
+        statut: newRestant === 0 ? ('payee' as const) : ('credit_encours' as const),
+      };
+    });
 
-        const savedFacs = localStorage.getItem(STORAGE_KEYS.FACTURES);
-        const allFacs: Facture[] = savedFacs ? JSON.parse(savedFacs) : SEED_FACTURES;
-        const updatedFacs = allFacs.map((f) => {
-          if (f && f.id === data.facture_id) {
-            const newPaye = (f.montant_paye || 0) + data.montant_regle;
-            const newRestant = Math.max(0, (f.montant_total || 0) - newPaye);
-            return {
-              ...f,
-              montant_paye: newPaye,
-              montant_restant: newRestant,
-              statut: (newRestant === 0 ? 'payee' : 'credit_encours') as any,
-            };
-          }
-          return f;
-        });
-
-        localStorage.setItem(STORAGE_KEYS.FACTURES, JSON.stringify(updatedFacs));
-      } catch (e) {}
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.FACTURES, JSON.stringify(updatedFacs));
+        const rembsData = localStorage.getItem(KEYS.REMBOURSEMENTS);
+        const rembsList: RemboursementCredit[] = rembsData ? JSON.parse(rembsData) : SEED_REMBOURSEMENTS;
+        localStorage.setItem(KEYS.REMBOURSEMENTS, JSON.stringify([newRemb, ...rembsList]));
+      }
+    } catch (e) { console.error(e); }
 
     return newRemb;
   },
 
-  // --- CHARGES JOURNALIÈRES ---
-  getCharges(): ChargeJournaliere[] {
-    const etab = this.getEtablissement();
-    if (typeof window === 'undefined') return SEED_CHARGES.filter((c) => c.etablissement_id === etab.id);
-    let allCharges: ChargeJournaliere[] = [];
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CHARGES);
-      if (saved) {
-        allCharges = JSON.parse(saved);
-      } else {
-        allCharges = SEED_CHARGES;
-        localStorage.setItem(STORAGE_KEYS.CHARGES, JSON.stringify(allCharges));
-      }
-    } catch (e) {
-      allCharges = SEED_CHARGES;
-    }
-    return allCharges.filter((c) => c && c.etablissement_id === etab.id);
+  // --- COMPTABILITÉ P&L ---
+  getComptabiliteJournaliere(periode: 'jour' | 'semaine' | 'mois' | number = 1) {
+    const facs = this.getFactures();
+    const charges = this.getCharges();
+
+    let periodeDays = 1;
+    if (typeof periode === 'number') periodeDays = periode;
+    else if (periode === 'semaine') periodeDays = 7;
+    else if (periode === 'mois') periodeDays = 30;
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - periodeDays);
+
+    const periodFacs = facs.filter((f) => f && new Date(f.created_at) >= cutoffDate && f.statut !== 'annulee');
+    const periodCharges = charges.filter((c) => c && new Date(c.created_at) >= cutoffDate);
+
+    let chiffreAffairesTotal = 0;
+    let coutTotalVendu = 0;
+
+    periodFacs.forEach((f) => {
+      chiffreAffairesTotal += f.montant_total || 0;
+      (f.lignes || []).forEach((l) => {
+        coutTotalVendu += l.sous_total_cout || 0;
+      });
+    });
+
+    const margeBruteTotal = chiffreAffairesTotal - coutTotalVendu;
+    const totalChargesExploitation = periodCharges.reduce((acc, c) => acc + (c.montant || 0), 0);
+    const beneficeNetGlobal = margeBruteTotal - totalChargesExploitation;
+    const tauxMargeMoyenne = chiffreAffairesTotal > 0 ? (margeBruteTotal / chiffreAffairesTotal) * 100 : 0;
+
+    return {
+      caTotal: chiffreAffairesTotal,
+      encaisseReel: chiffreAffairesTotal,
+      cmvTotal: coutTotalVendu,
+      margeBrute: margeBruteTotal,
+      totalCharges: totalChargesExploitation,
+      resultatNet: beneficeNetGlobal,
+      tauxMargeMoyenne,
+      nbFactures: periodFacs.length,
+      factures: periodFacs,
+      charges: periodCharges,
+      // Alias rétrocompatibilité
+      chiffreAffairesTotal,
+      coutTotalVendu,
+      margeBruteTotal,
+      totalChargesExploitation,
+      beneficeNetGlobal,
+      facturesCount: periodFacs.length,
+      chargesCount: periodCharges.length,
+    };
   },
 
-  addChargeJournaliere(data: { motif: string; montant: number; date?: string }): ChargeJournaliere {
-    const etab = this.getEtablissement();
-    let allCharges: ChargeJournaliere[] = [];
+  getCharges(): ChargeJournaliere[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CHARGES);
-      allCharges = saved ? JSON.parse(saved) : SEED_CHARGES;
-    } catch (e) { allCharges = SEED_CHARGES; }
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return SEED_CHARGES.filter((c) => c && c.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.CHARGES);
+      if (!data) return SEED_CHARGES.filter((c) => c && c.etablissement_id === etab.id);
+      const parsed: ChargeJournaliere[] = JSON.parse(data);
+      return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
+    } catch { return SEED_CHARGES; }
+  },
+
+  addChargeJournaliere(arg1: string | { motif: string; montant: number }, arg2?: number): ChargeJournaliere {
+    const etab = this.getEtablissement();
+    let motif = '';
+    let montant = 0;
+
+    if (typeof arg1 === 'object') {
+      motif = arg1.motif;
+      montant = arg1.montant;
+    } else {
+      motif = arg1;
+      montant = arg2 || 0;
+    }
 
     const newCharge: ChargeJournaliere = {
-      id: 'chg-' + Date.now(),
+      id: `chg-${Date.now()}`,
       etablissement_id: etab.id,
-      motif: data.motif || 'Charge divers',
-      montant: data.montant || 0,
-      date: data.date || new Date().toISOString().split('T')[0],
+      motif,
+      montant,
+      date: new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
     };
-
-    const updated = [newCharge, ...allCharges];
-    if (typeof window !== 'undefined') {
-      try { localStorage.setItem(STORAGE_KEYS.CHARGES, JSON.stringify(updated)); } catch (e) {}
-    }
+    const all = this.getAllChargesGlobal();
+    const updated = [newCharge, ...all];
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.CHARGES, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
     return newCharge;
   },
 
-  // --- MODULE COMPTABILITÉ & ÉTAT DU JOUR ---
-  getComptabiliteJournaliere(range: 'jour' | 'semaine' | 'mois' = 'jour') {
-    const factures = this.getFactures();
-    const rembs = this.getRemboursements();
-    const charges = this.getCharges();
-
-    const now = new Date();
-
-    const filterByRange = (dateStr: string) => {
-      if (!dateStr) return false;
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return false;
-      if (range === 'jour') {
-        return d.toDateString() === now.toDateString();
-      } else if (range === 'semaine') {
-        const diffDays = (now.getTime() - d.getTime()) / (1000 * 3600 * 24);
-        return diffDays <= 7;
-      } else {
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      }
-    };
-
-    const periodFactures = factures.filter((f) => filterByRange(f.created_at));
-    const periodRembs = rembs.filter((r) => filterByRange(r.created_at));
-    const periodCharges = charges.filter((c) => filterByRange(c.created_at));
-
-    const caTotal = periodFactures.reduce((acc, f) => acc + (f.montant_total || 0), 0);
-    const encaisseDirect = periodFactures.reduce((acc, f) => acc + (f.montant_paye || 0), 0);
-    const encaisseRembs = periodRembs.reduce((acc, r) => acc + (r.montant_regle || 0), 0);
-    const encaisseReel = encaisseDirect + encaisseRembs;
-
-    let cmvTotal = 0;
-    periodFactures.forEach((f) => {
-      if (f.lignes) {
-        f.lignes.forEach((l) => {
-          cmvTotal += l.sous_total_cout || 0;
-        });
-      }
-    });
-
-    const margeBrute = caTotal - cmvTotal;
-    const totalCharges = periodCharges.reduce((acc, c) => acc + (c.montant || 0), 0);
-    const resultatNet = margeBrute - totalCharges;
-
-    return {
-      caTotal,
-      encaisseReel,
-      cmvTotal,
-      margeBrute,
-      totalCharges,
-      resultatNet,
-      nbFactures: periodFactures.length,
-      factures: periodFactures,
-      charges: periodCharges,
-    };
-  },
-
-  // --- FILE D'ATTENTE HORS-LIGNE & SYNCHRO ---
-  addToOfflineQueue(item: any): void {
-    if (typeof window === 'undefined') return;
+  getAllChargesGlobal(): ChargeJournaliere[] {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
-      const queue = saved ? JSON.parse(saved) : [];
-      queue.push(item);
-      localStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(queue));
-    } catch (e) {}
+      if (typeof window === 'undefined') return SEED_CHARGES;
+      const data = localStorage.getItem(KEYS.CHARGES);
+      return data ? JSON.parse(data) : SEED_CHARGES;
+    } catch { return SEED_CHARGES; }
   },
 
+  // --- QUEUE DE SYNCHRO HORS-LIGNE ---
   getOfflineQueueCount(): number {
-    if (typeof window === 'undefined') return 0;
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
-      return saved ? JSON.parse(saved).length : 0;
-    } catch (e) { return 0; }
+      const mvts = this.getMouvements();
+      return mvts.filter((m) => m && m.sync_status === 'pending_offline').length;
+    } catch { return 0; }
   },
 
   syncOfflineQueue(): number {
-    if (typeof window === 'undefined') return 0;
-    const count = this.getOfflineQueueCount();
-    if (count === 0) return 0;
-
-    try {
-      const savedMvts = localStorage.getItem(STORAGE_KEYS.MOUVEMENTS);
-      if (savedMvts) {
-        const allMvts: MouvementStock[] = JSON.parse(savedMvts);
-        const synced = allMvts.map((m) => ({ ...m, sync_status: 'synced' as const }));
-        localStorage.setItem(STORAGE_KEYS.MOUVEMENTS, JSON.stringify(synced));
-      }
-      localStorage.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
-    } catch (e) {}
-    return count;
-  },
-
-  // --- ABONNEMENT MOBILE MONEY ---
-  processMobileMoneyPayment(data: {
-    montant: number;
-    methode: 'Orange Money' | 'MTN MoMo';
-    telephone_payeur: string;
-  }): Paiement {
     const etab = this.getEtablissement();
-    const newPaiement: Paiement = {
-      id: 'pay-' + Date.now(),
-      etablissement_id: etab.id,
-      montant: data.montant,
-      methode: data.methode,
-      telephone_payeur: data.telephone_payeur,
-      reference_transaction: `TXN-${data.methode === 'Orange Money' ? 'OM' : 'MOMO'}-${Date.now().toString().slice(-6)}`,
-      statut: 'reussi',
-      created_at: new Date().toISOString(),
-    };
-
-    const currentFin = etab.date_fin_essai ? new Date(etab.date_fin_essai) : new Date();
-    const now = new Date();
-    const baseDate = currentFin > now ? currentFin : now;
-    baseDate.setDate(baseDate.getDate() + 30);
-
-    const updatedEtab: Etablissement = {
-      ...etab,
-      statut_abonnement: 'actif',
-      date_prochain_paiement: baseDate.toISOString(),
-      date_fin_essai: baseDate.toISOString(),
-    };
-
-    if (typeof window !== 'undefined') {
-      try {
-        const etabs = this.getEtablissements();
-        const updatedList = etabs.map((e) => (e.id === etab.id ? updatedEtab : e));
-        localStorage.setItem(STORAGE_KEYS.ETABLISSEMENTS, JSON.stringify(updatedList));
-
-        const savedPaiements = localStorage.getItem(STORAGE_KEYS.PAIEMENTS);
-        const allPaiements: Paiement[] = savedPaiements ? JSON.parse(savedPaiements) : [];
-        localStorage.setItem(STORAGE_KEYS.PAIEMENTS, JSON.stringify([newPaiement, ...allPaiements]));
-      } catch (e) {}
-    }
-
-    return newPaiement;
+    const allMvts = this.getAllMouvementsGlobal();
+    let syncedCount = 0;
+    const updated = allMvts.map((m) => {
+      if (m.etablissement_id === etab.id && m.sync_status === 'pending_offline') {
+        syncedCount++;
+        return { ...m, sync_status: 'synced' as const };
+      }
+      return m;
+    });
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    return syncedCount;
   },
 };
