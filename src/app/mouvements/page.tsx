@@ -16,7 +16,9 @@ export default function MouvementsPage() {
   }, []);
 
   const loadMouvements = () => {
-    setMouvements(offlineDB.getMouvements());
+    try {
+      setMouvements(offlineDB.getMouvements());
+    } catch (e) { console.error(e); }
   };
 
   const handleSyncNow = () => {
@@ -25,33 +27,40 @@ export default function MouvementsPage() {
   };
 
   const filteredMouvements = mouvements.filter((m) => {
+    if (!m) return false;
     const matchesType = typeFilter === 'tous' || m.type_mouvement === typeFilter;
+    const prodName = m.produit?.nom || '';
+    const userName = m.utilisateur?.nom || '';
+    const motif = m.note_motif || '';
+
     const matchesSearch =
-      m.produit?.nom.toLowerCase().includes(search.toLowerCase()) ||
-      m.utilisateur?.nom.toLowerCase().includes(search.toLowerCase()) ||
-      m.note_motif.toLowerCase().includes(search.toLowerCase());
+      prodName.toLowerCase().includes(search.toLowerCase()) ||
+      userName.toLowerCase().includes(search.toLowerCase()) ||
+      motif.toLowerCase().includes(search.toLowerCase());
     return matchesType && matchesSearch;
   });
 
   return (
-    <div className="min-h-screen bg-[#0F1115] text-white flex">
+    <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex">
       <Sidebar />
 
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 max-w-7xl mx-auto pb-24">
+      <main className="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-brand-border/60">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#E2D5C3]">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-brand-orange bg-brand-orangeLight px-2.5 py-1 rounded-full border border-brand-orange/30">
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-1 rounded-full border border-[#B8442C]/20">
               Traçabilité Complète
             </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-white mt-1">Historique des Mouvements de Stock</h1>
+            <h1 className="font-serif text-2xl sm:text-3xl font-black text-[#1B4332] mt-1">
+              Historique des Mouvements de Stock
+            </h1>
           </div>
 
           <button
             onClick={handleSyncNow}
-            className="py-3 px-5 rounded-2xl bg-brand-card hover:bg-brand-hover border border-brand-border text-white font-bold text-xs flex items-center gap-2 transition-all active:scale-95 shadow-card"
+            className="py-2.5 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs flex items-center gap-2 transition-transform active:scale-95 shadow-md"
           >
-            <RefreshCcw className="w-4 h-4 text-brand-orange" />
+            <RefreshCcw className="w-4 h-4 text-[#E8A33D]" />
             <span>Synchroniser Mouvements</span>
           </button>
         </div>
@@ -59,17 +68,17 @@ export default function MouvementsPage() {
         {/* Filters */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-6">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
             <input
               type="text"
               placeholder="Rechercher par produit, motif ou utilisateur..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-brand-card border border-brand-border rounded-2xl py-2.5 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-brand-orange"
+              className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl py-2.5 pl-10 pr-4 text-xs text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
             {[
               { id: 'tous', label: 'Tous' },
               { id: 'entree', label: '➕ Entrées' },
@@ -81,8 +90,8 @@ export default function MouvementsPage() {
                 onClick={() => setTypeFilter(f.id)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                   typeFilter === f.id
-                    ? 'bg-brand-orange text-white shadow-glow'
-                    : 'bg-brand-card border border-brand-border text-gray-400 hover:text-white'
+                    ? 'bg-[#1B4332] text-white shadow-md font-black'
+                    : 'bg-[#F3ECE0] border border-[#E2D5C3] text-[#1B4332] hover:bg-[#EADECB]'
                 }`}
               >
                 {f.label}
@@ -92,10 +101,10 @@ export default function MouvementsPage() {
         </div>
 
         {/* Movements Table */}
-        <div className="p-6 rounded-3xl bg-brand-card border border-brand-border shadow-card overflow-hidden">
+        <div className="p-6 sm:p-8 rounded-3xl bg-[#F3ECE0] border border-[#E2D5C3] shadow-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-gray-300">
-              <thead className="bg-brand-black/80 text-gray-400 uppercase text-[10px] tracking-wider border-b border-brand-border">
+            <table className="w-full text-left text-xs text-[#1B4332]">
+              <thead className="bg-[#FBF7EF] text-[#1B4332]/70 uppercase text-[10px] tracking-wider border-b border-[#E2D5C3]">
                 <tr>
                   <th className="py-3 px-4">Date / Heure</th>
                   <th className="py-3 px-4">Type</th>
@@ -103,10 +112,10 @@ export default function MouvementsPage() {
                   <th className="py-3 px-4">Quantité</th>
                   <th className="py-3 px-4">Auteur (PIN)</th>
                   <th className="py-3 px-4">Motif / Note</th>
-                  <th className="py-3 px-4">Synchronisation</th>
+                  <th className="py-3 px-4">Statut Synchro</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-brand-border/60">
+              <tbody className="divide-y divide-[#E2D5C3]">
                 {filteredMouvements.map((m) => {
                   const dateStr = new Date(m.created_at).toLocaleString('fr-FR', {
                     dateStyle: 'short',
@@ -114,41 +123,45 @@ export default function MouvementsPage() {
                   });
 
                   return (
-                    <tr key={m.id} className="hover:bg-brand-hover/50 transition-colors">
-                      <td className="py-3.5 px-4 font-bold text-gray-400">{dateStr}</td>
+                    <tr key={m.id} className="hover:bg-[#FBF7EF]/60 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-gray-600">{dateStr}</td>
                       <td className="py-3.5 px-4 font-black">
                         {m.type_mouvement === 'entree' ? (
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 text-[10px]">
+                          <span className="px-2.5 py-1 rounded-full bg-[#1B4332]/10 text-[#2D6A4F] text-[10px] font-bold">
                             ➕ Entrée
                           </span>
                         ) : m.type_mouvement === 'sortie' ? (
-                          <span className="px-2.5 py-1 rounded-full bg-brand-orange/20 border border-brand-orange/40 text-brand-orange text-[10px]">
+                          <span className="px-2.5 py-1 rounded-full bg-[#B8442C]/10 text-[#B8442C] text-[10px] font-bold">
                             ➖ Sortie
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 rounded-full bg-red-950/80 border border-red-500/40 text-red-400 text-[10px]">
+                          <span className="px-2.5 py-1 rounded-full bg-[#E8A33D]/20 text-[#1B4332] text-[10px] font-bold">
                             ⚠️ Casse / Perte
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-white">{m.produit?.nom || 'Produit'}</td>
-                      <td className="py-3.5 px-4 font-black text-amber-400">
+                      <td className="py-3.5 px-4 font-bold text-[#1B4332]">{m.produit?.nom || 'Produit'}</td>
+                      <td className="py-3.5 px-4 font-black text-[#1B4332]">
                         {m.type_mouvement === 'entree' ? `+${m.quantite_bouteilles}` : `-${m.quantite_bouteilles}`} bouteilles
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
-                        {m.utilisateur?.photo_url && (
-                          <img src={m.utilisateur.photo_url} alt={m.utilisateur.nom} className="w-6 h-6 rounded-full object-cover" />
-                        )}
-                        <span>{m.utilisateur?.nom || 'Employé'} ({m.utilisateur?.role})</span>
+                      <td className="py-3.5 px-4 font-bold text-[#1B4332] flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full overflow-hidden border border-[#1B4332] bg-[#1B4332] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                          {m.utilisateur?.photo_url ? (
+                            <img src={m.utilisateur.photo_url} alt={m.utilisateur.nom} className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{(m.utilisateur?.nom || 'E')[0]}</span>
+                          )}
+                        </div>
+                        <span>{m.utilisateur?.nom || 'Employé'} ({m.utilisateur?.role || 'Staff'})</span>
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-gray-300 max-w-xs truncate">{m.note_motif}</td>
+                      <td className="py-3.5 px-4 font-semibold text-gray-700 max-w-xs truncate">{m.note_motif}</td>
                       <td className="py-3.5 px-4">
                         {m.sync_status === 'synced' ? (
-                          <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          <span className="text-[#2D6A4F] font-bold flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Synchro
                           </span>
                         ) : (
-                          <span className="text-amber-400 font-bold flex items-center gap-1 animate-pulse">
+                          <span className="text-[#E8A33D] font-bold flex items-center gap-1 animate-pulse">
                             <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> En Attente (Offline)
                           </span>
                         )}

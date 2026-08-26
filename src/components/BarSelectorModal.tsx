@@ -26,8 +26,12 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
   }, []);
 
   const loadData = () => {
-    setEtablissements(offlineDB.getEtablissements());
-    setActiveEtablissement(offlineDB.getEtablissement());
+    try {
+      setEtablissements(offlineDB.getEtablissements());
+      setActiveEtablissement(offlineDB.getEtablissement());
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleSelectBar = (id: string) => {
@@ -66,60 +70,60 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
       {/* Bouton En-tête pour changer / voir le bar actif */}
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-card hover:bg-brand-hover border border-brand-border text-white text-xs font-bold transition-all shadow-card"
+        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] text-xs font-bold transition-all shadow-sm"
       >
-        <Store className="w-4 h-4 text-brand-orange" />
-        <span className="truncate max-w-[110px]">{activeEtablissement?.nom || 'Mon Bar'}</span>
+        <Store className="w-4 h-4 text-[#B8442C]" />
+        <span className="truncate max-w-[120px] font-black">{activeEtablissement?.nom || 'Mon Bar'}</span>
         <span className="text-[10px] text-gray-500">▾</span>
       </button>
 
       {/* Modal Multi-Bar & Inscription */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-brand-card border border-brand-border rounded-3xl p-5 w-full max-w-md shadow-glow relative">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button
               onClick={() => {
                 setIsOpen(false);
                 setIsCreating(false);
               }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-full bg-brand-black"
+              className="absolute top-4 right-4 text-gray-500 hover:text-black p-1.5 rounded-full bg-[#FBF7EF]"
             >
               <X className="w-5 h-5" />
             </button>
 
             {!isCreating ? (
               <div>
-                <h2 className="text-xl font-black text-white mb-1 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-brand-orange" />
+                <h2 className="font-serif text-xl font-black text-[#1B4332] mb-1 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-[#B8442C]" />
                   Vos Bars & Lounges
                 </h2>
-                <p className="text-xs text-gray-400 mb-4">
-                  Chaque bar dispose de son propre compte, de son personnel et de son stock.
+                <p className="text-xs text-[#1B4332]/80 mb-4 font-medium">
+                  Chaque bar dispose de son propre compte, de ses serveuses et de son stock.
                 </p>
 
-                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-2 mb-5 max-h-60 overflow-y-auto pr-1">
                   {etablissements.map((b) => {
                     const isSelected = b.id === activeEtablissement?.id;
                     return (
                       <div
                         key={b.id}
                         onClick={() => handleSelectBar(b.id)}
-                        className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                        className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
                           isSelected
-                            ? 'bg-brand-orange/20 border-brand-orange shadow-glow text-white'
-                            : 'bg-brand-black border-brand-border text-gray-300 hover:border-gray-500'
+                            ? 'bg-[#FBF7EF] border-[#1B4332] shadow-sm text-[#1B4332]'
+                            : 'bg-[#FBF7EF]/60 border-[#E2D5C3] text-[#1B4332] hover:border-gray-400'
                         }`}
                       >
                         <div>
-                          <h4 className="font-bold text-sm text-white">{b.nom}</h4>
-                          <p className="text-[11px] text-gray-400 mt-0.5">
+                          <h4 className="font-bold text-sm text-[#1B4332]">{b.nom}</h4>
+                          <p className="text-[11px] text-gray-600 font-medium mt-0.5">
                             {b.ville} {b.adresse ? `• ${b.adresse}` : ''}
                           </p>
                         </div>
 
                         {isSelected && (
-                          <div className="w-6 h-6 rounded-full bg-brand-orange text-white flex items-center justify-center font-bold text-xs">
-                            <Check className="w-4 h-4" />
+                          <div className="w-6 h-6 rounded-full bg-[#1B4332] text-white flex items-center justify-center font-bold text-xs">
+                            <Check className="w-4 h-4 text-[#E8A33D]" />
                           </div>
                         )}
                       </div>
@@ -129,25 +133,25 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
 
                 <button
                   onClick={() => setIsCreating(true)}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-brand-orange to-amber-500 hover:from-brand-orangeHover hover:to-amber-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-95"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs flex items-center justify-center gap-2 shadow-glow-brique transition-transform active:scale-95"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4 text-white" />
                   <span>🏢 Créer un Nouveau Bar (Compte SaaS)</span>
                 </button>
               </div>
             ) : (
               <div>
-                <h2 className="text-xl font-black text-white mb-1 flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-brand-orange" />
+                <h2 className="font-serif text-xl font-black text-[#1B4332] mb-1 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-[#B8442C]" />
                   Créer mon Bar / Mon Compte
                 </h2>
-                <p className="text-xs text-gray-400 mb-4">
+                <p className="text-xs text-[#1B4332]/80 mb-4 font-medium">
                   Formulaire d'inscription rapide (14 jours d'essai offerts).
                 </p>
 
                 <form onSubmit={handleCreateBar} className="space-y-3.5">
                   <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">
+                    <label className="text-xs font-bold text-[#1B4332] block mb-1">
                       Nom de votre Bar / Snack / Lounge *
                     </label>
                     <input
@@ -155,12 +159,12 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
                       placeholder="Ex: BAR LA CITADELLE"
                       value={nomBar}
                       onChange={(e) => setNomBar(e.target.value)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3.5 text-white font-bold text-base focus:outline-none focus:border-brand-orange"
+                      className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3.5 text-[#1B4332] font-bold text-sm focus:outline-none focus:border-[#1B4332]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-1">
+                    <label className="text-xs font-bold text-[#1B4332] block mb-1">
                       Téléphone du Gérant / Patronne *
                     </label>
                     <input
@@ -168,29 +172,29 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
                       placeholder="Ex: 699001122"
                       value={telephone}
                       onChange={(e) => setTelephone(e.target.value)}
-                      className="w-full bg-brand-black border border-brand-border rounded-2xl p-3.5 text-white font-bold text-base focus:outline-none focus:border-brand-orange"
+                      className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3.5 text-[#1B4332] font-bold text-sm focus:outline-none focus:border-[#1B4332]"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-bold text-gray-300 block mb-1">Ville</label>
+                      <label className="text-xs font-bold text-[#1B4332] block mb-1">Ville</label>
                       <input
                         type="text"
                         placeholder="Ex: Douala, Yaoundé..."
                         value={ville}
                         onChange={(e) => setVille(e.target.value)}
-                        className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
+                        className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-[#1B4332] font-bold text-xs focus:outline-none focus:border-[#1B4332]"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-gray-300 block mb-1">Quartier / Adresse</label>
+                      <label className="text-xs font-bold text-[#1B4332] block mb-1">Quartier / Adresse</label>
                       <input
                         type="text"
                         placeholder="Ex: Akwa, Bastos..."
                         value={adresse}
                         onChange={(e) => setAdresse(e.target.value)}
-                        className="w-full bg-brand-black border border-brand-border rounded-2xl p-3 text-white font-bold text-xs focus:outline-none focus:border-brand-orange"
+                        className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-[#1B4332] font-bold text-xs focus:outline-none focus:border-[#1B4332]"
                       />
                     </div>
                   </div>
@@ -199,13 +203,13 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
                     <button
                       type="button"
                       onClick={() => setIsCreating(false)}
-                      className="py-3.5 px-4 rounded-2xl bg-brand-black border border-brand-border text-gray-400 font-bold text-xs"
+                      className="py-3.5 px-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
                     >
                       Annuler
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-brand-orange to-amber-500 text-white font-black text-sm shadow-glow transition-transform active:scale-95"
+                      className="flex-1 py-3.5 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md transition-transform active:scale-95"
                     >
                       🚀 Créer et Accéder à mon Bar
                     </button>
@@ -219,4 +223,3 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
     </>
   );
 }
-
