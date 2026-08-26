@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Store, Plus, Check, X, Building2, Phone, MapPin } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { Etablissement } from '@/types';
@@ -10,6 +11,7 @@ interface BarSelectorModalProps {
 }
 
 export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModalProps) {
+  const router = useRouter();
   const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
   const [activeEtablissement, setActiveEtablissement] = useState<Etablissement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -39,7 +41,7 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
     loadData();
     setIsOpen(false);
     if (onBoutiqueChanged) onBoutiqueChanged();
-    window.location.reload();
+    router.refresh();
   };
 
   const handleCreateBar = (e: React.FormEvent) => {
@@ -62,7 +64,7 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
     setIsOpen(false);
     loadData();
     if (onBoutiqueChanged) onBoutiqueChanged();
-    window.location.reload();
+    router.refresh();
   };
 
   return (

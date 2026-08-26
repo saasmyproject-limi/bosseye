@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   ArrowRight,
@@ -34,6 +35,7 @@ import BarSelectorModal from '@/components/BarSelectorModal';
 import PinLoginModal from '@/components/PinLoginModal';
 
 export default function LandingPage() {
+  const router = useRouter();
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
@@ -657,7 +659,7 @@ export default function LandingPage() {
           onClose={() => setIsPinModalOpen(false)}
           onSuccess={() => {
             setIsPinModalOpen(false);
-            window.location.href = '/dashboard';
+            router.push('/dashboard');
           }}
         />
       )}

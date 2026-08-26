@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Package,
@@ -27,6 +27,7 @@ import PinLoginModal from './PinLoginModal';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -39,12 +40,14 @@ export default function Sidebar() {
   }, []);
 
   const loadInfo = () => {
-    setCurrentUser(offlineDB.getCurrentUser());
-    setEtablissement(offlineDB.getEtablissement());
-    setLowStockCount(offlineDB.getLowStockProducts().length);
-    const factures = offlineDB.getFactures();
-    const activeCredits = factures.filter((f) => f.statut === 'credit_encours' && f.montant_restant > 0);
-    setPendingCreditsCount(activeCredits.length);
+    try {
+      setCurrentUser(offlineDB.getCurrentUser());
+      setEtablissement(offlineDB.getEtablissement());
+      setLowStockCount(offlineDB.getLowStockProducts().length);
+      const factures = offlineDB.getFactures();
+      const activeCredits = factures.filter((f) => f && f.statut === 'credit_encours' && (f.montant_restant || 0) > 0);
+      setPendingCreditsCount(activeCredits.length);
+    } catch (e) { console.error(e); }
   };
 
   const navItems = [
@@ -147,13 +150,11 @@ export default function Sidebar() {
         <div className="pt-4 border-t border-[#2D6A4F] space-y-3">
           <div className="flex items-center justify-between p-3 rounded-2xl bg-[#1B4332] border border-[#2D6A4F]">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#E8A33D] shrink-0">
+              <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#E8A33D] bg-[#E8A33D] text-[#0F291E] flex items-center justify-center font-bold text-xs shrink-0">
                 {currentUser?.photo_url ? (
                   <img src={currentUser.photo_url} alt={currentUser.nom} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-[#E8A33D] text-[#0F291E] flex items-center justify-center font-bold text-xs">
-                    {currentUser?.nom[0] || 'U'}
-                  </div>
+                  <span>{(currentUser?.nom || 'U')[0]}</span>
                 )}
               </div>
               <div>
@@ -186,7 +187,7 @@ export default function Sidebar() {
           onSuccess={() => {
             setIsPinModalOpen(false);
             loadInfo();
-            window.location.reload();
+            router.refresh();
           }}
         />
       )}
