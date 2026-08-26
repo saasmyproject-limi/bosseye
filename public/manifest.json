@@ -1,0 +1,24 @@
+{
+  "name": "TAKAM BAR",
+  "short_name": "TAKAM BAR",
+  "description": "Gestion Caisse & Stock Snack/Bar Chic Yaoundé",
+  "start_url": "/caisse",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#FF6B00",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=192&h=192&q=80",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=512&h=512&q=80",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

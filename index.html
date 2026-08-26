@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TAKAMBAR - SaaS Multi-Tenant Gestion de Stock au Cameroun</title>
+  <meta name="theme-color" content="#FF6B00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              black: '#0B0C0E',
+              card: '#14161C',
+              hover: '#1D2029',
+              border: '#262A36',
+              orange: '#FF6B00',
+              orangeHover: '#E56000',
+              orangeLight: 'rgba(255, 107, 0, 0.15)',
+              gold: '#FFD700',
+            }
+          },
+          boxShadow: {
+            glow: '0 0 25px rgba(255, 107, 0, 0.35)',
+            card: '0 10px 30px -10px rgba(0, 0, 0, 0.8)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons & jsPDF -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body {
+      background-color: #0B0C0E;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    .scrollbar-none::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="bg-brand-black text-white min-h-screen pb-24">
+
+  <!-- APP CONTAINER -->
+  <div id="app" class="max-w-md mx-auto min-h-screen p-4 flex flex-col justify-between">
+    <!-- Header -->
+    <header class="flex items-center justify-between py-2 mb-4 border-b border-brand-border/60">
+      <div class="flex items-center gap-2 cursor-pointer" onclick="navigate('landing')">
+        <div class="w-8 h-8 rounded-xl bg-brand-orange/20 border border-brand-orange/40 flex items-center justify-center text-brand-orange">
+          ⚡
+        </div>
+        <div>
+          <span class="text-[9px] font-black uppercase tracking-widest text-brand-orange bg-brand-orangeLight px-2 py-0.5 rounded-full border border-brand-orange/30">
+            SaaS Cameroun
+          </span>
+          <h1 class="text-xl font-black tracking-tight text-white mt-0.5">
+            TAKAMBAR
+          </h1>
+        </div>
+      </div>
+      <div id="online-badge" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>En Ligne</span>
+      </div>
+    </header>
+
+    <!-- MAIN DYNAMIC CONTENT -->
+    <main id="main-content" class="flex-1">
+      <!-- Section active injectée dynamiquement par JavaScript -->
+    </main>
+
+    <!-- MOBILE BOTTOM NAVIGATION (iPhone Style) -->
+    <nav class="fixed bottom-0 left-0 right-0 z-50 bg-brand-card/95 backdrop-blur-xl border-t border-brand-border px-2 py-2 pb-safe">
+      <div class="max-w-md mx-auto flex items-center justify-around">
+        <button onclick="navigate('landing')" id="nav-landing" class="nav-btn flex flex-col items-center py-1 px-3 rounded-2xl text-brand-orange bg-brand-orange/15 font-bold scale-105 shadow-glow">
+          <i data-lucide="home" class="w-5 h-5 mb-0.5"></i>
+          <span class="text-[10px]">Accueil</span>
+        </button>
+        <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-btn flex flex-col items-center py-1 px-3 rounded-2xl text-gray-400">
+          <i data-lucide="layout-dashboard" class="w-5 h-5 mb-0.5"></i>
+          <span class="text-[10px]">Dashboard</span>
+        </button>
+        <button onclick="navigate('produits')" id="nav-produits" class="nav-btn flex flex-col items-center py-1 px-3 rounded-2xl text-gray-400">
+          <i data-lucide="package" class="w-5 h-5 mb-0.5"></i>
+          <span class="text-[10px]">Stock</span>
+        </button>
+        <button onclick="navigate('mouvements')" id="nav-mouvements" class="nav-btn flex flex-col items-center py-1 px-3 rounded-2xl text-gray-400">
+          <i data-lucide="history" class="w-5 h-5 mb-0.5"></i>
+          <span class="text-[10px]">Mouvements</span>
+        </button>
+        <button onclick="navigate('employes')" id="nav-employes" class="nav-btn flex flex-col items-center py-1 px-3 rounded-2xl text-gray-400">
+          <i data-lucide="users" class="w-5 h-5 mb-0.5"></i>
+          <span class="text-[10px]">PIN Auth</span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- APPLICATION LOGIC & STATE -->
+  <script>
+    const store = {
+      etablissement: { nom: 'LE CAPITOLE BAR', ville: 'Douala', plan: 'Premium', statut: 'essai' },
+      currentUser: { nom: 'Madame TAKAM', role: 'Patron', pin: '1234' },
+      utilisateurs: [
+        { id: 'u1', nom: 'Madame TAKAM', role: 'Patron', pin: '1234', photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80' },
+        { id: 'u2', nom: 'Jean-Paul KENGNE', role: 'Gérant', pin: '5678', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80' },
+        { id: 'u3', nom: 'Chantal MBALLA', role: 'Serveuse', pin: '0000', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80' },
+      ],
+      produits: [
+        { id: 'p1', nom: 'Beaufort Lager', categorie: 'Bière', casiers: 12, vrac: 5, par_casier: 24, seuil: 50, prix: 650 },
+        { id: 'p2', nom: '33 Export', categorie: 'Bière', casiers: 8, vrac: 12, par_casier: 24, seuil: 48, prix: 600 },
+        { id: 'p3', nom: 'Guinness Foreign Extra', categorie: 'Bière', casiers: 1, vrac: 3, par_casier: 24, seuil: 48, prix: 1000 },
+        { id: 'p4', nom: 'Poulet DG', categorie: 'Plat', casiers: 0, vrac: 15, par_casier: 12, seuil: 5, prix: 5000 },
+      ],
+      mouvements: [
+        { id: 'm1', produit: 'Beaufort Lager', type: 'entree', qty: 120, auteur: 'Jean-Paul (Gérant)', motif: 'Livraison Brasseries', date: 'Aujourd\'hui 10:30' },
+        { id: 'm2', produit: 'Guinness Foreign Extra', type: 'sortie', qty: 12, auteur: 'Chantal (Serveuse)', motif: 'Vente Table VIP 1', date: 'Aujourd\'hui 11:15' },
+        { id: 'm3', produit: 'Guinness Foreign Extra', type: 'casse_perte', qty: 2, auteur: 'Chantal (Serveuse)', motif: 'Bouteille cassée au service', date: 'Aujourd\'hui 11:40' },
+      ]
+    };
+
+    function navigate(page) {
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.className = 'nav-btn flex flex-col items-center py-1 px-3 rounded-2xl text-gray-400';
+      });
+      const activeNav = document.getElementById('nav-' + page);
+      if(activeNav) activeNav.className = 'nav-btn flex flex-col items-center py-1 px-3 rounded-2xl text-brand-orange bg-brand-orange/15 font-bold scale-105 shadow-glow';
+
+      const main = document.getElementById('main-content');
+      if (page === 'landing') renderLanding(main);
+      else if (page === 'dashboard') renderDashboard(main);
+      else if (page === 'produits') renderProduits(main);
+      else if (page === 'mouvements') renderMouvements(main);
+      else if (page === 'employes') renderEmployes(main);
+      lucide.createIcons();
+    }
+
+    // --- LANDING PAGE (MERIDIAL STYLE) ---
+    function renderLanding(container) {
+      container.innerHTML = `
+        <div class="space-y-6 text-center py-2">
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-orange/15 border border-brand-orange/30 text-brand-orange text-xs font-bold">
+            🔥 SUIVI DE STOCK EN TEMPS RÉEL AU CAMEROUN
+          </div>
+
+          <h1 class="text-3xl font-black text-white leading-tight">
+            La clarté totale sur votre stock,<br/>
+            <span class="text-brand-orange">sans feuille Excel.</span>
+          </h1>
+
+          <p class="text-xs text-gray-300 leading-relaxed max-w-xs mx-auto">
+            Connexion rapide par PIN à 4 chiffres (1234/5678), suivi des casiers "8c+3b" & mode 100% hors-ligne.
+          </p>
+
+          <div class="space-y-2 max-w-xs mx-auto">
+            <button onclick="navigate('dashboard')" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-orange to-amber-500 text-white font-black text-sm shadow-glow">
+              📊 Accéder au Dashboard Patron
+            </button>
+            <button onclick="promptPin()" class="w-full py-3.5 rounded-2xl bg-brand-card border border-brand-border text-white font-bold text-xs">
+              🔑 Connexion PIN Rapide (1234)
+            </button>
+          </div>
+
+          <div class="p-4 rounded-3xl bg-brand-card border border-brand-border text-left space-y-2">
+            <div class="flex justify-between items-center text-xs border-b border-brand-border pb-2">
+              <span class="font-bold text-white">⚠️ Détection Stock Bas</span>
+              <span class="text-[10px] text-red-400 bg-red-950 px-2 py-0.5 rounded-full font-bold">ALERTE</span>
+            </div>
+            <div class="text-xs space-y-1 text-gray-300">
+              <p>• <strong>Guinness</strong>: 1 casier + 3 vrac (Alerte <= 48b)</p>
+              <p>• <strong>Beaufort Lager</strong>: 12 casiers + 5 vrac (293b)</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- DASHBOARD (SASTRIFY STYLE) ---
+    function renderDashboard(container) {
+      const lowStock = store.produits.filter(p => (p.casiers * p.par_casier + p.vrac) <= p.seuil);
+      const totalBottles = store.produits.reduce((acc, p) => acc + (p.casiers * p.par_casier + p.vrac), 0);
+
+      container.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex justify-between items-center border-b border-brand-border pb-3">
+            <div>
+              <span class="text-[10px] font-bold text-brand-orange uppercase">Patron: ${store.currentUser.nom}</span>
+              <h2 class="text-lg font-black text-white">${store.etablissement.nom}</h2>
+            </div>
+            <span class="text-xs font-bold text-emerald-400 bg-emerald-950 px-2.5 py-1 rounded-full border border-emerald-500/40">Essai 14j</span>
+          </div>
+
+          <!-- KPI Cards Grid -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="p-3 rounded-2xl bg-brand-card border border-brand-border">
+              <span class="text-[10px] text-gray-400 font-bold uppercase block">Total Quantité</span>
+              <h3 class="text-xl font-black text-brand-orange mt-0.5">${totalBottles} b</h3>
+            </div>
+            <div class="p-3 rounded-2xl bg-brand-card border ${lowStock.length > 0 ? 'border-red-500 bg-red-950/20' : 'border-brand-border'}">
+              <span class="text-[10px] text-gray-400 font-bold uppercase block">Stock Bas</span>
+              <h3 class="text-xl font-black ${lowStock.length > 0 ? 'text-red-400' : 'text-emerald-400'}">${lowStock.length} art.</h3>
+            </div>
+          </div>
+
+          <!-- Mouvements Récents -->
+          <div class="p-4 rounded-3xl bg-brand-card border border-brand-border space-y-2">
+            <h3 class="font-bold text-xs text-white">🔄 Mouvements Récents de Stock</h3>
+            ${store.mouvements.map(m => `
+              <div class="flex justify-between items-center text-xs p-2 bg-brand-black rounded-xl border border-brand-border/60">
+                <div>
+                  <span class="font-bold text-white block">${m.produit}</span>
+                  <span class="text-[10px] text-gray-400">${m.auteur} • ${m.date}</span>
+                </div>
+                <span class="font-black ${m.type === 'entree' ? 'text-emerald-400' : 'text-brand-orange'}">${m.type === 'entree' ? '+' : '-'}${m.qty}b</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // --- PRODUITS INVENTAIRE ---
+    function renderProduits(container) {
+      container.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <h2 class="text-lg font-black text-white">Inventaire Boissons</h2>
+            <button onclick="ajouterMouvementModal('entree')" class="py-2 px-3 bg-brand-orange text-white text-xs font-bold rounded-xl shadow-glow">+ Entrée</button>
+          </div>
+
+          <div class="space-y-2.5">
+            ${store.produits.map(p => {
+              const totalB = p.casiers * p.par_casier + p.vrac;
+              const isLow = totalB <= p.seuil;
+              return `
+                <div class="p-3.5 rounded-2xl bg-brand-card border ${isLow ? 'border-red-500 bg-red-950/20' : 'border-brand-border'} flex justify-between items-center">
+                  <div>
+                    <h3 class="font-bold text-xs text-white">${p.nom}</h3>
+                    <span class="text-[10px] text-amber-400 font-bold block mt-0.5">${p.casiers} casier(s) + ${p.vrac} vrac (${totalB}b)</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="font-black text-emerald-400 text-xs">${p.prix} F</span>
+                    ${isLow ? `<span class="block text-[9px] font-bold text-red-400">⚠️ Seuil: ${p.seuil}b</span>` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // --- MOUVEMENTS LOG ---
+    function renderMouvements(container) {
+      container.innerHTML = `
+        <div class="space-y-4">
+          <h2 class="text-lg font-black text-white">Journal Mouvements Stock</h2>
+          <div class="space-y-2">
+            ${store.mouvements.map(m => `
+              <div class="p-3 bg-brand-card border border-brand-border rounded-2xl text-xs space-y-1">
+                <div class="flex justify-between font-bold">
+                  <span class="text-white">${m.produit}</span>
+                  <span class="${m.type === 'entree' ? 'text-emerald-400' : 'text-brand-orange'}">${m.type === 'entree' ? '+' : '-'}${m.qty}b</span>
+                </div>
+                <div class="flex justify-between text-[10px] text-gray-400">
+                  <span>${m.motif}</span>
+                  <span>${m.auteur}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // --- UTILISATEURS PIN ---
+    function renderEmployes(container) {
+      container.innerHTML = `
+        <div class="space-y-4">
+          <h2 class="text-lg font-black text-white">Utilisateurs & PIN 4 Chiffres</h2>
+          <div class="space-y-2.5">
+            ${store.utilisateurs.map(u => `
+              <div class="p-3.5 bg-brand-card border border-brand-border rounded-2xl flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <img src="${u.photo}" class="w-10 h-10 rounded-full object-cover border border-brand-orange" />
+                  <div>
+                    <h3 class="font-bold text-xs text-white">${u.nom}</h3>
+                    <span class="text-[10px] text-brand-orange uppercase font-bold">${u.role}</span>
+                  </div>
+                </div>
+                <span class="font-mono text-amber-400 font-bold text-xs bg-brand-black px-2.5 py-1 rounded-xl border border-brand-border">PIN: ${u.pin}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function promptPin() {
+      const code = prompt("Entrez votre code PIN à 4 chiffres (ex: 1234 pour Patron, 5678 pour Gérant, 0000 pour Serveuse) :");
+      if (code === '1234' || code === '5678' || code === '0000') {
+        const u = store.utilisateurs.find(x => x.pin === code);
+        if (u) store.currentUser = u;
+        alert(`Connecté avec succès en tant que ${store.currentUser.nom} (${store.currentUser.role}) !`);
+        navigate('dashboard');
+      } else if (code) {
+        alert("Code PIN incorrect. Réessayez !");
+      }
+    }
+
+    function ajouterMouvementModal(type) {
+      const qty = prompt("Quantité de bouteilles :", "12");
+      if (qty) {
+        store.mouvements.unshift({
+          id: 'm' + Date.now(),
+          produit: 'Beaufort Lager',
+          type: type,
+          qty: parseInt(qty) || 12,
+          auteur: `${store.currentUser.nom} (${store.currentUser.role})`,
+          motif: 'Mouvement manuel Sastrify',
+          date: 'À l\'instant'
+        });
+        navigate('mouvements');
+      }
+    }
+
+    navigate('landing');
+  </script>
+</body>
+</html>
