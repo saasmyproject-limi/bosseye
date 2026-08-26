@@ -3,15 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import { Store, Plus, Check, X, Building2, Phone, MapPin } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
-import { Boutique } from '@/types';
+import { Etablissement } from '@/types';
 
 interface BarSelectorModalProps {
   onBoutiqueChanged?: () => void;
 }
 
 export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModalProps) {
-  const [boutiques, setBoutiques] = useState<Boutique[]>([]);
-  const [activeBoutique, setActiveBoutique] = useState<Boutique | null>(null);
+  const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
+  const [activeEtablissement, setActiveEtablissement] = useState<Etablissement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -26,12 +26,12 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
   }, []);
 
   const loadData = () => {
-    setBoutiques(offlineDB.getBoutiques());
-    setActiveBoutique(offlineDB.getBoutique());
+    setEtablissements(offlineDB.getEtablissements());
+    setActiveEtablissement(offlineDB.getEtablissement());
   };
 
   const handleSelectBar = (id: string) => {
-    offlineDB.switchBoutique(id);
+    offlineDB.switchEtablissement(id);
     loadData();
     setIsOpen(false);
     if (onBoutiqueChanged) onBoutiqueChanged();
@@ -42,18 +42,20 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
     e.preventDefault();
     if (!nomBar.trim() || !telephone.trim()) return;
 
-    const newBar = offlineDB.createBoutique({
+    offlineDB.createEtablissement({
       nom: nomBar.trim(),
-      telephone: telephone.trim(),
-      ville: ville.trim() || 'Cameroun',
+      type: 'bar',
+      ville: ville.trim() || 'Douala',
       adresse: adresse.trim() || 'Centre-ville',
+      patronNom: 'Patron',
+      patronPin: '1234',
     });
 
     setNomBar('');
     setTelephone('');
     setAdresse('');
     setIsCreating(false);
-    setIsOpened(false);
+    setIsOpen(false);
     loadData();
     if (onBoutiqueChanged) onBoutiqueChanged();
     window.location.reload();
@@ -67,7 +69,7 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-card hover:bg-brand-hover border border-brand-border text-white text-xs font-bold transition-all shadow-card"
       >
         <Store className="w-4 h-4 text-brand-orange" />
-        <span className="truncate max-w-[110px]">{activeBoutique?.nom || 'Mon Bar'}</span>
+        <span className="truncate max-w-[110px]">{activeEtablissement?.nom || 'Mon Bar'}</span>
         <span className="text-[10px] text-gray-500">▾</span>
       </button>
 
@@ -96,8 +98,8 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
                 </p>
 
                 <div className="space-y-2 mb-4 max-h-60 overflow-y-auto pr-1">
-                  {boutiques.map((b) => {
-                    const isSelected = b.id === activeBoutique?.id;
+                  {etablissements.map((b) => {
+                    const isSelected = b.id === activeEtablissement?.id;
                     return (
                       <div
                         key={b.id}
@@ -111,7 +113,7 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
                         <div>
                           <h4 className="font-bold text-sm text-white">{b.nom}</h4>
                           <p className="text-[11px] text-gray-400 mt-0.5">
-                            {b.ville} • Tél: {b.telephone}
+                            {b.ville} {b.adresse ? `• ${b.adresse}` : ''}
                           </p>
                         </div>
 
@@ -140,7 +142,7 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
                   Créer mon Bar / Mon Compte
                 </h2>
                 <p className="text-xs text-gray-400 mb-4">
-                  Formulaire d'inscription rapide (7 jours d'essai offerts).
+                  Formulaire d'inscription rapide (14 jours d'essai offerts).
                 </p>
 
                 <form onSubmit={handleCreateBar} className="space-y-3.5">
@@ -217,3 +219,4 @@ export default function BarSelectorModal({ onBoutiqueChanged }: BarSelectorModal
     </>
   );
 }
+

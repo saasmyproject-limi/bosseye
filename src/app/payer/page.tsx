@@ -19,7 +19,7 @@ export default function PayerPage() {
   const loadInfo = () => {
     const etab = offlineDB.getEtablissement();
     setEtablissement(etab);
-    setTelephonePayeur(etab.telephone || '699001122');
+    setTelephonePayeur('699001122');
   };
 
   const handlePayMobileMoney = (methode: 'Orange Money' | 'MTN MoMo') => {

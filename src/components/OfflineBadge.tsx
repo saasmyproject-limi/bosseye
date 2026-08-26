@@ -18,7 +18,7 @@ export default function OfflineBadge() {
     window.addEventListener('offline', handleOffline);
 
     const interval = setInterval(() => {
-      setQueueCount(offlineDB.getSyncQueueCount());
+      setQueueCount(offlineDB.getOfflineQueueCount());
     }, 3000);
 
     return () => {

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import Navigation from '@/components/Navigation';
 
 export const metadata: Metadata = {
   title: 'TAKAM BAR - SaaS Snack Chic Yaoundé',
@@ -36,8 +35,8 @@ export default function RootLayout({
       </head>
       <body className="bg-brand-black text-white min-h-screen pb-24 antialiased selection:bg-brand-orange selection:text-white">
         {children}
-        <Navigation />
       </body>
     </html>
   );
 }
+
