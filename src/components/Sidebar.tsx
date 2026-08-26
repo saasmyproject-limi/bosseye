@@ -15,7 +15,9 @@ import {
   Zap,
   Menu,
   X,
-  AlertTriangle
+  AlertTriangle,
+  BarChart3,
+  MessageSquare
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { Utilisateur, Etablissement } from '@/types';
@@ -30,6 +32,7 @@ export default function Sidebar() {
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
 
   useEffect(() => {
     loadInfo();
@@ -39,11 +42,16 @@ export default function Sidebar() {
     setCurrentUser(offlineDB.getCurrentUser());
     setEtablissement(offlineDB.getEtablissement());
     setLowStockCount(offlineDB.getLowStockProducts().length);
+    const factures = offlineDB.getFactures();
+    const activeCredits = factures.filter((f) => f.statut === 'credit_encours' && f.montant_restant > 0);
+    setPendingCreditsCount(activeCredits.length);
   };
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard Patron', icon: LayoutDashboard },
     { href: '/produits', label: 'Inventaire Stock', icon: Package, badge: lowStockCount > 0 ? lowStockCount : null },
+    { href: '/comptabilite', label: 'Comptabilité & Marges', icon: BarChart3 },
+    { href: '/credits', label: 'Crédits & Relances WA', icon: MessageSquare, badge: pendingCreditsCount > 0 ? pendingCreditsCount : null },
     { href: '/mouvements', label: 'Mouvements', icon: History },
     { href: '/employes', label: 'Employés & PINs', icon: Users },
     { href: '/payer', label: 'Abonnement MoMo', icon: CreditCard },

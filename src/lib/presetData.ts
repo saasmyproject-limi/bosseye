@@ -1,4 +1,4 @@
-import { Etablissement, Utilisateur, Produit, MouvementStock } from '@/types';
+import { Etablissement, Utilisateur, Produit, MouvementStock, Client, Facture, RemboursementCredit, ChargeJournaliere } from '@/types';
 
 export const SEED_ETABLISSEMENT: Etablissement = {
   id: 'etab-capitole-douala',
@@ -19,7 +19,7 @@ export const SEED_UTILISATEURS: Utilisateur[] = [
     etablissement_id: 'etab-capitole-douala',
     nom: 'Madame TAKAM (Patronne)',
     role: 'Patron',
-    pin_code: '1234', // PIN 4 chiffres
+    pin_code: '1234',
     telephone: '699001122',
     photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
     actif: true,
@@ -29,7 +29,7 @@ export const SEED_UTILISATEURS: Utilisateur[] = [
     etablissement_id: 'etab-capitole-douala',
     nom: 'Jean-Paul KENGNE (Gérant)',
     role: 'Gérant',
-    pin_code: '5678', // PIN 4 chiffres
+    pin_code: '5678',
     telephone: '675443322',
     photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
     actif: true,
@@ -39,7 +39,7 @@ export const SEED_UTILISATEURS: Utilisateur[] = [
     etablissement_id: 'etab-capitole-douala',
     nom: 'Chantal MBALLA (Serveuse)',
     role: 'Employé',
-    pin_code: '0000', // PIN 4 chiffres
+    pin_code: '0000',
     telephone: '655889900',
     photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
     actif: true,
@@ -56,10 +56,11 @@ export const SEED_PRODUITS: Produit[] = [
     casiers_pleins: 12,
     bouteilles_vrac: 5,
     bouteilles_par_casier: 24,
-    quantite_totale_bouteilles: 293, // 12 * 24 + 5
-    seuil_alerte: 50, // Moins de ~2 casiers = alerte
+    quantite_totale_bouteilles: 293,
+    seuil_alerte: 50,
     prix_achat_casier: 6500,
     prix_vente_bouteille: 650,
+    cout_achat_unitaire_cmp: Math.round(6500 / 24), // ~271 FCFA
     actif: true,
   },
   {
@@ -75,6 +76,7 @@ export const SEED_PRODUITS: Produit[] = [
     seuil_alerte: 48,
     prix_achat_casier: 6000,
     prix_vente_bouteille: 600,
+    cout_achat_unitaire_cmp: Math.round(6000 / 24), // 250 FCFA
     actif: true,
   },
   {
@@ -83,13 +85,14 @@ export const SEED_PRODUITS: Produit[] = [
     nom: 'Guinness Foreign Extra',
     categorie: 'Bière',
     unite: 'bouteille',
-    casiers_pleins: 1, // ALERTE STOCK BAS
+    casiers_pleins: 1,
     bouteilles_vrac: 3,
     bouteilles_par_casier: 24,
     quantite_totale_bouteilles: 27,
-    seuil_alerte: 48, // Seuil à 48 -> Déclenche alerte stock bas !
+    seuil_alerte: 48,
     prix_achat_casier: 11000,
     prix_vente_bouteille: 1000,
+    cout_achat_unitaire_cmp: Math.round(11000 / 24), // ~458 FCFA
     actif: true,
   },
   {
@@ -105,6 +108,7 @@ export const SEED_PRODUITS: Produit[] = [
     seuil_alerte: 48,
     prix_achat_casier: 6500,
     prix_vente_bouteille: 650,
+    cout_achat_unitaire_cmp: Math.round(6500 / 24),
     actif: true,
   },
   {
@@ -120,6 +124,7 @@ export const SEED_PRODUITS: Produit[] = [
     seuil_alerte: 48,
     prix_achat_casier: 6800,
     prix_vente_bouteille: 700,
+    cout_achat_unitaire_cmp: Math.round(6800 / 24), // ~283 FCFA
     actif: true,
   },
   {
@@ -135,6 +140,7 @@ export const SEED_PRODUITS: Produit[] = [
     seuil_alerte: 5,
     prix_achat_casier: 3500,
     prix_vente_bouteille: 5000,
+    cout_achat_unitaire_cmp: 2500,
     actif: true,
   },
 ];
@@ -145,7 +151,7 @@ export const SEED_MOUVEMENTS: MouvementStock[] = [
     etablissement_id: 'etab-capitole-douala',
     produit_id: 'prod-beaufort',
     type_mouvement: 'entree',
-    quantite_bouteilles: 120, // 5 casiers
+    quantite_bouteilles: 120,
     utilisateur_id: 'user-gerant',
     note_motif: 'Reconstitution du stock fournisseur Brasseries',
     sync_status: 'synced',
@@ -159,21 +165,122 @@ export const SEED_MOUVEMENTS: MouvementStock[] = [
     type_mouvement: 'sortie',
     quantite_bouteilles: 12,
     utilisateur_id: 'user-employe',
-    note_motif: 'Vente table VIP 1',
+    note_motif: 'Vente table VIP 1 (Facture FAC-2026-0041)',
     sync_status: 'synced',
     client_timestamp: new Date(Date.now() - 3600 * 1000 * 5).toISOString(),
     created_at: new Date(Date.now() - 3600 * 1000 * 5).toISOString(),
   },
+];
+
+export const SEED_CLIENTS: Client[] = [
   {
-    id: 'mvt-3',
+    id: 'client-tchamba',
     etablissement_id: 'etab-capitole-douala',
-    produit_id: 'prod-guinness',
-    type_mouvement: 'casse_perte',
-    quantite_bouteilles: 2,
+    nom: 'Papa TCHAMBA (Client VIP)',
+    telephone_whatsapp: '237699112233',
+    note_quartier: 'Résidence Akwa Nord',
+    created_at: new Date(Date.now() - 3600 * 1000 * 24 * 10).toISOString(),
+  },
+  {
+    id: 'client-mbele',
+    etablissement_id: 'etab-capitole-douala',
+    nom: 'Docteur MBELE',
+    telephone_whatsapp: '237675998877',
+    note_quartier: 'Cabinet Médical Akwa',
+    created_at: new Date(Date.now() - 3600 * 1000 * 24 * 5).toISOString(),
+  },
+];
+
+export const SEED_FACTURES: Facture[] = [
+  {
+    id: 'fac-1001',
+    etablissement_id: 'etab-capitole-douala',
+    numero_facture: 'FAC-2026-0041',
     utilisateur_id: 'user-employe',
-    note_motif: 'Bouteilles cassées au service par la serveuse',
-    sync_status: 'synced',
-    client_timestamp: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-    created_at: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
+    montant_total: 12000,
+    montant_paye: 12000,
+    montant_restant: 0,
+    mode_paiement: 'cash',
+    statut: 'payee',
+    created_at: new Date(Date.now() - 3600 * 1000 * 5).toISOString(),
+    lignes: [
+      {
+        id: 'lig-1',
+        facture_id: 'fac-1001',
+        produit_id: 'prod-guinness',
+        nom_produit: 'Guinness Foreign Extra',
+        quantite_bouteilles: 12,
+        prix_unitaire_vente: 1000,
+        cout_unitaire_cmp: 458,
+        sous_total_vente: 12000,
+        sous_total_cout: 5496,
+        marge_brute: 6504,
+      },
+    ],
+  },
+  {
+    id: 'fac-1002',
+    etablissement_id: 'etab-capitole-douala',
+    numero_facture: 'FAC-2026-0042',
+    client_id: 'client-tchamba',
+    utilisateur_id: 'user-gerant',
+    montant_total: 45000,
+    montant_paye: 20000,
+    montant_restant: 25000, // Facture à crédit partiellement payée !
+    mode_paiement: 'credit',
+    statut: 'credit_encours',
+    date_derniere_relance_whatsapp: new Date(Date.now() - 3600 * 1000 * 24 * 2).toISOString(),
+    compteur_relances: 1,
+    created_at: new Date(Date.now() - 3600 * 1000 * 24 * 3).toISOString(),
+    lignes: [
+      {
+        id: 'lig-2',
+        facture_id: 'fac-1002',
+        produit_id: 'prod-beaufort',
+        nom_produit: 'Beaufort Lager',
+        quantite_bouteilles: 24,
+        prix_unitaire_vente: 650,
+        cout_unitaire_cmp: 271,
+        sous_total_vente: 15600,
+        sous_total_cout: 6504,
+        marge_brute: 9096,
+      },
+      {
+        id: 'lig-3',
+        facture_id: 'fac-1002',
+        produit_id: 'prod-pouletdg',
+        nom_produit: 'Poulet DG Capitole',
+        quantite_bouteilles: 5,
+        prix_unitaire_vente: 5000,
+        cout_unitaire_cmp: 2500,
+        sous_total_vente: 25000,
+        sous_total_cout: 12500,
+        marge_brute: 12500,
+      },
+    ],
+  },
+];
+
+export const SEED_REMBOURSEMENTS: RemboursementCredit[] = [
+  {
+    id: 'remb-1',
+    facture_id: 'fac-1002',
+    etablissement_id: 'etab-capitole-douala',
+    montant_regle: 20000,
+    methode: 'orange_money',
+    utilisateur_id: 'user-patron',
+    note_reference: 'Acompte versé par Orange Money CM',
+    created_at: new Date(Date.now() - 3600 * 1000 * 24 * 3).toISOString(),
+  },
+];
+
+export const SEED_CHARGES: ChargeJournaliere[] = [
+  {
+    id: 'chg-1',
+    etablissement_id: 'etab-capitole-douala',
+    motif: 'Glace en bloc pour comptoir',
+    montant: 3000,
+    date: new Date().toISOString().split('T')[0],
+    created_at: new Date().toISOString(),
   },
 ];
