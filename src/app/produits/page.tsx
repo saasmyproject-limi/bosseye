@@ -48,6 +48,7 @@ export default function ProduitsPage() {
       seuil_alerte: Number(seuilAlerte) || 48,
       prix_achat_casier: Number(prixAchatCasier) || 0,
       prix_vente_bouteille: Number(prixVenteBouteille) || 0,
+      cout_achat_unitaire_cmp: Math.round((Number(prixAchatCasier) || 0) / bouteillesParCasier),
       actif: true,
     };
 
