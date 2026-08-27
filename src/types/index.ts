@@ -265,6 +265,7 @@ export interface Paiement {
   abonnement_id?: string;
   montant: number;
   methode: MethodePaiement;
+  telephone_payeur?: string;
   reference_transaction: string;
   statut: 'en_attente' | 'reussi' | 'echoue';
   created_at: string;
