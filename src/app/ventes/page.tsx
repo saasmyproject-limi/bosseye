@@ -63,9 +63,11 @@ export default function VentesPage() {
   // Variantes Modal Picker
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Produit | null>(null);
 
-  // Modal Encaissement & Payment Mode
+  // Modal Encaissement, Remise & Payment Mode
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit'>('cash');
+  const [remiseInput, setRemiseInput] = useState<number>(0);
+  const [montantVerseInput, setMontantVerseInput] = useState<number>(0);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
 
@@ -273,8 +275,13 @@ export default function VentesPage() {
   const handleFinalizeSale = () => {
     const isBarOrSnack = etablissement?.type_activite !== 'boutique';
     const itemsToProcess = isBarOrSnack ? currentTableItems : cart;
+    const rawTotal = isBarOrSnack ? currentTableTotal : cartTotal;
 
     if (itemsToProcess.length === 0) return;
+
+    const netAPayerCalculated = Math.max(0, rawTotal - (remiseInput || 0));
+    const verseVal = montantVerseInput || netAPayerCalculated;
+    const renduVal = Math.max(0, verseVal - netAPayerCalculated);
 
     const lignes = itemsToProcess.map((item: any) => {
       let detail = '';
@@ -297,6 +304,9 @@ export default function VentesPage() {
     const newFac = offlineDB.createFacture({
       lignes,
       mode_paiement: paymentMode,
+      remise: remiseInput || 0,
+      montant_verse: verseVal,
+      montant_rendu: renduVal,
       client_id: paymentMode === 'credit' ? selectedClientId : undefined,
       transaction_id: isBarOrSnack ? activeTableNumber : 'COMPTOIR',
       caissiere_id: currentUser?.id,
@@ -311,6 +321,8 @@ export default function VentesPage() {
     }
 
     setIsPaymentModalOpen(false);
+    setRemiseInput(0);
+    setMontantVerseInput(0);
     loadData();
   };
 
@@ -318,6 +330,10 @@ export default function VentesPage() {
     offlineDB.updateStatutCommandeEnLigne(cmdId, nextStatut);
     loadData();
   };
+
+  const currentRawTotal = etablissement?.type_activite === 'boutique' ? cartTotal : currentTableTotal;
+  const currentNetAPayer = Math.max(0, currentRawTotal - (remiseInput || 0));
+  const currentMonnaieRendue = Math.max(0, (montantVerseInput || currentNetAPayer) - currentNetAPayer);
 
   return (
     <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex flex-col lg:flex-row font-sans">
@@ -948,7 +964,7 @@ export default function VentesPage() {
           </div>
         )}
 
-        {/* --- MODAL PAIEMENT & ENCAISSEMENT --- */}
+        {/* --- MODAL PAIEMENT, REMISE & ENCAISSEMENT --- */}
         {isPaymentModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-4">
@@ -956,12 +972,62 @@ export default function VentesPage() {
                 Encaissement & Édition de Ticket
               </h3>
 
-              <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between">
-                <span className="font-bold text-xs text-[#1B4332]">Montant total à régler :</span>
-                <span className="font-serif font-black text-xl text-[#1B4332]">
-                  {(etablissement?.type_activite === 'boutique' ? cartTotal : currentTableTotal).toLocaleString('fr-FR')} FCFA
-                </span>
+              {/* Résumé Financier : Grand Total, Remise & Net à payer */}
+              <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-gray-600">Grand Total Brut :</span>
+                  <span className="font-black text-[#1B4332]">{currentRawTotal.toLocaleString('fr-FR')} FCFA</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-[#B8442C]">
+                  <span className="font-bold">Remise / Réduction :</span>
+                  <span className="font-black">- {(remiseInput || 0).toLocaleString('fr-FR')} FCFA</span>
+                </div>
+
+                <div className="flex justify-between items-center pt-2 border-t border-[#E2D5C3]">
+                  <span className="font-bold text-xs text-[#1B4332]">Net à Payer Client :</span>
+                  <span className="font-serif font-black text-xl text-[#1B4332]">
+                    {currentNetAPayer.toLocaleString('fr-FR')} FCFA
+                  </span>
+                </div>
               </div>
+
+              {/* Saisie de la Remise & du Montant Versé */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Remise (FCFA)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={remiseInput || ''}
+                    onChange={(e) => setRemiseInput(Number(e.target.value))}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Montant Versé (FCFA)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder={`${currentNetAPayer}`}
+                    value={montantVerseInput || ''}
+                    onChange={(e) => setMontantVerseInput(Number(e.target.value))}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              </div>
+
+              {/* Calcul de la Monnaie Rendue */}
+              {montantVerseInput > 0 && (
+                <div className="p-3 rounded-2xl bg-emerald-100 border border-emerald-300 flex justify-between items-center text-xs">
+                  <span className="font-bold text-emerald-950">Monnaie à Rendre Client :</span>
+                  <span className="font-serif font-black text-base text-emerald-950">
+                    {currentMonnaieRendue.toLocaleString('fr-FR')} FCFA
+                  </span>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-bold text-[#1B4332] block mb-2">Moyen de Règlement</label>
@@ -1023,35 +1089,95 @@ export default function VentesPage() {
           </div>
         )}
 
-        {/* --- MODAL CONFIRMATION TICKET THERMIQUE BLUETOOTH --- */}
+        {/* --- MODAL CONFIRMATION & IMPRESSION TICKET THERMIQUE BLUETOOTH (COMPLET 11 POINTS) --- */}
         {lastCreatedFacture && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-center space-y-4">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-center space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto text-2xl font-bold">
                 ✓
               </div>
               <h3 className="font-serif font-black text-xl text-[#1B4332]">
                 Facture Clôturée & Enregistrée !
               </h3>
-              <p className="text-xs font-bold text-gray-600">
-                Facture n° <strong className="text-[#1B4332]">{lastCreatedFacture.numero_facture}</strong> • Total :{' '}
-                <strong className="text-[#1B4332]">{lastCreatedFacture.montant_total.toLocaleString('fr-FR')} FCFA</strong>
-              </p>
 
-              <div className="p-4 rounded-2xl bg-white border border-[#E2D5C3] text-left text-xs font-mono space-y-1 shadow-inner">
-                <div className="text-center font-bold pb-2 border-b border-gray-200">
-                  <p className="text-sm font-sans font-black">{etablissement?.nom}</p>
-                  <p className="text-[10px] text-gray-500 font-sans">{etablissement?.ville} - {etablissement?.adresse}</p>
+              {/* TICKET CLIENT COMPLET AVEC LES 11 ÉLÉMENTS REQUIS */}
+              <div className="p-4 rounded-2xl bg-white border border-[#E2D5C3] text-left text-xs font-mono space-y-2.5 shadow-inner">
+                {/* 1. Nom boutique, 2. Quartier/Adresse, 3. Téléphone */}
+                <div className="text-center pb-2 border-b border-dashed border-gray-300">
+                  <p className="text-base font-sans font-black uppercase text-[#1B4332]">{etablissement?.nom}</p>
+                  <p className="text-[11px] text-gray-600 font-sans font-bold">Quartier : {etablissement?.ville} - {etablissement?.adresse}</p>
+                  <p className="text-[11px] text-[#B8442C] font-sans font-black">📞 Tél : {etablissement?.telephone || '699 00 00 00'}</p>
                 </div>
-                {lastCreatedFacture.lignes?.map((l) => (
-                  <div key={l.id} className="flex justify-between">
-                    <span>{l.quantite_bouteilles || (l as any).quantite || 1}x {l.nom_produit} {l.detail_variante ? `(${l.detail_variante})` : ''}</span>
-                    <span className="font-bold">{l.sous_total_vente.toLocaleString('fr-FR')} FCFA</span>
+
+                {/* 4. Date & Heure précises, 5. Mode de Paiement */}
+                <div className="text-[11px] font-sans space-y-0.5 border-b border-dashed border-gray-300 pb-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-bold">N° Facture :</span>
+                    <span className="font-black text-[#1B4332]">{lastCreatedFacture.numero_facture}</span>
                   </div>
-                ))}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-bold">Date & Heure :</span>
+                    <span className="font-bold text-gray-700">
+                      {new Date(lastCreatedFacture.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-bold">Règlement :</span>
+                    <span className="font-black uppercase text-[#B8442C]">
+                      {lastCreatedFacture.mode_paiement === 'cash' ? '💵 Cash Espèces' : lastCreatedFacture.mode_paiement === 'orange_money' ? '🟧 Orange Money' : lastCreatedFacture.mode_paiement === 'mtn_momo' ? '🟡 MTN MoMo' : '📝 Crédit Client'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 6. Liste des Articles, Déclinaisons & Prix */}
+                <div className="py-1 border-b border-dashed border-gray-300 space-y-1.5">
+                  <div className="flex justify-between font-bold text-[10px] uppercase text-gray-400 pb-1">
+                    <span>Article (Déclinaison)</span>
+                    <span>Total</span>
+                  </div>
+                  {lastCreatedFacture.lignes?.map((l) => {
+                    const q = l.quantite_bouteilles || (l as any).quantite || 1;
+                    return (
+                      <div key={l.id} className="flex justify-between text-xs">
+                        <div className="truncate pr-2">
+                          <p className="font-bold text-[#1B4332]">{q}x {l.nom_produit}</p>
+                          {l.detail_variante && <p className="text-[10px] text-gray-500 font-sans">{l.detail_variante}</p>}
+                          <p className="text-[10px] text-gray-400 font-sans">{l.prix_unitaire_vente.toLocaleString('fr-FR')} F / u</p>
+                        </div>
+                        <span className="font-black text-[#1B4332] whitespace-nowrap">{l.sous_total_vente.toLocaleString('fr-FR')} F</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 7. Grand Total Brut, 8. Remise, 9. Net à Payer, 10. Versé, 11. Remboursé */}
+                <div className="pt-1 text-xs font-sans space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 font-bold">Grand Total Brut :</span>
+                    <span className="font-black text-[#1B4332]">{lastCreatedFacture.montant_total.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  {(lastCreatedFacture.remise || 0) > 0 && (
+                    <div className="flex justify-between text-[#B8442C]">
+                      <span className="font-bold">Remise / Réduction :</span>
+                      <span className="font-black">- {(lastCreatedFacture.remise || 0).toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm pt-1 border-t border-gray-200">
+                    <span className="font-black text-[#1B4332]">NET À PAYER :</span>
+                    <span className="font-black text-[#1B4332]">{(lastCreatedFacture.net_a_payer || lastCreatedFacture.montant_total).toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-600 pt-1">
+                    <span className="font-bold">Montant Versé Client :</span>
+                    <span className="font-bold text-gray-800">{(lastCreatedFacture.montant_verse || lastCreatedFacture.net_a_payer || lastCreatedFacture.montant_total).toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-emerald-800 font-bold bg-emerald-50 p-2 rounded-xl border border-emerald-200 mt-1">
+                    <span>MONNAIE RENDUE :</span>
+                    <span className="font-black text-sm">{(lastCreatedFacture.montant_rendu || 0).toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-2">
                 <button
                   onClick={() => window.print()}
                   className="flex-1 py-3.5 rounded-2xl bg-[#1B4332] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md"

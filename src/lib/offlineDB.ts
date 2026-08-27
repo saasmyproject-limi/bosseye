@@ -751,6 +751,9 @@ export const offlineDB = {
     }>;
     mode_paiement: 'cash' | 'orange_money' | 'mtn_momo' | 'credit';
     montant_paye?: number;
+    remise?: number;
+    montant_verse?: number;
+    montant_rendu?: number;
     client_id?: string;
     transaction_id?: string;
     caissiere_id?: string;
@@ -803,8 +806,11 @@ export const offlineDB = {
       };
     });
 
-    const mPaye = params.mode_paiement === 'credit' ? (params.montant_paye || 0) : totalVente;
-    const mRestant = Math.max(0, totalVente - mPaye);
+    const remiseVal = params.remise || 0;
+    const netAPayer = Math.max(0, totalVente - remiseVal);
+
+    const mPaye = params.mode_paiement === 'credit' ? (params.montant_paye || 0) : netAPayer;
+    const mRestant = Math.max(0, netAPayer - mPaye);
     const isCredit = mRestant > 0 || params.mode_paiement === 'credit';
 
     const numSeq = Math.floor(1000 + Math.random() * 9000);
@@ -818,6 +824,10 @@ export const offlineDB = {
       caissiere_id: params.caissiere_id || currentUser.id,
       serveuse_id: params.serveuse_id,
       montant_total: totalVente,
+      remise: remiseVal,
+      net_a_payer: netAPayer,
+      montant_verse: params.montant_verse || mPaye,
+      montant_rendu: params.montant_rendu || (params.montant_verse ? Math.max(0, params.montant_verse - netAPayer) : 0),
       montant_paye: mPaye,
       montant_restant: mRestant,
       mode_paiement: params.mode_paiement,

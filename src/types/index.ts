@@ -31,6 +31,7 @@ export interface Etablissement {
   type_activite: TypeActivite;
   ville: string;
   adresse: string;
+  telephone?: string;
   plan: 'Basique' | 'Premium';
   statut_abonnement: StatutAbonnement;
   date_fin_essai: string; // ISO String (7 jours pour œko)
@@ -207,6 +208,10 @@ export interface Facture {
   caissiere_id?: string;
   serveuse_id?: string;
   montant_total: number;
+  remise?: number;
+  net_a_payer?: number;
+  montant_verse?: number;
+  montant_rendu?: number;
   montant_paye: number;
   montant_restant: number;
   mode_paiement: ModePaiementVente;
