@@ -23,7 +23,9 @@ import {
   Clock,
   Printer,
   ShieldAlert,
-  Sparkles
+  Sparkles,
+  Send,
+  X
 } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import {
@@ -50,7 +52,7 @@ export default function VentesPage() {
   // Mode Onglet pour Boutique
   const [activeTab, setActiveTab] = useState<'comptoir' | 'livraisons'>('comptoir');
 
-  // Panier Vente Comptoir (Boutique)
+  // Panier Vente Comptoir (Feuille Facture Client Directe)
   const [cart, setCart] = useState<Array<{
     produit: Produit;
     variante?: VarianteProduit;
@@ -66,6 +68,18 @@ export default function VentesPage() {
   const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit'>('cash');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
+
+  // --- MODAL CRÉATION COMMANDE LIVRAISON WHATSAPP ---
+  const [isNewDeliveryModalOpen, setIsNewDeliveryModalOpen] = useState(false);
+  const [newCmdClientNom, setNewCmdClientNom] = useState('');
+  const [newCmdClientPhone, setNewCmdClientPhone] = useState('');
+  const [newCmdAdresse, setNewCmdAdresse] = useState('');
+  const [newCmdCart, setNewCmdCart] = useState<Array<{
+    produit: Produit;
+    variante?: VarianteProduit;
+    quantite: number;
+    prix_unitaire: number;
+  }>>([]);
 
   // --- GESTION DES TABLES BAR & SNACK ---
   const [tablesState, setTablesState] = useState<Record<string, Array<{
@@ -157,6 +171,61 @@ export default function VentesPage() {
       updated[index].quantite = newQty;
       return updated;
     });
+  };
+
+  // --- NOULLE COMMANDE LIVRAISON WHATSAPP ---
+  const handleAddProductToDeliveryCart = (prod: Produit, variante?: VarianteProduit) => {
+    const price = variante?.prix_vente_override || prod.prix_vente_unitaire || 0;
+    setNewCmdCart((prev) => {
+      const existingIndex = prev.findIndex(
+        (item) => item.produit.id === prod.id && item.variante?.id === variante?.id
+      );
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex].quantite += 1;
+        return updated;
+      } else {
+        return [...prev, { produit: prod, variante, quantite: 1, prix_unitaire: price }];
+      }
+    });
+  };
+
+  const handleCreateDeliveryOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCmdClientNom.trim() || !newCmdAdresse.trim() || newCmdCart.length === 0) return;
+
+    const total = newCmdCart.reduce((acc, i) => acc + i.quantite * i.prix_unitaire, 0);
+
+    offlineDB.addCommandeEnLigne({
+      client_nom: newCmdClientNom.trim(),
+      client_telephone: newCmdClientPhone.trim() || '237600000000',
+      adresse_livraison: newCmdAdresse.trim(),
+      statut: 'en_attente',
+      montant_total: total,
+      lignes: newCmdCart.map((item) => {
+        let detail = '';
+        if (item.variante) {
+          const t = item.variante.taille ? `Taille ${item.variante.taille}` : '';
+          const c = item.variante.couleur ? `${item.variante.couleur}` : '';
+          detail = [t, c].filter(Boolean).join(' / ');
+        }
+        return {
+          produit_id: item.produit.id,
+          variante_id: item.variante?.id,
+          nom_produit: item.produit.nom,
+          detail_variante: detail,
+          quantite: item.quantite,
+          prix_unitaire: item.prix_unitaire,
+        };
+      }),
+    });
+
+    setIsNewDeliveryModalOpen(false);
+    setNewCmdClientNom('');
+    setNewCmdClientPhone('');
+    setNewCmdAdresse('');
+    setNewCmdCart([]);
+    loadData();
   };
 
   // --- BAR/SNACK TABLE ACTIONS ---
@@ -282,7 +351,7 @@ export default function VentesPage() {
                   activeTab === 'comptoir' ? 'bg-[#1B4332] text-white shadow-md' : 'text-[#1B4332] hover:bg-[#FBF7EF]'
                 }`}
               >
-                🏬 Vente Comptoir
+                🏬 Vente Comptoir (Facture)
               </button>
               <button
                 onClick={() => setActiveTab('livraisons')}
@@ -291,13 +360,13 @@ export default function VentesPage() {
                 }`}
               >
                 <Truck className="w-4 h-4 text-[#E8A33D]" />
-                <span>Commandes & Livraisons ({commandesLigne.length})</span>
+                <span>Livraisons WhatsApp ({commandesLigne.length})</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* --- SECTEUR 1: BOUTIQUE (VENTE COMPTOIR DIRECTE & LIVRAISONS) --- */}
+        {/* --- SECTEUR 1: BOUTIQUE (VENTE COMPTOIR DIRECTE & LIVRAISONS WHATSAPP) --- */}
         {etablissement?.type_activite === 'boutique' && activeTab === 'comptoir' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Catalogue Produits & Variantes (7 Cols) */}
@@ -356,7 +425,7 @@ export default function VentesPage() {
                         </span>
                         <button className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1 hover:bg-[#2D6A4F]">
                           <Plus className="w-3.5 h-3.5" />
-                          <span>{hasVariants ? 'Choisir Taille' : 'Ajouter au Panier'}</span>
+                          <span>{hasVariants ? 'Choisir Taille' : 'Cocher / Ajouter'}</span>
                         </button>
                       </div>
                     </div>
@@ -365,28 +434,31 @@ export default function VentesPage() {
               </div>
             </div>
 
-            {/* Ticket Facture Client Panier (5 Cols) */}
+            {/* FEUILLE FACTURE TICKET CLIENT DIRECTE (5 Cols) */}
             <div className="lg:col-span-5 bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-lg flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-[#E2D5C3]">
-                  <h2 className="font-serif font-black text-lg text-[#1B4332] flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-[#B8442C]" />
-                    Facture Ticket Client (Comptoir)
-                  </h2>
-                  <span className="text-xs font-bold text-gray-500">{cart.length} article(s)</span>
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-[#B8442C]">Générateur de Facture</span>
+                    <h2 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-[#B8442C]" />
+                      Facture Ticket Client
+                    </h2>
+                  </div>
+                  <span className="text-xs font-bold text-gray-500">{cart.length} ligne(s)</span>
                 </div>
 
                 {cart.length === 0 ? (
                   <div className="py-12 text-center text-gray-400 space-y-2">
                     <ShoppingBag className="w-12 h-12 mx-auto opacity-30 text-[#1B4332]" />
-                    <p className="text-xs font-bold">Cliquez sur un article à gauche pour l'ajouter sur la facture client</p>
+                    <p className="text-xs font-bold">Cliquez sur un article à gauche pour cocher et créer la facture du client</p>
                   </div>
                 ) : (
                   <div className="space-y-2.5 mt-4 max-h-[380px] overflow-y-auto pr-1">
                     {cart.map((item, index) => (
                       <div
                         key={index}
-                        className="bg-[#FBF7EF] p-3 rounded-2xl border border-[#E2D5C3] flex items-center justify-between gap-2"
+                        className="bg-[#FBF7EF] p-3 rounded-2xl border border-[#E2D5C3] flex items-center justify-between gap-2 shadow-sm"
                       >
                         <div className="flex-1 truncate">
                           <h4 className="font-bold text-xs text-[#1B4332] truncate">{item.produit.nom}</h4>
@@ -396,7 +468,7 @@ export default function VentesPage() {
                             </span>
                           )}
                           <p className="text-[11px] font-black text-[#1B4332]/80 mt-0.5">
-                            {item.prix_unitaire.toLocaleString('fr-FR')} FCFA
+                            {item.prix_unitaire.toLocaleString('fr-FR')} FCFA / pièce
                           </p>
                         </div>
 
@@ -443,12 +515,91 @@ export default function VentesPage() {
           </div>
         )}
 
+        {/* --- SECTEUR 1 (SUITE): COMMANDES EN LIGNE & LIVRAISONS WHATSAPP (BOUTIQUE) --- */}
+        {etablissement?.type_activite === 'boutique' && activeTab === 'livraisons' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h2 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
+                <Truck className="w-5 h-5 text-[#B8442C]" />
+                Commandes à Livrer (depuis WhatsApp & Réseaux)
+              </h2>
+
+              <button
+                onClick={() => setIsNewDeliveryModalOpen(true)}
+                className="py-3 px-5 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-md flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Nouvelle Commande WhatsApp</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {commandesLigne.map((cmd) => (
+                <div key={cmd.id} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#B8442C]">
+                        {cmd.numero_commande}
+                      </span>
+                      <h3 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom}</h3>
+                      <p className="text-xs text-gray-600 font-bold">📱 {cmd.client_telephone}</p>
+                    </div>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                      cmd.statut === 'livree_payee'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : cmd.statut === 'en_livraison'
+                        ? 'bg-amber-100 text-amber-900'
+                        : 'bg-blue-100 text-blue-900'
+                    }`}>
+                      {cmd.statut === 'livree_payee' ? '✓ Livrée & Payée' : cmd.statut === 'en_livraison' ? '🚚 En cours de livraison' : '⏳ En attente de livraison'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
+                    <p className="text-gray-500 font-bold">📍 Adresse : {cmd.adresse_livraison}</p>
+                    {cmd.lignes.map((l, i) => (
+                      <div key={i} className="flex justify-between font-medium">
+                        <span>{l.quantite}x {l.nom_produit} {l.detail_variante ? `(${l.detail_variante})` : ''}</span>
+                        <span className="font-bold">{l.prix_unitaire.toLocaleString('fr-FR')} F</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[#E2D5C3]">
+                    <span className="font-serif font-black text-lg text-[#1B4332]">
+                      Total: {cmd.montant_total.toLocaleString('fr-FR')} FCFA
+                    </span>
+
+                    {cmd.statut !== 'livree_payee' && (
+                      <div className="flex items-center gap-2">
+                        {cmd.statut === 'en_attente' && (
+                          <button
+                            onClick={() => handleUpdateStatutLivraison(cmd.id, 'en_livraison')}
+                            className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold"
+                          >
+                            Passer En Livraison
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleUpdateStatutLivraison(cmd.id, 'livree_payee')}
+                          className="px-3 py-1.5 rounded-xl bg-[#B8442C] text-white text-xs font-bold"
+                        >
+                          Valider Livrée & Payée (Auto-Déstockage)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* --- SECTEUR 2: BAR & SNACK (GESTION INTERACTIVE DES TABLES ET BOISSONS) --- */}
         {etablissement?.type_activite !== 'boutique' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Colonne Gauche: Tables & Catalogue de Boissons (7 Cols) */}
             <div className="lg:col-span-7 space-y-5">
-              {/* Sélection des Tables */}
               <div>
                 <h3 className="font-serif font-black text-base text-[#1B4332] mb-2.5">
                   1. Cliquez sur une Table pour ouvrir sa Commande :
@@ -487,7 +638,6 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              {/* Catalogue de Boissons & Plats pour la Table sélectionnée */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-serif font-black text-base text-[#1B4332]">
@@ -526,7 +676,7 @@ export default function VentesPage() {
               </div>
             </div>
 
-            {/* Colonne Droite: Ticket Facture Client de la Table Active (5 Cols) */}
+            {/* Ticket Facture Client de la Table Active (5 Cols) */}
             <div className="lg:col-span-5 bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-lg flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-[#E2D5C3]">
@@ -576,7 +726,6 @@ export default function VentesPage() {
                   </div>
                 )}
 
-                {/* Option Split Addition Divisible */}
                 {currentTableItems.length > 0 && (
                   <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
@@ -603,7 +752,6 @@ export default function VentesPage() {
                 )}
               </div>
 
-              {/* Total & Encaissement Table */}
               <div className="pt-4 border-t border-[#E2D5C3] space-y-3">
                 <div className="flex items-center justify-between text-base">
                   <span className="font-bold text-[#1B4332]">Total {activeTableNumber} :</span>
@@ -629,6 +777,107 @@ export default function VentesPage() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* --- MODAL CRÉATION COMMANDE WHATSAPP (BOUTIQUE) --- */}
+        {isNewDeliveryModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <form onSubmit={handleCreateDeliveryOrder} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-[#B8442C]" />
+                  Nouvelle Commande à Livrer (WhatsApp)
+                </h3>
+                <button type="button" onClick={() => setIsNewDeliveryModalOpen(false)} className="p-1 text-gray-500">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Client *</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Mme CHANTAL VIP"
+                    value={newCmdClientNom}
+                    onChange={(e) => setNewCmdClientNom(e.target.value)}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Téléphone WhatsApp *</label>
+                  <input
+                    type="tel"
+                    placeholder="Ex: 699445566"
+                    value={newCmdClientPhone}
+                    onChange={(e) => setNewCmdClientPhone(e.target.value)}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Adresse / Quartier de Livraison *</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Douala - Bonapriso (Face Clinique)"
+                  value={newCmdAdresse}
+                  onChange={(e) => setNewCmdAdresse(e.target.value)}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                  required
+                />
+              </div>
+
+              {/* Sélection des Articles à réserver */}
+              <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
+                <label className="text-xs font-bold text-[#1B4332] block">Sélectionner les Articles Commandés :</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                  {produits.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => handleAddProductToDeliveryCart(p)}
+                      className="p-2 rounded-xl bg-[#F3ECE0] hover:bg-[#E2D5C3] cursor-pointer text-xs font-bold text-[#1B4332] flex justify-between items-center"
+                    >
+                      <span className="truncate">{p.nom}</span>
+                      <span className="font-black text-[#B8442C]">{(p.prix_vente_unitaire || 0).toLocaleString('fr-FR')} F +</span>
+                    </div>
+                  ))}
+                </div>
+
+                {newCmdCart.length > 0 && (
+                  <div className="pt-2 border-t border-[#E2D5C3] space-y-1">
+                    <span className="text-[11px] font-bold text-gray-500">Articles réservés ({newCmdCart.length}) :</span>
+                    {newCmdCart.map((item, i) => (
+                      <div key={i} className="flex justify-between text-xs font-bold">
+                        <span>{item.quantite}x {item.produit.nom}</span>
+                        <span>{(item.quantite * item.prix_unitaire).toLocaleString('fr-FR')} FCFA</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewDeliveryModalOpen(false)}
+                  className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={newCmdCart.length === 0}
+                  className="flex-1 py-3 px-4 rounded-xl bg-[#B8442C] text-white font-black text-xs shadow-md disabled:opacity-50"
+                >
+                  Enregistrer la Commande à Livrer
+                </button>
+              </div>
+            </form>
           </div>
         )}
 

@@ -437,6 +437,24 @@ export const offlineDB = {
     } catch { return SEED_COMMANDES_LIGNE; }
   },
 
+  addCommandeEnLigne(cmd: Omit<CommandeEnLigne, 'id' | 'etablissement_id' | 'numero_commande' | 'created_at'>): CommandeEnLigne {
+    const etab = this.getEtablissement();
+    const numSeq = Math.floor(100 + Math.random() * 900);
+    const newCmd: CommandeEnLigne = {
+      ...cmd,
+      id: `cmd-${Date.now()}`,
+      etablissement_id: etab.id,
+      numero_commande: `CMD-2026-${numSeq}`,
+      created_at: new Date().toISOString(),
+    };
+    const all = this.getAllCommandesGlobal();
+    const updated = [newCmd, ...all];
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+    return newCmd;
+  },
+
   updateStatutCommandeEnLigne(commandeId: string, newStatut: StatutLivraison): CommandeEnLigne | null {
     const cmds = this.getCommandesEnLigne();
     const cmd = cmds.find((c) => c.id === commandeId);
