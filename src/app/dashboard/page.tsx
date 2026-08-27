@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
-import { Etablissement, Utilisateur, Produit, MouvementStock } from '@/types';
+import { Etablissement, Utilisateur, Produit, MouvementStock, Facture } from '@/types';
 
 export default function DashboardPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
@@ -172,7 +172,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <h1 className="font-serif text-2xl sm:text-3xl font-black">
-              {greetingTime}, {currentUser?.nom || 'Patron'} !
+              {salutation}, {currentUser?.nom || 'Patron'} !
             </h1>
             <p className="text-xs text-emerald-100/80 max-w-xl">
               Bienvenue sur <strong>{etablissement?.nom}</strong> ({etablissement?.ville}). Voici l'état de votre commerce aujourd'hui.
