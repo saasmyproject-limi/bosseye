@@ -70,6 +70,9 @@ export default function VentesPage() {
   const [montantVerseInput, setMontantVerseInput] = useState<number>(0);
   const [acompteCreditInput, setAcompteCreditInput] = useState<number>(0);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [isNewClientMode, setIsNewClientMode] = useState<boolean>(false);
+  const [newClientNom, setNewClientNom] = useState<string>('');
+  const [newClientPhone, setNewClientPhone] = useState<string>('');
   const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
 
   // --- MODAL CRÉATION COMMANDE LIVRAISON WHATSAPP ---
@@ -281,10 +284,28 @@ export default function VentesPage() {
     if (itemsToProcess.length === 0) return;
 
     const netAPayerCalculated = Math.max(0, rawTotal - (remiseInput || 0));
-    const isCredit = paymentMode === 'credit';
-    const acompte = isCredit ? (acompteCreditInput || 0) : netAPayerCalculated;
-    const verseVal = isCredit ? acompte : (montantVerseInput || netAPayerCalculated);
-    const renduVal = isCredit ? 0 : Math.max(0, verseVal - netAPayerCalculated);
+    const isCreditMode = paymentMode === 'credit';
+    const isPartialPayment = montantVerseInput > 0 && montantVerseInput < netAPayerCalculated;
+    const isCreditOrPartial = isCreditMode || isPartialPayment;
+
+    // Gérer l'enregistrement du Client (sélection existant ou création rapide)
+    let activeClientId = selectedClientId;
+    if (isCreditOrPartial) {
+      if (isNewClientMode && newClientNom.trim() && newClientPhone.trim()) {
+        const createdC = offlineDB.addClient({
+          nom: newClientNom.trim(),
+          telephone_whatsapp: newClientPhone.trim(),
+        });
+        activeClientId = createdC.id;
+      }
+    }
+
+    const acompte = isCreditMode
+      ? (acompteCreditInput || 0)
+      : (isPartialPayment ? montantVerseInput : netAPayerCalculated);
+
+    const verseVal = isCreditMode ? acompte : (montantVerseInput || netAPayerCalculated);
+    const renduVal = (isCreditMode || isPartialPayment) ? 0 : Math.max(0, verseVal - netAPayerCalculated);
 
     const lignes = itemsToProcess.map((item: any) => {
       let detail = '';
@@ -311,7 +332,7 @@ export default function VentesPage() {
       montant_paye: acompte,
       montant_verse: verseVal,
       montant_rendu: renduVal,
-      client_id: paymentMode === 'credit' ? selectedClientId : undefined,
+      client_id: activeClientId || undefined,
       transaction_id: isBarOrSnack ? activeTableNumber : 'COMPTOIR',
       caissiere_id: currentUser?.id,
     });
@@ -328,6 +349,10 @@ export default function VentesPage() {
     setRemiseInput(0);
     setMontantVerseInput(0);
     setAcompteCreditInput(0);
+    setSelectedClientId('');
+    setNewClientNom('');
+    setNewClientPhone('');
+    setIsNewClientMode(false);
     loadData();
   };
 
@@ -1058,49 +1083,77 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              {paymentMode === 'credit' && (
-                <div className="space-y-3 p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3]">
-                  <div>
-                    <label className="text-xs font-bold text-[#1B4332] block mb-1">Sélectionner le Client à Crédit *</label>
-                    <select
-                      value={selectedClientId}
-                      onChange={(e) => setSelectedClientId(e.target.value)}
-                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
-                    >
-                      <option value="">-- Choisir un client --</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nom} ({c.telephone_whatsapp})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {/* En cas de Versement Partiel ou de Crédit : Affichage du Reliquat Dû & Saisie Client */}
+              {(() => {
+                const isPartialPayment = montantVerseInput > 0 && montantVerseInput < currentNetAPayer;
+                const isCreditMode = paymentMode === 'credit';
+                const isCreditOrPartial = isCreditMode || isPartialPayment;
+                const reliquatDuAmount = isCreditMode
+                  ? Math.max(0, currentNetAPayer - (acompteCreditInput || 0))
+                  : (isPartialPayment ? (currentNetAPayer - montantVerseInput) : 0);
 
-                  <div>
-                    <label className="text-xs font-bold text-[#1B4332] block mb-1">Acompte / Avance Versée Maintenant (FCFA)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={currentNetAPayer}
-                      placeholder="Ex: 10000"
-                      value={acompteCreditInput || ''}
-                      onChange={(e) => setAcompteCreditInput(Number(e.target.value))}
-                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
-                    />
-                  </div>
+                if (!isCreditOrPartial) return null;
 
-                  <div className="pt-2 border-t border-[#E2D5C3] text-xs space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 font-bold">Avance Versée :</span>
-                      <span className="font-bold text-emerald-800">{(acompteCreditInput || 0).toLocaleString('fr-FR')} FCFA</span>
+                return (
+                  <div className="space-y-3 p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300">
+                    <div className="flex justify-between items-center pb-2 border-b border-amber-200 text-xs font-black text-[#B8442C]">
+                      <span>⚠️ RELIQUAT DÛ À CRÉDIT :</span>
+                      <span className="font-serif text-base">{reliquatDuAmount.toLocaleString('fr-FR')} FCFA</span>
                     </div>
-                    <div className="flex justify-between font-black text-sm text-[#B8442C]">
-                      <span>Manquant / Reste Dû à Crédit :</span>
-                      <span>{Math.max(0, currentNetAPayer - (acompteCreditInput || 0)).toLocaleString('fr-FR')} FCFA</span>
+
+                    <p className="text-[11px] text-[#1B4332] font-bold">
+                      {isPartialPayment
+                        ? `Le montant versé (${montantVerseInput.toLocaleString('fr-FR')} FCFA) est inférieur au Net à Payer (${currentNetAPayer.toLocaleString('fr-FR')} FCFA). Vente enregistrée avec un reliquat dû.`
+                        : `Vente à crédit enregistrée avec un reliquat dû.`}
+                    </p>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-[#1B4332]">Identité du Client (Pour Relance WhatsApp) *</label>
+                        <button
+                          type="button"
+                          onClick={() => setIsNewClientMode(!isNewClientMode)}
+                          className="text-[11px] font-bold text-[#B8442C] hover:underline"
+                        >
+                          {isNewClientMode ? '← Choisir Client Existant' : '+ Nouveau Client'}
+                        </button>
+                      </div>
+
+                      {isNewClientMode ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Nom du client (ex: Carine)"
+                            value={newClientNom}
+                            onChange={(e) => setNewClientNom(e.target.value)}
+                            className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                          />
+                          <input
+                            type="tel"
+                            placeholder="Tél WhatsApp (ex: 699000000)"
+                            value={newClientPhone}
+                            onChange={(e) => setNewClientPhone(e.target.value)}
+                            className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                          />
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedClientId}
+                          onChange={(e) => setSelectedClientId(e.target.value)}
+                          className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                        >
+                          <option value="">-- Sélectionner un client enregistré --</option>
+                          {clients.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.nom} ({c.telephone_whatsapp})
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div className="flex items-center gap-2 pt-2">
                 <button
