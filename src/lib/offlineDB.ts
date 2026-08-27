@@ -14,6 +14,10 @@ import {
   TypeEtablissement,
   MethodePaiement,
   Paiement,
+  CommandeEnLigne,
+  Caisse,
+  TARIFS_ABONNEMENT,
+  StatutLivraison,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
@@ -25,41 +29,47 @@ import {
   SEED_FACTURES,
   SEED_REMBOURSEMENTS,
   SEED_CHARGES,
+  SEED_COMMANDES_LIGNE,
+  SEED_CAISSES,
 } from './presetData';
 
 const KEYS = {
-  ACTIVE_ETAB_ID: 'takam_active_etab_id',
-  ETABLISSEMENTS: 'takam_etablissements',
-  UTILISATEURS: 'takam_utilisateurs',
-  CURRENT_USER_ID: 'takam_current_user_id',
-  PRODUITS: 'takam_produits',
-  MOUVEMENTS: 'takam_mouvements',
-  CLIENTS: 'takam_clients',
-  FACTURES: 'takam_factures',
-  TRANSACTIONS: 'takam_transactions_ventes',
-  REMBOURSEMENTS: 'takam_remboursements',
-  CHARGES: 'takam_charges',
-  OFFLINE_QUEUE: 'takam_offline_queue',
+  ACTIVE_ETAB_ID: 'oeko_active_etab_id',
+  ETABLISSEMENTS: 'oeko_etablissements',
+  UTILISATEURS: 'oeko_utilisateurs',
+  CURRENT_USER_ID: 'oeko_current_user_id',
+  PRODUITS: 'oeko_produits',
+  MOUVEMENTS: 'oeko_mouvements',
+  CLIENTS: 'oeko_clients',
+  FACTURES: 'oeko_factures',
+  TRANSACTIONS: 'oeko_transactions_ventes',
+  COMMANDES_LIGNE: 'oeko_commandes_ligne',
+  CAISSES: 'oeko_caisses',
+  REMBOURSEMENTS: 'oeko_remboursements',
+  CHARGES: 'oeko_charges',
+  OFFLINE_QUEUE: 'oeko_offline_queue',
 };
 
-// Helper pour déterminer le vocabulaire selon le type d'activité
+// Helper pour déterminer le vocabulaire selon le type d'activité (œko)
 export function getTerminology(type_activite?: TypeActivite) {
   const isBoutique = type_activite === 'boutique';
   const isBar = type_activite === 'bar';
 
   return {
+    appName: 'œko',
+    appTagline: 'L\'œil du patron',
     itemLabel: isBoutique ? 'Article' : 'Produit / Boisson',
     itemsLabel: isBoutique ? 'Articles' : 'Boissons',
     unitLabel: isBoutique ? 'Pièces' : 'Bouteilles',
     unitSingular: isBoutique ? 'Pièce' : 'Bouteille',
     stockLabel: isBoutique ? 'Stock d\'articles' : 'Stock de casiers & bouteilles',
-    sellerLabel: isBoutique ? 'Vendeuse' : isBar ? 'Serveuse' : 'Serveuse / Caissière',
-    salesScreenTitle: isBoutique ? 'Vente Comptoir' : isBar ? 'Gestion des Tables' : 'Prise de Commande & Caisse',
+    sellerLabel: isBoutique ? 'Vendeuse / Employée' : isBar ? 'Serveuse' : 'Serveuse / Caissière',
+    salesScreenTitle: isBoutique ? 'Vente Comptoir & Livraisons' : isBar ? 'Gestion des Tables' : 'Prise de Commande & Caisses',
     salesScreenDesc: isBoutique
-      ? 'Vente directe, encaissement immédiat et sélection des déclinaisons (tailles/couleurs).'
+      ? 'Vente directe au comptoir, gestion des déclinaisons (tailles/couleurs) et suivi des commandes en ligne.'
       : isBar
-      ? 'Ouverture de table, accumulation de consommations et clôture avec addition.'
-      : 'Prise de commande par serveuse transmise instantanément en caisse.',
+      ? 'Ouverture de table, accumulation de consommations et factures divisibles.'
+      : 'Flux 2 étapes : serveuse transmet à la caisse, la caissière valide et déstocke.',
   };
 }
 
@@ -86,9 +96,11 @@ export const offlineDB = {
       else if (e.type === 'bar' || e.type === 'lounge') act = 'bar';
       else act = 'snack';
     }
+    const tarif = e.tarif_mensuel || TARIFS_ABONNEMENT[act] || 5000;
     return {
       ...e,
       type_activite: act,
+      tarif_mensuel: tarif,
     };
   },
 
@@ -109,12 +121,13 @@ export const offlineDB = {
 
   switchEtablissement(id: string) {
     try {
-      if (typeof window !== 'undefined') return;
-      localStorage.setItem(KEYS.ACTIVE_ETAB_ID, id);
-      const users = this.getUtilisateurs();
-      const firstUserInEtab = users.find((u) => u && u.etablissement_id === id);
-      if (firstUserInEtab) {
-        localStorage.setItem(KEYS.CURRENT_USER_ID, firstUserInEtab.id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.ACTIVE_ETAB_ID, id);
+        const users = this.getUtilisateurs();
+        const firstUserInEtab = users.find((u) => u && u.etablissement_id === id);
+        if (firstUserInEtab) {
+          localStorage.setItem(KEYS.CURRENT_USER_ID, firstUserInEtab.id);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -132,28 +145,37 @@ export const offlineDB = {
   }): Etablissement {
     const etabs = this.getEtablissements();
     const newId = `etab-${Date.now()}`;
+    const act = params.type_activite;
+    const tarif = TARIFS_ABONNEMENT[act] || 5000;
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const nowIso = new Date().toISOString();
+    const endTrialIso = new Date(Date.now() + SEVEN_DAYS_MS).toISOString();
+
     const newEtab: Etablissement = {
       id: newId,
       nom: params.nom,
-      type: params.type || (params.type_activite as TypeEtablissement),
-      type_activite: params.type_activite,
+      type: params.type || (act as TypeEtablissement),
+      type_activite: act,
       ville: params.ville,
       adresse: params.adresse,
       plan: 'Premium',
       statut_abonnement: 'essai',
-      date_fin_essai: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      date_prochain_paiement: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date().toISOString(),
+      tarif_mensuel: tarif,
+      date_fin_essai: endTrialIso,
+      date_prochain_paiement: endTrialIso,
+      created_at: nowIso,
     };
+
+    const patronRole = act === 'snack' ? 'Directeur' : 'Patronne';
 
     const newPatron: Utilisateur = {
       id: `user-patron-${Date.now()}`,
       etablissement_id: newId,
-      nom: params.patronNom || 'Patron',
-      role: 'Patron',
+      nom: params.patronNom || (act === 'snack' ? 'M. Directeur' : 'Mme Patronne'),
+      role: patronRole,
       pin_code: params.patronPin || '1234',
       actif: true,
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
     };
 
     const users = this.getUtilisateurs();
@@ -171,6 +193,20 @@ export const offlineDB = {
     return newEtab;
   },
 
+  isTrialExpired(etab: Etablissement): boolean {
+    if (etab.statut_abonnement === 'actif') return false;
+    if (etab.statut_abonnement === 'expire') return true;
+    const endTrial = new Date(etab.date_fin_essai).getTime();
+    return Date.now() > endTrial;
+  },
+
+  getTrialDaysRemaining(etab: Etablissement): number {
+    if (etab.statut_abonnement === 'actif') return 30;
+    const endTrial = new Date(etab.date_fin_essai).getTime();
+    const diff = endTrial - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  },
+
   processMobileMoneyPayment(params: {
     plan?: 'Basique' | 'Premium';
     methode: MethodePaiement;
@@ -185,7 +221,7 @@ export const offlineDB = {
     const nextPay = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const updated = {
       ...etab,
-      plan: params.plan,
+      plan: params.plan || 'Premium',
       statut_abonnement: 'actif' as const,
       date_prochain_paiement: nextPay,
     };
@@ -196,7 +232,7 @@ export const offlineDB = {
     const newPaiement: Paiement = {
       id: `pay-${Date.now()}`,
       etablissement_id: etab.id,
-      montant: params.montant || (params.plan === 'Premium' ? 25000 : 15000),
+      montant: params.montant || etab.tarif_mensuel || 5000,
       methode: params.methode,
       telephone_payeur: phone,
       reference_transaction: ref,
@@ -296,6 +332,76 @@ export const offlineDB = {
     } catch (e) { console.error(e); }
   },
 
+  // --- MULTI-CAISSES (SNACK) ---
+  getCaisses(): Caisse[] {
+    try {
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return SEED_CAISSES.filter((c) => c && c.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.CAISSES);
+      if (!data) {
+        localStorage.setItem(KEYS.CAISSES, JSON.stringify(SEED_CAISSES));
+        return SEED_CAISSES.filter((c) => c && c.etablissement_id === etab.id);
+      }
+      const parsed: Caisse[] = JSON.parse(data);
+      return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
+    } catch { return SEED_CAISSES; }
+  },
+
+  // --- COMMANDES EN LIGNE & LIVRAISONS (BOUTIQUE) ---
+  getCommandesEnLigne(): CommandeEnLigne[] {
+    try {
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
+      if (!data) {
+        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(SEED_COMMANDES_LIGNE));
+        return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
+      }
+      const parsed: CommandeEnLigne[] = JSON.parse(data);
+      return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
+    } catch { return SEED_COMMANDES_LIGNE; }
+  },
+
+  updateStatutCommandeEnLigne(commandeId: string, newStatut: StatutLivraison): CommandeEnLigne | null {
+    const cmds = this.getCommandesEnLigne();
+    const cmd = cmds.find((c) => c.id === commandeId);
+    if (!cmd) return null;
+
+    const updatedCmd: CommandeEnLigne = { ...cmd, statut: newStatut };
+
+    // Si statut passe à 'livree_payee', auto-création de la facture et déstockage
+    if (newStatut === 'livree_payee' && cmd.statut !== 'livree_payee') {
+      const fac = this.createFacture({
+        lignes: cmd.lignes.map((l) => ({
+          produit_id: l.produit_id,
+          variante_id: l.variante_id,
+          nom_produit: l.nom_produit,
+          detail_variante: l.detail_variante,
+          quantite: l.quantite,
+          prix_unitaire: l.prix_unitaire,
+        })),
+        mode_paiement: 'cash',
+        transaction_id: `LIVRAISON-${cmd.numero_commande}`,
+      });
+      updatedCmd.facture_id = fac.id;
+    }
+
+    const all = this.getAllCommandesGlobal().map((c) => (c.id === commandeId ? updatedCmd : c));
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(all));
+    } catch (e) { console.error(e); }
+
+    return updatedCmd;
+  },
+
+  getAllCommandesGlobal(): CommandeEnLigne[] {
+    try {
+      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE;
+      const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
+      return data ? JSON.parse(data) : SEED_COMMANDES_LIGNE;
+    } catch { return SEED_COMMANDES_LIGNE; }
+  },
+
   // --- PRODUITS & VARIANTES ---
   getProduits(): Produit[] {
     try {
@@ -339,7 +445,7 @@ export const offlineDB = {
     });
   },
 
-  // --- TRANSACTIONS DE VENTE (MOTEUR UNIQUE) ---
+  // --- TRANSACTIONS DE VENTE ---
   getTransactions(): TransactionVente[] {
     try {
       const etab = this.getEtablissement();
@@ -411,7 +517,6 @@ export const offlineDB = {
     const allMvts = this.getAllMouvementsGlobal();
     const updatedMvts = [newMvt, ...allMvts];
 
-    // Mise à jour du stock produit
     const prods = this.getProduits();
     const updatedProds = prods.map((p) => {
       if (p.id !== mvt.produit_id) return p;
@@ -548,6 +653,8 @@ export const offlineDB = {
     montant_paye?: number;
     client_id?: string;
     transaction_id?: string;
+    caissiere_id?: string;
+    serveuse_id?: string;
   }): Facture {
     const etab = this.getEtablissement();
     const currentUser = this.getCurrentUser();
@@ -608,6 +715,8 @@ export const offlineDB = {
       transaction_id: params.transaction_id,
       client_id: params.client_id,
       utilisateur_id: currentUser.id,
+      caissiere_id: params.caissiere_id || currentUser.id,
+      serveuse_id: params.serveuse_id,
       montant_total: totalVente,
       montant_paye: mPaye,
       montant_restant: mRestant,
@@ -744,7 +853,6 @@ export const offlineDB = {
       nbFactures: periodFacs.length,
       factures: periodFacs,
       charges: periodCharges,
-      // Alias rétrocompatibilité
       chiffreAffairesTotal,
       coutTotalVendu,
       margeBruteTotal,

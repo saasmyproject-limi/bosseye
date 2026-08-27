@@ -1,12 +1,28 @@
 export type TypeActivite = 'bar' | 'snack' | 'boutique';
 export type TypeEtablissement = TypeActivite | 'snack_bar' | 'lounge'; // Rétrocompatibilité
-export type RoleUtilisateur = 'Patron' | 'Gérant' | 'Employé';
+
+export type RoleUtilisateur =
+  | 'Patron'      // Lecture seule à distance (Snack) ou accès complet
+  | 'Patronne'    // Accès complet (Boutique / Bar)
+  | 'Directeur'   // Accès complet sur site (Snack)
+  | 'Gérant'      // Accès gérance
+  | 'Caissière'   // Encaissement sur sa propre caisse (Snack)
+  | 'Serveuse'    // Prise de commande & service (Bar / Snack)
+  | 'Employé';    // Vente & stock sans marges/rapports globaux (Boutique)
+
 export type TypeMouvement = 'entree' | 'sortie' | 'casse_perte';
 export type StatutAbonnement = 'essai' | 'actif' | 'expire';
 export type MethodePaiement = 'Orange Money' | 'MTN MoMo';
 export type ModePaiementVente = 'cash' | 'orange_money' | 'mtn_momo' | 'credit' | 'mixte';
 export type StatutFacture = 'payee' | 'credit_encours' | 'annulee';
 export type StatutTransaction = 'ouverte' | 'en_attente_caisse' | 'payee' | 'annulee';
+export type StatutLivraison = 'en_attente' | 'en_livraison' | 'livree_payee' | 'annulee';
+
+export const TARIFS_ABONNEMENT: Record<TypeActivite, number> = {
+  boutique: 5000,
+  bar: 5000,
+  snack: 10000,
+};
 
 export interface Etablissement {
   id: string;
@@ -17,8 +33,9 @@ export interface Etablissement {
   adresse: string;
   plan: 'Basique' | 'Premium';
   statut_abonnement: StatutAbonnement;
-  date_fin_essai: string; // ISO String (14 jours)
+  date_fin_essai: string; // ISO String (7 jours pour œko)
   date_prochain_paiement: string; // ISO String
+  tarif_mensuel: number; // 5000 ou 10000 FCFA
   created_at?: string;
 }
 
@@ -30,7 +47,19 @@ export interface Utilisateur {
   pin_code: string; // PIN à 4 chiffres (ex: "1234")
   telephone?: string;
   photo_url?: string | null;
+  caisse_id?: string; // Si rôle Caissière
   actif: boolean;
+  created_at?: string;
+}
+
+export interface Caisse {
+  id: string;
+  etablissement_id: string;
+  caissiere_id: string;
+  caissiere_nom: string;
+  nom_caisse: string; // Ex: "Caisse Principale", "Caisse Terrasse"
+  total_encaisse_du_jour: number;
+  active: boolean;
   created_at?: string;
 }
 
@@ -63,6 +92,27 @@ export interface Produit {
   variantes?: VarianteProduit[]; // Déclinaisons taille/couleur pour boutique
   actif: boolean;
   created_at?: string;
+}
+
+export interface CommandeEnLigne {
+  id: string;
+  etablissement_id: string;
+  numero_commande: string; // Ex: "CMD-2026-001"
+  client_nom: string;
+  client_telephone: string;
+  adresse_livraison: string;
+  statut: StatutLivraison;
+  lignes: Array<{
+    produit_id: string;
+    variante_id?: string;
+    nom_produit: string;
+    detail_variante?: string;
+    quantite: number;
+    prix_unitaire: number;
+  }>;
+  montant_total: number;
+  facture_id?: string;
+  created_at: string;
 }
 
 export interface MouvementStock {
@@ -114,9 +164,11 @@ export interface TransactionVente {
   type_activite: TypeActivite;
   statut: StatutTransaction;
   
-  table_numero?: string; // Utilisé pour les bars (ex: "Table 04")
+  table_numero?: string; // Utilisé pour les bars (ex: "Table 04", "VIP 1")
+  is_vip_table?: boolean;
   serveur_id?: string;
   caissier_id?: string;
+  caisse_id?: string;
   client_id?: string;
   
   montant_total: number;
@@ -152,6 +204,8 @@ export interface Facture {
   transaction_id?: string;
   client_id?: string;
   utilisateur_id: string;
+  caissiere_id?: string;
+  serveuse_id?: string;
   montant_total: number;
   montant_paye: number;
   montant_restant: number;
@@ -196,6 +250,7 @@ export interface Abonnement {
   etablissement_id: string;
   plan: 'Basique' | 'Premium';
   statut: StatutAbonnement;
+  tarif_mensuel: number;
   date_prochain_paiement: string;
 }
 

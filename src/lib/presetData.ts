@@ -1,16 +1,33 @@
-import { Etablissement, Utilisateur, Produit, MouvementStock, Client, Facture, RemboursementCredit, ChargeJournaliere, TransactionVente } from '@/types';
+import {
+  Etablissement,
+  Utilisateur,
+  Produit,
+  MouvementStock,
+  Client,
+  Facture,
+  RemboursementCredit,
+  ChargeJournaliere,
+  TransactionVente,
+  CommandeEnLigne,
+  Caisse,
+  TARIFS_ABONNEMENT,
+} from '@/types';
+
+const NOW = Date.now();
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const SEED_ETABLISSEMENT: Etablissement = {
   id: 'etab-capitole-douala',
-  nom: 'LE CAPITOLE BAR & LOUNGE',
+  nom: 'LE CAPITOLE SNACK-BAR',
   type: 'snack_bar',
   type_activite: 'snack',
   ville: 'Douala',
   adresse: 'Akwa - Boulevard de la Liberté',
   plan: 'Premium',
   statut_abonnement: 'essai',
-  date_fin_essai: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-  date_prochain_paiement: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+  tarif_mensuel: TARIFS_ABONNEMENT.snack, // 10,000 FCFA
+  date_fin_essai: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
+  date_prochain_paiement: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
   created_at: new Date().toISOString(),
 };
 
@@ -18,15 +35,16 @@ export const SEED_ETABLISSEMENTS_LIST: Etablissement[] = [
   SEED_ETABLISSEMENT,
   {
     id: 'etab-citadelle-douala',
-    nom: 'BAR LA CITADELLE (Maquis)',
+    nom: 'BAR LA CITADELLE',
     type: 'bar',
     type_activite: 'bar',
     ville: 'Douala',
     adresse: 'Akwa Nord',
     plan: 'Basique',
     statut_abonnement: 'essai',
-    date_fin_essai: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-    date_prochain_paiement: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    tarif_mensuel: TARIFS_ABONNEMENT.bar, // 5,000 FCFA
+    date_fin_essai: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
+    date_prochain_paiement: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
     created_at: new Date().toISOString(),
   },
   {
@@ -38,64 +56,122 @@ export const SEED_ETABLISSEMENTS_LIST: Etablissement[] = [
     adresse: 'Rue Joffre - Akwa',
     plan: 'Premium',
     statut_abonnement: 'essai',
-    date_fin_essai: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-    date_prochain_paiement: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    tarif_mensuel: TARIFS_ABONNEMENT.boutique, // 5,000 FCFA
+    date_fin_essai: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
+    date_prochain_paiement: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
     created_at: new Date().toISOString(),
   },
 ];
 
 export const SEED_UTILISATEURS: Utilisateur[] = [
+  // --- SNACK RÔLES (Patron, Directeur, Caissière, Serveuse) ---
   {
-    id: 'user-patron',
+    id: 'user-patron-snack',
     etablissement_id: 'etab-capitole-douala',
-    nom: 'Madame TAKAM (Patronne)',
+    nom: 'M. TAKAM (Patron à distance)',
     role: 'Patron',
     pin_code: '1234',
     telephone: '699001122',
-    photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
-    actif: true,
-  },
-  {
-    id: 'user-gerant',
-    etablissement_id: 'etab-capitole-douala',
-    nom: 'Jean-Paul KENGNE (Gérant)',
-    role: 'Gérant',
-    pin_code: '5678',
-    telephone: '675443322',
     photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
     actif: true,
   },
   {
-    id: 'user-employe',
+    id: 'user-directeur-snack',
     etablissement_id: 'etab-capitole-douala',
-    nom: 'Chantal MBALLA (Serveuse)',
-    role: 'Employé',
-    pin_code: '0000',
-    telephone: '655889900',
+    nom: 'Mme TAKAM (Directrice)',
+    role: 'Directeur',
+    pin_code: '9999',
+    telephone: '677112233',
+    photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
+    actif: true,
+  },
+  {
+    id: 'user-caissiere-1',
+    etablissement_id: 'etab-capitole-douala',
+    nom: 'Marie (Caissière Principal)',
+    role: 'Caissière',
+    pin_code: '5678',
+    telephone: '675443322',
+    caisse_id: 'caisse-1',
     photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
     actif: true,
   },
+  {
+    id: 'user-serveuse-1',
+    etablissement_id: 'etab-capitole-douala',
+    nom: 'Chantal (Serveuse)',
+    role: 'Serveuse',
+    pin_code: '0000',
+    telephone: '655889900',
+    photo_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80',
+    actif: true,
+  },
 
-  // Utilisateurs pour la boutique Élégance Akwa
+  // --- BOUTIQUE RÔLES (Patronne, Employé) ---
   {
     id: 'user-patron-elegance',
     etablissement_id: 'etab-elegance-akwa',
-    nom: 'Mme EBOLE (Propriétaire)',
-    role: 'Patron',
+    nom: 'Mme EBOLE (Patronne)',
+    role: 'Patronne',
     pin_code: '1234',
     telephone: '699334455',
     photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
     actif: true,
   },
   {
-    id: 'user-[#boutique-vendeuse]',
+    id: 'user-employe-boutique',
     etablissement_id: 'etab-elegance-akwa',
-    nom: 'Vanessa (Vendeuse Comptoir)',
+    nom: 'Vanessa (Vendeuse / Employée)',
     role: 'Employé',
     pin_code: '1111',
     telephone: '677112233',
     photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
     actif: true,
+  },
+
+  // --- BAR RÔLES (Patronne, Serveuse) ---
+  {
+    id: 'user-patron-bar',
+    etablissement_id: 'etab-citadelle-douala',
+    nom: 'Tante ROSE (Patronne Bar)',
+    role: 'Patronne',
+    pin_code: '1234',
+    telephone: '699887766',
+    photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
+    actif: true,
+  },
+  {
+    id: 'user-serveuse-bar',
+    etablissement_id: 'etab-citadelle-douala',
+    nom: 'Clarisse (Serveuse)',
+    role: 'Serveuse',
+    pin_code: '2222',
+    telephone: '655112244',
+    photo_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80',
+    actif: true,
+  },
+];
+
+export const SEED_CAISSES: Caisse[] = [
+  {
+    id: 'caisse-1',
+    etablissement_id: 'etab-capitole-douala',
+    caissiere_id: 'user-caissiere-1',
+    caissiere_nom: 'Marie (Caissière Principal)',
+    nom_caisse: 'Caisse Principale Comptoir',
+    total_encaisse_du_jour: 145000,
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'caisse-2',
+    etablissement_id: 'etab-capitole-douala',
+    caissiere_id: 'user-caissiere-1',
+    caissiere_nom: 'Marie',
+    nom_caisse: 'Caisse Carré VIP',
+    total_encaisse_du_jour: 85000,
+    active: true,
+    created_at: new Date().toISOString(),
   },
 ];
 
@@ -104,7 +180,7 @@ export const SEED_PRODUITS: Produit[] = [
   {
     id: 'prod-beaufort',
     etablissement_id: 'etab-capitole-douala',
-    nom: 'Beaufort Lager',
+    nom: 'Beaufort Lager 65cl',
     categorie: 'Bière',
     unite: 'bouteille',
     casiers_pleins: 12,
@@ -122,7 +198,7 @@ export const SEED_PRODUITS: Produit[] = [
   {
     id: 'prod-33export',
     etablissement_id: 'etab-capitole-douala',
-    nom: '33 Export',
+    nom: '33 Export 65cl',
     categorie: 'Bière',
     unite: 'bouteille',
     casiers_pleins: 8,
@@ -156,7 +232,7 @@ export const SEED_PRODUITS: Produit[] = [
     actif: true,
   },
 
-  // --- PRODUITS BOUTIQUE DE VÊTEMENTS (AVEC VARIANTES TAILLE/COULEUR) ---
+  // --- PRODUITS BOUTIQUE DE VÊTEMENTS (VARIANTES TAILLE/COULEUR) ---
   {
     id: 'prod-robe-soie',
     etablissement_id: 'etab-elegance-akwa',
@@ -213,6 +289,30 @@ export const SEED_PRODUITS: Produit[] = [
   },
 ];
 
+export const SEED_COMMANDES_LIGNE: CommandeEnLigne[] = [
+  {
+    id: 'cmd-001',
+    etablissement_id: 'etab-elegance-akwa',
+    numero_commande: 'CMD-2026-001',
+    client_nom: 'Mme CHANTAL VIP',
+    client_telephone: '237699445566',
+    adresse_livraison: 'Douala - Bonapriso (Face Clinique)',
+    statut: 'en_livraison',
+    articles: [
+      {
+        produit_id: 'prod-robe-soie',
+        variante_id: 'var-robe-m-noir',
+        nom_produit: 'Robe de Soirée Éléganza',
+        detail_variante: 'Taille M / Noir',
+        quantite: 1,
+        prix_unitaire: 25000,
+      },
+    ],
+    montant_total: 25000,
+    created_at: new Date(NOW - 3600 * 1000 * 3).toISOString(),
+  },
+];
+
 export const SEED_MOUVEMENTS: MouvementStock[] = [
   {
     id: 'mvt-1',
@@ -220,11 +320,11 @@ export const SEED_MOUVEMENTS: MouvementStock[] = [
     produit_id: 'prod-beaufort',
     type_mouvement: 'entree',
     quantite_bouteilles: 120,
-    utilisateur_id: 'user-gerant',
+    utilisateur_id: 'user-directeur-snack',
     note_motif: 'Reconstitution du stock fournisseur Brasseries',
     sync_status: 'synced',
-    client_timestamp: new Date(Date.now() - 3600 * 1000 * 24).toISOString(),
-    created_at: new Date(Date.now() - 3600 * 1000 * 24).toISOString(),
+    client_timestamp: new Date(NOW - 3600 * 1000 * 24).toISOString(),
+    created_at: new Date(NOW - 3600 * 1000 * 24).toISOString(),
   },
 ];
 
@@ -235,7 +335,7 @@ export const SEED_CLIENTS: Client[] = [
     nom: 'Papa TCHAMBA (Client VIP)',
     telephone_whatsapp: '237699112233',
     note_quartier: 'Résidence Akwa Nord',
-    created_at: new Date(Date.now() - 3600 * 1000 * 24 * 10).toISOString(),
+    created_at: new Date(NOW - 3600 * 1000 * 24 * 10).toISOString(),
   },
   {
     id: 'client-mbele',
@@ -243,7 +343,7 @@ export const SEED_CLIENTS: Client[] = [
     nom: 'Docteur MBELE',
     telephone_whatsapp: '237675998877',
     note_quartier: 'Cabinet Médical Akwa',
-    created_at: new Date(Date.now() - 3600 * 1000 * 24 * 5).toISOString(),
+    created_at: new Date(NOW - 3600 * 1000 * 24 * 5).toISOString(),
   },
   {
     id: 'client-boutique-1',
@@ -251,7 +351,7 @@ export const SEED_CLIENTS: Client[] = [
     nom: 'Mme CHANTAL VIP',
     telephone_whatsapp: '237699445566',
     note_quartier: 'Bonapriso',
-    created_at: new Date(Date.now() - 3600 * 1000 * 24 * 2).toISOString(),
+    created_at: new Date(NOW - 3600 * 1000 * 24 * 2).toISOString(),
   },
 ];
 
@@ -260,13 +360,15 @@ export const SEED_FACTURES: Facture[] = [
     id: 'fac-1001',
     etablissement_id: 'etab-capitole-douala',
     numero_facture: 'FAC-2026-0041',
-    utilisateur_id: 'user-employe',
+    utilisateur_id: 'user-caissiere-1',
+    caissiere_id: 'user-caissiere-1',
+    serveuse_id: 'user-serveuse-1',
     montant_total: 12000,
     montant_paye: 12000,
     montant_restant: 0,
     mode_paiement: 'cash',
     statut: 'payee',
-    created_at: new Date(Date.now() - 3600 * 1000 * 5).toISOString(),
+    created_at: new Date(NOW - 3600 * 1000 * 5).toISOString(),
     lignes: [
       {
         id: 'lig-1',
@@ -279,48 +381,6 @@ export const SEED_FACTURES: Facture[] = [
         sous_total_vente: 12000,
         sous_total_cout: 5496,
         marge_brute: 6504,
-      },
-    ],
-  },
-  {
-    id: 'fac-boutique-1',
-    etablissement_id: 'etab-elegance-akwa',
-    numero_facture: 'FAC-2026-0001',
-    utilisateur_id: 'user-[#boutique-vendeuse]',
-    montant_total: 40000,
-    montant_paye: 40000,
-    montant_restant: 0,
-    mode_paiement: 'orange_money',
-    statut: 'payee',
-    created_at: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-    lignes: [
-      {
-        id: 'lig-b1',
-        facture_id: 'fac-boutique-1',
-        produit_id: 'prod-robe-soie',
-        variante_id: 'var-robe-m-noir',
-        nom_produit: 'Robe de Soirée Éléganza',
-        detail_variante: 'Taille M / Noir',
-        quantite_bouteilles: 1,
-        prix_unitaire_vente: 25000,
-        cout_unitaire_cmp: 12000,
-        sous_total_vente: 25000,
-        sous_total_cout: 12000,
-        marge_brute: 13000,
-      },
-      {
-        id: 'lig-b2',
-        facture_id: 'fac-boutique-1',
-        produit_id: 'prod-chemise-homme',
-        variante_id: 'var-chem-m-blanc',
-        nom_produit: 'Chemise Slim Fit Coton',
-        detail_variante: 'Taille M / Blanc pure',
-        quantite_bouteilles: 1,
-        prix_unitaire_vente: 15000,
-        cout_unitaire_cmp: 7000,
-        sous_total_vente: 15000,
-        sous_total_cout: 7000,
-        marge_brute: 8000,
       },
     ],
   },

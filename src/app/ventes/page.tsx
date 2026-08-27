@@ -17,48 +17,72 @@ import {
   QrCode,
   Tag,
   Split,
-  MessageSquare
+  MessageSquare,
+  Truck,
+  Package,
+  Clock,
+  Printer,
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
-import { Produit, VarianteProduit, Etablissement, Utilisateur, Client, Facture, LigneTransaction } from '@/types';
+import {
+  Produit,
+  VarianteProduit,
+  Etablissement,
+  Utilisateur,
+  Client,
+  Facture,
+  CommandeEnLigne,
+  Caisse,
+  StatutLivraison,
+} from '@/types';
 
 export default function VentesPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
   const [produits, setProduits] = useState<Produit[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [commandesLigne, setCommandesLigne] = useState<CommandeEnLigne[]>([]);
+  const [caisses, setCaisses] = useState<Caisse[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Boutique Cart / Direct Sale State
+  // Mode Onglet (Boutique: 'comptoir' | 'livraisons', Snack: 'serveuse' | 'caissiere')
+  const [activeTab, setActiveTab] = useState<'comptoir' | 'livraisons'>('comptoir');
+
+  // Boutique Cart State
   const [cart, setCart] = useState<Array<{
     produit: Produit;
     variante?: VarianteProduit;
     quantite: number;
     prix_unitaire: number;
   }>>([]);
-  
+
   // Selected variant for modal picker
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Produit | null>(null);
-  
+
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit'>('cash');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
 
-  // Bar Open Tables State
+  // Bar Open Tables State & Split
   const [tables, setTables] = useState<Array<{
     tableNumber: string;
+    isVip: boolean;
     items: Array<{ produit: Produit; quantite: number }>;
     status: 'libre' | 'occupee';
   }>>([
-    { tableNumber: 'Table 01', items: [], status: 'libre' },
-    { tableNumber: 'Table 02', items: [], status: 'libre' },
-    { tableNumber: 'Table 03 (VIP)', items: [], status: 'libre' },
-    { tableNumber: 'Table 04 (Terrasse)', items: [], status: 'libre' },
+    { tableNumber: 'Table 01', isVip: false, items: [], status: 'libre' },
+    { tableNumber: 'Table 02', isVip: false, items: [], status: 'libre' },
+    { tableNumber: 'Table 03', isVip: false, items: [], status: 'libre' },
+    { tableNumber: 'Carré VIP 1', isVip: true, items: [], status: 'libre' },
+    { tableNumber: 'Carré VIP 2', isVip: true, items: [], status: 'libre' },
   ]);
   const [activeTableNumber, setActiveTableNumber] = useState<string>('Table 01');
   const [splitCount, setSplitCount] = useState<number>(1);
+  const [selectedCaisseId, setSelectedCaisseId] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -71,6 +95,10 @@ export default function VentesPage() {
       setCurrentUser(offlineDB.getCurrentUser());
       setProduits(offlineDB.getProduits());
       setClients(offlineDB.getClients());
+      setCommandesLigne(offlineDB.getCommandesEnLigne());
+      const caissesList = offlineDB.getCaisses();
+      setCaisses(caissesList);
+      if (caissesList.length > 0) setSelectedCaisseId(caissesList[0].id);
     } catch (e) { console.error(e); }
   };
 
@@ -95,7 +123,7 @@ export default function VentesPage() {
     }
 
     const price = variante?.prix_vente_override || prod.prix_vente_unitaire || prod.prix_vente_bouteille || 0;
-    
+
     setCart((prev) => {
       const existingIndex = prev.findIndex(
         (item) => item.produit.id === prod.id && item.variante?.id === variante?.id
@@ -154,11 +182,18 @@ export default function VentesPage() {
       lignes,
       mode_paiement: paymentMode,
       client_id: paymentMode === 'credit' ? selectedClientId : undefined,
+      caissiere_id: currentUser?.id,
     });
 
     setLastCreatedFacture(newFac);
     setCart([]);
     setIsPaymentModalOpen(false);
+    loadData();
+  };
+
+  // --- MISE À JOUR LIVRAISON COMMANDE EN LIGNE (BOUTIQUE) ---
+  const handleUpdateStatutLivraison = (cmdId: string, nextStatut: StatutLivraison) => {
+    offlineDB.updateStatutCommandeEnLigne(cmdId, nextStatut);
     loadData();
   };
 
@@ -175,7 +210,7 @@ export default function VentesPage() {
                 {etablissement?.type_activite === 'boutique' ? '👗' : etablissement?.type_activite === 'bar' ? '🍺' : '🍟'}
               </span>
               <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full border border-[#B8442C]/30">
-                Mode {etablissement?.type_activite === 'boutique' ? 'Boutique (Vente Directe)' : etablissement?.type_activite === 'bar' ? 'Bar & Lounge (Tables)' : 'Snack-Bar (Caisse)'}
+                Mode {etablissement?.type_activite === 'boutique' ? 'Boutique Mode & Vêtements' : etablissement?.type_activite === 'bar' ? 'Bar & Lounge (Tables)' : 'Snack-Bar (Flux 2 Étapes & Caisses)'}
               </span>
             </div>
             <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332]">
@@ -185,31 +220,52 @@ export default function VentesPage() {
               {term.salesScreenDesc}
             </p>
           </div>
+
+          {/* Onglets spécialisés pour Boutique */}
+          {etablissement?.type_activite === 'boutique' && (
+            <div className="flex items-center gap-2 bg-[#F3ECE0] p-1.5 rounded-2xl border border-[#E2D5C3]">
+              <button
+                onClick={() => setActiveTab('comptoir')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'comptoir' ? 'bg-[#1B4332] text-white shadow-md' : 'text-[#1B4332] hover:bg-[#FBF7EF]'
+                }`}
+              >
+                🏬 Vente Comptoir
+              </button>
+              <button
+                onClick={() => setActiveTab('livraisons')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'livraisons' ? 'bg-[#1B4332] text-white shadow-md' : 'text-[#1B4332] hover:bg-[#FBF7EF]'
+                }`}
+              >
+                <Truck className="w-4 h-4 text-[#E8A33D]" />
+                <span>Commandes & Livraisons ({commandesLigne.length})</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* --- SECTEUR 1: BOUTIQUE (VENTE COMPTOIR DIRECTE AVEC VARIANTES) --- */}
-        {etablissement?.type_activite === 'boutique' && (
+        {/* --- SECTEUR 1: BOUTIQUE (VENTE COMPTOIR DIRECTE & LIVRAISONS) --- */}
+        {etablissement?.type_activite === 'boutique' && activeTab === 'comptoir' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Colonne Gauche: Catalogue Produits & Variantes (8 Cols) */}
+            {/* Colonne Gauche: Catalogue Produits & Variantes (7 Cols) */}
             <div className="lg:col-span-7 space-y-4">
-              {/* Barre de Recherche / Scanneur Code-barres */}
               <div className="relative">
                 <Search className="w-5 h-5 absolute left-4 top-3.5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Rechercher vêtement, taille, couleur ou SKU code-barres..."
+                  placeholder="Rechercher vêtement, taille, couleur ou SKU..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-12 pr-4 py-3 text-sm font-bold text-[#1B4332] placeholder-gray-400 focus:outline-none focus:border-[#1B4332]"
                 />
               </div>
 
-              {/* Grille des Articles */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-[650px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-[620px] overflow-y-auto pr-1">
                 {filteredProduits.map((p) => {
                   const hasVariants = p.variantes && p.variantes.length > 0;
                   const price = p.prix_vente_unitaire || p.prix_vente_bouteille || 0;
-                  const stockTotal = p.quantite_totale || (p.casiers_pleins || 0) * 24 + (p.bouteilles_vrac || 0);
+                  const stockTotal = p.quantite_totale || 0;
 
                   return (
                     <div
@@ -223,12 +279,11 @@ export default function VentesPage() {
                             {p.categorie}
                           </span>
                           <span className={`text-[10px] font-bold ${stockTotal <= p.seuil_alerte ? 'text-red-600' : 'text-gray-500'}`}>
-                            Stock: {stockTotal} {term.unitSingular}s
+                            Stock: {stockTotal} pièce(s)
                           </span>
                         </div>
                         <h3 className="font-serif font-black text-base text-[#1B4332]">{p.nom}</h3>
 
-                        {/* badges variantes */}
                         {hasVariants && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {p.variantes?.map((v) => (
@@ -258,7 +313,7 @@ export default function VentesPage() {
               </div>
             </div>
 
-            {/* Colonne Droite: Panier Comptoir & Encaissement Direct (5 Cols) */}
+            {/* Colonne Droite: Panier Comptoir & Encaissement (5 Cols) */}
             <div className="lg:col-span-5 bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-lg flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-[#E2D5C3]">
@@ -314,7 +369,7 @@ export default function VentesPage() {
                 )}
               </div>
 
-              {/* Total & Action d'Encaissement */}
+              {/* Total & Action Encaissement */}
               <div className="pt-4 border-t border-[#E2D5C3] space-y-3">
                 <div className="flex items-center justify-between text-base">
                   <span className="font-bold text-[#1B4332]">Total à encaisser :</span>
@@ -329,14 +384,84 @@ export default function VentesPage() {
                   className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-glow-brique disabled:opacity-50 transition-transform active:scale-95"
                 >
                   <Receipt className="w-5 h-5 text-white" />
-                  <span>Encaisser et Éditer Facture</span>
+                  <span>Encaisser & Éditer Reçu</span>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* --- SECTEUR 2: BAR (GESTION DE TABLES OUVERTES & SPLIT D'ADDITION) --- */}
+        {/* --- SECTEUR 1 (SUITE): COMMANDES EN LIGNE & LIVRAISONS (BOUTIQUE) --- */}
+        {etablissement?.type_activite === 'boutique' && activeTab === 'livraisons' && (
+          <div className="space-y-4">
+            <h2 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
+              <Truck className="w-5 h-5 text-[#B8442C]" />
+              Suivi des Commandes en Ligne & Livraisons
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {commandesLigne.map((cmd) => (
+                <div key={cmd.id} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#B8442C]">
+                        {cmd.numero_commande}
+                      </span>
+                      <h3 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom}</h3>
+                      <p className="text-xs text-gray-600 font-bold">📱 {cmd.client_telephone}</p>
+                    </div>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                      cmd.statut === 'livree_payee'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : cmd.statut === 'en_livraison'
+                        ? 'bg-amber-100 text-amber-900'
+                        : 'bg-blue-100 text-blue-900'
+                    }`}>
+                      {cmd.statut === 'livree_payee' ? '✓ Livrée & Payée' : cmd.statut === 'en_livraison' ? '🚚 En cours de livraison' : '⏳ En attente'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
+                    <p className="text-gray-500 font-bold">📍 Adresse : {cmd.adresse_livraison}</p>
+                    {cmd.lignes.map((l, i) => (
+                      <div key={i} className="flex justify-between font-medium">
+                        <span>{l.quantite}x {l.nom_produit} ({l.detail_variante})</span>
+                        <span className="font-bold">{l.prix_unitaire.toLocaleString('fr-FR')} F</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[#E2D5C3]">
+                    <span className="font-serif font-black text-lg text-[#1B4332]">
+                      Total: {cmd.montant_total.toLocaleString('fr-FR')} FCFA
+                    </span>
+
+                    {cmd.statut !== 'livree_payee' && (
+                      <div className="flex items-center gap-2">
+                        {cmd.statut === 'en_attente' && (
+                          <button
+                            onClick={() => handleUpdateStatutLivraison(cmd.id, 'en_livraison')}
+                            className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold"
+                          >
+                            Passer En Livraison
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleUpdateStatutLivraison(cmd.id, 'livree_payee')}
+                          className="px-3 py-1.5 rounded-xl bg-[#B8442C] text-white text-xs font-bold"
+                        >
+                          Valider Livrée & Payée
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* --- SECTEUR 2: BAR (GESTION DES TABLES & ADDITIONS DIVISIBLES) --- */}
         {etablissement?.type_activite === 'bar' && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -361,38 +486,94 @@ export default function VentesPage() {
               ))}
             </div>
 
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-md">
-              <h3 className="font-serif font-black text-xl text-[#1B4332] mb-3 flex items-center gap-2">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-md space-y-4">
+              <h3 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
                 <Beer className="w-5 h-5 text-[#B8442C]" />
                 Addition Ouverte : {activeTableNumber}
               </h3>
-              <p className="text-xs text-gray-600 mb-4">
-                Sélectionnez les boissons servies sur cette table. L'addition s'accumule et peut être divisée (Split) au moment du départ.
-              </p>
 
-              {/* Option de Split addition */}
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] mb-4">
-                <Split className="w-5 h-5 text-[#B8442C]" />
-                <div>
-                  <h4 className="font-bold text-xs text-[#1B4332]">Diviser l'addition (Split note)</h4>
-                  <p className="text-[11px] text-gray-500">Nombre de personnes partageant l'addition :</p>
+              {/* Option Split Addition Divisible */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3]">
+                <div className="flex items-center gap-3">
+                  <Split className="w-6 h-6 text-[#B8442C]" />
+                  <div>
+                    <h4 className="font-bold text-xs text-[#1B4332]">Addition Divisible (Split Note)</h4>
+                    <p className="text-[11px] text-gray-500">Divisez la note par personne au sein de la même table :</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 ml-auto">
+
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => setSplitCount(Math.max(1, splitCount - 1))}
-                    className="w-8 h-8 rounded-xl bg-[#F3ECE0] font-black"
+                    className="w-9 h-9 rounded-xl bg-[#F3ECE0] font-black text-base border"
                   >
                     -
                   </button>
-                  <span className="font-black text-sm">{splitCount} pers.</span>
+                  <span className="font-black text-sm px-2">{splitCount} Personne(s)</span>
                   <button
                     onClick={() => setSplitCount(splitCount + 1)}
-                    className="w-8 h-8 rounded-xl bg-[#F3ECE0] font-black"
+                    className="w-9 h-9 rounded-xl bg-[#F3ECE0] font-black text-base border"
                   >
                     +
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- SECTEUR 3: SNACK-BAR (FLUX 2 ÉTAPES & MULTI-CAISSES & CARRES VIP) --- */}
+        {etablissement?.type_activite === 'snack' && (
+          <div className="space-y-6">
+            {/* Multi-Caisses Selector */}
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
+              <h3 className="font-serif font-black text-base text-[#1B4332]">Sélection de la Caisse Active</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {caisses.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => setSelectedCaisseId(c.id)}
+                    className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center justify-between transition-all ${
+                      selectedCaisseId === c.id
+                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
+                        : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3]'
+                    }`}
+                  >
+                    <div>
+                      <h4 className="font-bold text-sm">{c.nom_caisse}</h4>
+                      <p className="text-[11px] opacity-80">Caissière : {c.caissiere_nom}</p>
+                    </div>
+                    <span className="font-serif font-black text-base">
+                      {c.total_encaisse_du_jour.toLocaleString('fr-FR')} F
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tables Normales vs VIP */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {tables.map((t) => (
+                <div
+                  key={t.tableNumber}
+                  onClick={() => setActiveTableNumber(t.tableNumber)}
+                  className={`p-5 rounded-3xl border-2 cursor-pointer transition-all ${
+                    activeTableNumber === t.tableNumber
+                      ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-md'
+                      : 'bg-[#F3ECE0] border-[#E2D5C3] text-[#1B4332]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-serif font-black text-base">{t.tableNumber}</span>
+                    {t.isVip && (
+                      <span className="text-[9px] font-black uppercase bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
+                        VIP
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs opacity-80">Flux 2 étapes activé</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -408,7 +589,7 @@ export default function VentesPage() {
                 Choisissez la taille et la couleur souhaitée par le client :
               </p>
 
-              <div className="space-y-2 mb-6">
+              <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
                 {selectedProductForVariant.variantes?.map((v) => (
                   <div
                     key={v.id}
@@ -441,12 +622,12 @@ export default function VentesPage() {
           </div>
         )}
 
-        {/* --- MODAL DE PAIEMENT & ENCAISSEMENT --- */}
+        {/* --- MODAL PAIEMENT & ENCAISSEMENT --- */}
         {isPaymentModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-4">
               <h3 className="font-serif font-black text-xl text-[#1B4332]">
-                Encaissement Vente Directe
+                Encaissement & Édition de Ticket
               </h3>
 
               <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between">
@@ -516,7 +697,7 @@ export default function VentesPage() {
           </div>
         )}
 
-        {/* --- MODAL CONFIRMATION FACTURE IMPRESSION --- */}
+        {/* --- MODAL CONFIRMATION TICKET THERMIQUE BLUETOOTH --- */}
         {lastCreatedFacture && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-center space-y-4">
@@ -527,27 +708,39 @@ export default function VentesPage() {
                 Vente Clôturée & Enregistrée !
               </h3>
               <p className="text-xs font-bold text-gray-600">
-                Facture n° <strong className="text-[#1B4332]">{lastCreatedFacture.numero_facture}</strong> • Montant :{' '}
+                Facture n° <strong className="text-[#1B4332]">{lastCreatedFacture.numero_facture}</strong> • Total :{' '}
                 <strong className="text-[#1B4332]">{lastCreatedFacture.montant_total.toLocaleString('fr-FR')} FCFA</strong>
               </p>
 
-              <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-left text-xs space-y-1">
+              <div className="p-4 rounded-2xl bg-white border border-[#E2D5C3] text-left text-xs font-mono space-y-1 shadow-inner">
+                <div className="text-center font-bold pb-2 border-b border-gray-200">
+                  <p className="text-sm font-sans font-black">{etablissement?.nom}</p>
+                  <p className="text-[10px] text-gray-500 font-sans">{etablissement?.ville} - {etablissement?.adresse}</p>
+                </div>
                 {lastCreatedFacture.lignes?.map((l) => (
                   <div key={l.id} className="flex justify-between">
-                    <span>
-                      {l.quantite_bouteilles}x {l.nom_produit} {l.detail_variante ? `(${l.detail_variante})` : ''}
-                    </span>
+                    <span>{l.quantite_bouteilles}x {l.nom_produit} {l.detail_variante ? `(${l.detail_variante})` : ''}</span>
                     <span className="font-bold">{l.sous_total_vente.toLocaleString('fr-FR')} FCFA</span>
                   </div>
                 ))}
               </div>
 
-              <button
-                onClick={() => setLastCreatedFacture(null)}
-                className="w-full py-3 rounded-2xl bg-[#1B4332] text-white font-black text-xs shadow-md"
-              >
-                Nouvelle Vente
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 py-3.5 rounded-2xl bg-[#1B4332] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
+                >
+                  <Printer className="w-4 h-4 text-[#E8A33D]" />
+                  <span>Imprimer Ticket Bluetooth</span>
+                </button>
+
+                <button
+                  onClick={() => setLastCreatedFacture(null)}
+                  className="py-3.5 px-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </div>
         )}
