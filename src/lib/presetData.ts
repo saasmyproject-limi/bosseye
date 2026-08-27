@@ -298,7 +298,7 @@ export const SEED_COMMANDES_LIGNE: CommandeEnLigne[] = [
     client_telephone: '237699445566',
     adresse_livraison: 'Douala - Bonapriso (Face Clinique)',
     statut: 'en_livraison',
-    articles: [
+    lignes: [
       {
         produit_id: 'prod-robe-soie',
         variante_id: 'var-robe-m-noir',
