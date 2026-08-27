@@ -809,7 +809,10 @@ export const offlineDB = {
     const remiseVal = params.remise || 0;
     const netAPayer = Math.max(0, totalVente - remiseVal);
 
-    const mPaye = params.mode_paiement === 'credit' ? (params.montant_paye || 0) : netAPayer;
+    const mPaye = (params.montant_paye !== undefined && params.montant_paye !== null)
+      ? params.montant_paye
+      : (params.mode_paiement === 'credit' ? 0 : netAPayer);
+
     const mRestant = Math.max(0, netAPayer - mPaye);
     const isCredit = mRestant > 0 || params.mode_paiement === 'credit';
 
@@ -826,8 +829,8 @@ export const offlineDB = {
       montant_total: totalVente,
       remise: remiseVal,
       net_a_payer: netAPayer,
-      montant_verse: params.montant_verse || mPaye,
-      montant_rendu: params.montant_rendu || (params.montant_verse ? Math.max(0, params.montant_verse - netAPayer) : 0),
+      montant_verse: params.montant_verse !== undefined ? params.montant_verse : mPaye,
+      montant_rendu: params.montant_rendu !== undefined ? params.montant_rendu : (params.montant_verse ? Math.max(0, params.montant_verse - netAPayer) : 0),
       montant_paye: mPaye,
       montant_restant: mRestant,
       mode_paiement: params.mode_paiement,

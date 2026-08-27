@@ -81,7 +81,7 @@ export default function DashboardPage() {
   const term = getTerminology(etablissement?.type_activite);
 
   const comptabilite = offlineDB.getComptabiliteJournaliere('semaine');
-  const facturesCredit = offlineDB.getFactures().filter((f) => f.statut === 'credit_encours');
+  const facturesCredit = offlineDB.getFactures().filter((f) => f.statut === 'credit_encours' || f.montant_restant > 0);
   const totalCreditedAmount = facturesCredit.reduce((acc, f) => acc + f.montant_restant, 0);
 
   const daysLeftTrial = etablissement ? offlineDB.getTrialDaysRemaining(etablissement) : 7;
