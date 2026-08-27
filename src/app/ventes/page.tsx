@@ -1197,14 +1197,29 @@ export default function VentesPage() {
                     <span className="font-black text-[#1B4332]">NET À PAYER :</span>
                     <span className="font-black text-[#1B4332]">{(lastCreatedFacture.net_a_payer || lastCreatedFacture.montant_total).toLocaleString('fr-FR')} FCFA</span>
                   </div>
-                  <div className="flex justify-between text-xs text-gray-600 pt-1">
-                    <span className="font-bold">Montant Versé Client :</span>
-                    <span className="font-bold text-gray-800">{(lastCreatedFacture.montant_verse || lastCreatedFacture.net_a_payer || lastCreatedFacture.montant_total).toLocaleString('fr-FR')} FCFA</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-emerald-800 font-bold bg-emerald-50 p-2 rounded-xl border border-emerald-200 mt-1">
-                    <span>MONNAIE RENDUE :</span>
-                    <span className="font-black text-sm">{(lastCreatedFacture.montant_rendu || 0).toLocaleString('fr-FR')} FCFA</span>
-                  </div>
+                  {lastCreatedFacture.montant_restant > 0 ? (
+                    <>
+                      {lastCreatedFacture.client && (
+                        <div className="flex justify-between text-xs text-[#1B4332] pt-1">
+                          <span className="font-bold">Client :</span>
+                          <span className="font-black">{lastCreatedFacture.client.nom} ({lastCreatedFacture.client.telephone_whatsapp})</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs text-emerald-800 font-bold bg-emerald-50 p-1.5 rounded-xl border border-emerald-200 mt-1">
+                        <span>AVANCE VERSÉE :</span>
+                        <span className="font-black">{(lastCreatedFacture.montant_paye || 0).toLocaleString('fr-FR')} FCFA</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-[#B8442C] font-black bg-amber-50 p-2 rounded-xl border border-amber-300 mt-1">
+                        <span>RELIQUAT DÛ À CRÉDIT :</span>
+                        <span className="font-black text-sm">{lastCreatedFacture.montant_restant.toLocaleString('fr-FR')} FCFA</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-xs text-emerald-800 font-bold bg-emerald-50 p-2 rounded-xl border border-emerald-200 mt-1">
+                      <span>MONNAIE RENDUE :</span>
+                      <span className="font-black text-sm">{(lastCreatedFacture.montant_rendu || 0).toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

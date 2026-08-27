@@ -23,6 +23,7 @@ import {
   Zap,
   ShoppingBag,
   CreditCard,
+  Send,
   Eye,
   Lock,
   Truck
@@ -112,6 +113,25 @@ export default function DashboardPage() {
     loadData();
   };
 
+  const handleDirectWhatsAppRelance = (fac: Facture) => {
+    const clientNom = fac.client?.nom || 'Cher Client';
+    const etabNom = etablissement?.nom || 'notre établissement';
+    const total = fac.montant_total.toLocaleString('fr-FR');
+    const avance = (fac.montant_paye || 0).toLocaleString('fr-FR');
+    const manquant = fac.montant_restant.toLocaleString('fr-FR');
+    const facNum = fac.numero_facture;
+
+    const message = `Bonjour ${clientNom}, ${etabNom} vous rappelle poliment qu'après votre avance de ${avance} FCFA sur la facture #${facNum} (Total: ${total} FCFA), il reste un manquant dû de ${manquant} FCFA à solder. Merci de votre confiance !`;
+    
+    const phone = (fac.client?.telephone_whatsapp || '').replace(/[^0-9]/g, '');
+    const encoded = encodeURIComponent(message);
+    const url = `https://wa.me/${phone.startsWith('237') ? phone : '237' + phone}?text=${encoded}`;
+    
+    offlineDB.recordWhatsAppRelance(fac.id);
+    loadData();
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex flex-col lg:flex-row font-sans">
       <Sidebar />
@@ -129,37 +149,45 @@ export default function DashboardPage() {
             </Link>
           </div>
         ) : daysLeftTrial <= 2 ? (
-          <div className="p-3 rounded-2xl bg-[#E8A33D]/20 border border-[#E8A33D] text-[#1B4332] flex items-center justify-between text-xs font-bold">
-            <span>⏳ Essai gratuit : {daysLeftTrial} jour(s) restant(s).</span>
-            <Link href="/payer" className="underline text-[#B8442C]">S'abonner maintenant</Link>
+          <div className="p-4 rounded-2xl bg-amber-100 border-2 border-amber-300 text-amber-950 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-amber-700" />
+              <span className="font-bold text-xs">Il reste {daysLeftTrial} jour(s) d'essai gratuit. Pensez à vous abonner !</span>
+            </div>
+            <Link href="/payer" className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white font-bold text-xs">
+              Activer Abonnement
+            </Link>
           </div>
         ) : null}
 
-        {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
-          <div>
+        {/* Banner de Bienvenue Personalisee */}
+        <div className="bg-[#1B4332] text-white rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Eye className="w-5 h-5 text-[#B8442C]" />
-              <span className="text-xs font-black uppercase tracking-widest text-[#B8442C]">
-                {salutation}, {currentUser?.nom || 'Patron'} !
+              <span className="text-xs font-bold uppercase tracking-widest text-[#E8A33D] bg-[#E8A33D]/10 px-3 py-1 rounded-full border border-[#E8A33D]/20">
+                Espace {currentUser?.role || 'Patron'}
+              </span>
+              <span className="text-xs text-[#E8A33D] font-medium flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> En Ligne
               </span>
             </div>
-            <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
-              Tableau de Bord — {etablissement?.nom}
+            <h1 className="font-serif text-2xl sm:text-3xl font-black">
+              {greetingTime}, {currentUser?.nom || 'Patron'} !
             </h1>
-            <p className="text-xs text-gray-600 font-medium">
-              Rôle actif : <strong className="text-[#1B4332] font-bold">{currentUser?.role}</strong>{' '}
-              {isPatronRemote && '(Lecture seule à distance)'}
+            <p className="text-xs text-emerald-100/80 max-w-xl">
+              Bienvenue sur <strong>{etablissement?.nom}</strong> ({etablissement?.ville}). Voici l'état de votre commerce aujourd'hui.
             </p>
           </div>
 
-          <Link
-            href="/ventes"
-            className="py-3 px-5 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2"
-          >
-            <span>Ouvrir {term.salesScreenTitle}</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+          {!isEmploye && (
+            <Link
+              href="/ventes"
+              className="py-3.5 px-6 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              <Zap className="w-4 h-4 text-[#E8A33D]" />
+              <span>Ouvrir {term.salesScreenTitle}</span>
+            </Link>
+          )}
         </div>
 
         {/* Stats Grid */}
@@ -242,12 +270,13 @@ export default function DashboardPage() {
                     <span className="text-gray-500 font-bold">Total: <strong className="text-[#1B4332]">{fac.montant_total.toLocaleString('fr-FR')} F</strong></span>
                   </div>
 
-                  <Link
-                    href="/credits"
+                  <button
+                    onClick={() => handleDirectWhatsAppRelance(fac)}
                     className="w-full py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm mt-1"
                   >
+                    <Send className="w-3 h-3 text-[#E8A33D]" />
                     <span>📱 Relancer WhatsApp</span>
-                  </Link>
+                  </button>
                 </div>
               ))}
             </div>
