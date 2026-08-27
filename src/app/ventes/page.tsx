@@ -173,7 +173,7 @@ export default function VentesPage() {
     });
   };
 
-  // --- NOULLE COMMANDE LIVRAISON WHATSAPP ---
+  // --- NOUVELLE COMMANDE LIVRAISON WHATSAPP ---
   const handleAddProductToDeliveryCart = (prod: Produit, variante?: VarianteProduit) => {
     const price = variante?.prix_vente_override || prod.prix_vente_unitaire || 0;
     setNewCmdCart((prev) => {
@@ -405,15 +405,22 @@ export default function VentesPage() {
                         </div>
                         <h3 className="font-serif font-black text-base text-[#1B4332]">{p.nom}</h3>
 
+                        {/* CLIC DIRECT SUR LES PILULES TAILLE & COULEUR POUR AJOUT SUR FACTURE */}
                         {hasVariants && (
-                          <div className="flex flex-wrap gap-1 mt-2">
+                          <div className="flex flex-wrap gap-1.5 mt-2.5">
                             {p.variantes?.map((v) => (
-                              <span
+                              <button
                                 key={v.id}
-                                className="text-[10px] font-bold bg-[#FBF7EF] border border-[#E2D5C3] px-2 py-0.5 rounded-md text-[#1B4332]"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddProductToCart(p, v);
+                                }}
+                                className="text-[11px] font-bold bg-[#FBF7EF] hover:bg-[#1B4332] hover:text-white border border-[#E2D5C3] px-2.5 py-1 rounded-xl text-[#1B4332] transition-colors shadow-sm active:scale-95 flex items-center gap-1"
                               >
-                                {v.taille} • {v.couleur} ({v.quantite_stock})
-                              </span>
+                                <span>{v.taille} • {v.couleur}</span>
+                                <span className="font-black text-[10px] opacity-75">({v.quantite_stock}) +</span>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -423,8 +430,15 @@ export default function VentesPage() {
                         <span className="font-serif font-black text-base text-[#1B4332]">
                           {price.toLocaleString('fr-FR')} FCFA
                         </span>
-                        <button className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1 hover:bg-[#2D6A4F]">
-                          <Plus className="w-3.5 h-3.5" />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddProductToCart(p);
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1 hover:bg-[#2D6A4F] shadow-sm"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-[#E8A33D]" />
                           <span>{hasVariants ? 'Choisir Taille' : 'Cocher / Ajouter'}</span>
                         </button>
                       </div>
@@ -451,7 +465,7 @@ export default function VentesPage() {
                 {cart.length === 0 ? (
                   <div className="py-12 text-center text-gray-400 space-y-2">
                     <ShoppingBag className="w-12 h-12 mx-auto opacity-30 text-[#1B4332]" />
-                    <p className="text-xs font-bold">Cliquez sur un article à gauche pour cocher et créer la facture du client</p>
+                    <p className="text-xs font-bold">Cliquez sur une taille/couleur à gauche pour cocher et créer la facture du client</p>
                   </div>
                 ) : (
                   <div className="space-y-2.5 mt-4 max-h-[380px] overflow-y-auto pr-1">
@@ -463,7 +477,7 @@ export default function VentesPage() {
                         <div className="flex-1 truncate">
                           <h4 className="font-bold text-xs text-[#1B4332] truncate">{item.produit.nom}</h4>
                           {item.variante && (
-                            <span className="text-[10px] font-bold text-[#B8442C]">
+                            <span className="text-[10px] font-black text-[#B8442C]">
                               Taille: {item.variante.taille} | Couleur: {item.variante.couleur}
                             </span>
                           )}
@@ -776,6 +790,59 @@ export default function VentesPage() {
                   <span>Encaisser & Clôturer {activeTableNumber}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- MODAL POPUP SELECTION VARIANTE PRODUIT --- */}
+        {selectedProductForVariant && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-4">
+              <div className="flex items-center justify-between border-b border-[#E2D5C3] pb-3">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-[#B8442C]">Sélection de Taille / Couleur</span>
+                  <h3 className="font-serif font-black text-xl text-[#1B4332]">
+                    {selectedProductForVariant.nom}
+                  </h3>
+                </div>
+                <button onClick={() => setSelectedProductForVariant(null)} className="p-1 text-gray-500 hover:text-black">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-600 font-bold">
+                Cliquez sur la déclinaison souhaitée par le client pour l'ajouter sur sa facture :
+              </p>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {selectedProductForVariant.variantes?.map((v) => (
+                  <div
+                    key={v.id}
+                    onClick={() => handleAddProductToCart(selectedProductForVariant, v)}
+                    className="p-3.5 rounded-2xl border-2 border-[#E2D5C3] bg-[#FBF7EF] hover:border-[#1B4332] hover:bg-emerald-50 cursor-pointer flex items-center justify-between transition-all shadow-sm"
+                  >
+                    <div>
+                      <h4 className="font-bold text-sm text-[#1B4332]">
+                        Taille {v.taille} • Couleur {v.couleur}
+                      </h4>
+                      <span className="text-[11px] text-gray-500 font-bold">SKU: {v.sku_code || 'N/A'}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-black text-sm text-[#1B4332]">
+                        {(v.prix_vente_override || selectedProductForVariant.prix_vente_unitaire || 0).toLocaleString('fr-FR')} FCFA
+                      </span>
+                      <p className="text-[10px] text-emerald-800 font-black">{v.quantite_stock} en stock +</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setSelectedProductForVariant(null)}
+                className="w-full py-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+              >
+                Fermer
+              </button>
             </div>
           </div>
         )}
