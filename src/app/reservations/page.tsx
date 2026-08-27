@@ -302,7 +302,7 @@ export default function ReservationsPage() {
         {/* --- MODAL RELANCE WHATSAPP --- */}
         {selectedResForWhatsApp && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
               <h3 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-emerald-700" />
                 Relance WhatsApp Réservation
@@ -358,7 +358,7 @@ export default function ReservationsPage() {
         {/* --- MODAL SOLDER RÉSERVATION --- */}
         {selectedResForSolder && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <form onSubmit={handleSolderReservation} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <form onSubmit={handleSolderReservation} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
               <h3 className="font-serif font-black text-xl text-[#1B4332]">
                 Solder la Réservation & Remettre l'Article
               </h3>

@@ -1103,10 +1103,23 @@ export default function VentesPage() {
         {/* --- MODAL PAIEMENT, REMISE & ENCAISSEMENT --- */}
         {isPaymentModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-4">
-              <h3 className="font-serif font-black text-xl text-[#1B4332]">
-                Encaissement & Édition de Ticket
-              </h3>
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-[#E2D5C3] pb-3">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-[#B8442C]">
+                    {paymentMode === 'reservation' ? '🔖 Mise de Côté & Réservation' : 'Règlement & Édition Facture'}
+                  </span>
+                  <h3 className="font-serif font-black text-xl text-[#1B4332]">
+                    {paymentMode === 'reservation' ? 'Réservation d\'Article en Boutique' : 'Encaissement & Édition de Ticket'}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-black/10 text-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               {/* Résumé Financier : Grand Total, Remise & Net à payer */}
               <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
@@ -1345,7 +1358,7 @@ export default function VentesPage() {
                 );
               })()}
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-2 border-t border-[#E2D5C3]">
                 <button
                   onClick={() => setIsPaymentModalOpen(false)}
                   className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
@@ -1354,9 +1367,13 @@ export default function VentesPage() {
                 </button>
                 <button
                   onClick={handleFinalizeSale}
-                  className="flex-1 py-3 px-4 rounded-xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-md"
+                  className={`flex-1 py-3.5 px-4 rounded-xl font-black text-xs shadow-md transition-all ${
+                    paymentMode === 'reservation'
+                      ? 'bg-blue-700 hover:bg-blue-800 text-white'
+                      : 'bg-[#B8442C] hover:bg-[#9C3823] text-white'
+                  }`}
                 >
-                  Confirmer Encaissement
+                  {paymentMode === 'reservation' ? '🔖 Confirmer la Réservation' : 'Confirmer Encaissement'}
                 </button>
               </div>
             </div>
