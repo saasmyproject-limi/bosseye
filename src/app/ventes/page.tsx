@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Sidebar from '@/components/Sidebar';
 import {
   ShoppingBag,
@@ -112,6 +113,7 @@ export default function VentesPage() {
   const [activeTableNumber, setActiveTableNumber] = useState<string>('Table 01');
   const [splitCount, setSplitCount] = useState<number>(1);
   const [selectedCaisseId, setSelectedCaisseId] = useState<string>('');
+  const [reservations, setReservations] = useState<Reservation[]>([]);
 
   useEffect(() => {
     loadData();
@@ -125,6 +127,7 @@ export default function VentesPage() {
       setProduits(offlineDB.getProduits());
       setClients(offlineDB.getClients());
       setCommandesLigne(offlineDB.getCommandesEnLigne());
+      setReservations(offlineDB.getReservations().filter((r) => r.statut === 'en_attente'));
       const caissesList = offlineDB.getCaisses();
       setCaisses(caissesList);
       if (caissesList.length > 0) setSelectedCaisseId(caissesList[0].id);
@@ -289,12 +292,19 @@ export default function VentesPage() {
     // --- RÈGLEMENT PAR RÉSERVATION / MISE DE CÔTÉ ---
     if (paymentMode === 'reservation') {
       let activeClientId = selectedClientId;
-      if (isNewClientMode && newClientNom.trim() && newClientPhone.trim()) {
+      if (isNewClientMode) {
+        if (!newClientNom.trim() || !newClientPhone.trim()) {
+          alert('Veuillez renseigner le Nom et le Numéro WhatsApp du client pour enregistrer la réservation.');
+          return;
+        }
         const createdC = offlineDB.addClient({
           nom: newClientNom.trim(),
           telephone_whatsapp: newClientPhone.trim(),
         });
         activeClientId = createdC.id;
+      } else if (!selectedClientId) {
+        alert('Veuillez sélectionner un client existant ou en ajouter un nouveau pour enregistrer la réservation.');
+        return;
       }
 
       const acompte = acompteCreditInput || montantVerseInput || 0;
@@ -445,7 +455,7 @@ export default function VentesPage() {
           </div>
 
           {etablissement?.type_activite === 'boutique' && (
-            <div className="flex items-center gap-2 bg-[#F3ECE0] p-1.5 rounded-2xl border border-[#E2D5C3]">
+            <div className="flex flex-wrap items-center gap-2 bg-[#F3ECE0] p-1.5 rounded-2xl border border-[#E2D5C3]">
               <button
                 onClick={() => setActiveTab('comptoir')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -463,6 +473,13 @@ export default function VentesPage() {
                 <Truck className="w-4 h-4 text-[#E8A33D]" />
                 <span>Livraisons WhatsApp ({commandesLigne.length})</span>
               </button>
+              <Link
+                href="/reservations"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-100 border border-blue-300 text-blue-950 hover:bg-blue-200 transition-all flex items-center gap-1.5"
+              >
+                <Bookmark className="w-4 h-4 text-blue-700" />
+                <span>Réservations en cours ({reservations.length}) →</span>
+              </Link>
             </div>
           )}
         </div>
@@ -617,14 +634,31 @@ export default function VentesPage() {
                   </span>
                 </div>
 
-                <button
-                  disabled={cart.length === 0}
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-glow-brique disabled:opacity-50 transition-transform active:scale-95"
-                >
-                  <Receipt className="w-5 h-5 text-white" />
-                  <span>Encaisser & Éditer Facture</span>
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    disabled={cart.length === 0}
+                    onClick={() => {
+                      setPaymentMode('reservation');
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="py-3.5 px-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    <Bookmark className="w-4 h-4 text-white" />
+                    <span>🔖 Mettre de Côté</span>
+                  </button>
+
+                  <button
+                    disabled={cart.length === 0}
+                    onClick={() => {
+                      setPaymentMode('cash');
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="py-3.5 px-3 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-glow-brique disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    <Receipt className="w-4 h-4 text-white" />
+                    <span>Encaisser Vente</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -882,14 +916,31 @@ export default function VentesPage() {
                   </div>
                 </div>
 
-                <button
-                  disabled={currentTableItems.length === 0}
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-glow-brique disabled:opacity-50 transition-transform active:scale-95"
-                >
-                  <Receipt className="w-5 h-5 text-white" />
-                  <span>Encaisser & Clôturer {activeTableNumber}</span>
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    disabled={currentTableItems.length === 0}
+                    onClick={() => {
+                      setPaymentMode('reservation');
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="py-3.5 px-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    <Bookmark className="w-4 h-4 text-white" />
+                    <span>🔖 Mettre de Côté</span>
+                  </button>
+
+                  <button
+                    disabled={currentTableItems.length === 0}
+                    onClick={() => {
+                      setPaymentMode('cash');
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="py-3.5 px-3 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-glow-brique disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    <Receipt className="w-4 h-4 text-white" />
+                    <span>Encaisser {activeTableNumber}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
