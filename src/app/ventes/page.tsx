@@ -1045,7 +1045,7 @@ export default function VentesPage() {
                 </div>
                 {lastCreatedFacture.lignes?.map((l) => (
                   <div key={l.id} className="flex justify-between">
-                    <span>{l.quantite_bouteilles}x {l.nom_produit} {l.detail_variante ? `(${l.detail_variante})` : ''}</span>
+                    <span>{l.quantite_bouteilles || (l as any).quantite || 1}x {l.nom_produit} {l.detail_variante ? `(${l.detail_variante})` : ''}</span>
                     <span className="font-bold">{l.sous_total_vente.toLocaleString('fr-FR')} FCFA</span>
                   </div>
                 ))}

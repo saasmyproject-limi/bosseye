@@ -10,8 +10,12 @@ export default function MouvementsPage() {
   const [mouvements, setMouvements] = useState<MouvementStock[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('tous');
   const [search, setSearch] = useState('');
+  const [etablissement, setEtablissement] = useState<any>(null);
 
   useEffect(() => {
+    try {
+      setEtablissement(offlineDB.getEtablissement());
+    } catch (e) { console.error(e); }
     loadMouvements();
   }, []);
 
@@ -142,7 +146,8 @@ export default function MouvementsPage() {
                       </td>
                       <td className="py-3.5 px-4 font-bold text-[#1B4332]">{m.produit?.nom || 'Produit'}</td>
                       <td className="py-3.5 px-4 font-black text-[#1B4332]">
-                        {m.type_mouvement === 'entree' ? `+${m.quantite_bouteilles}` : `-${m.quantite_bouteilles}`} bouteilles
+                        {m.type_mouvement === 'entree' ? `+${m.quantite_bouteilles}` : `-${m.quantite_bouteilles}`}{' '}
+                        {etablissement?.type_activite === 'boutique' || m.produit?.unite === 'piece' ? 'pièce(s)' : 'bouteille(s)'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-[#1B4332] flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full overflow-hidden border border-[#1B4332] bg-[#1B4332] text-white flex items-center justify-center text-[10px] font-bold shrink-0">

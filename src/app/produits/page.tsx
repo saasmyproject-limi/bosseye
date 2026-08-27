@@ -243,8 +243,8 @@ export default function ProduitsPage() {
                     <div className="flex justify-between">
                       <span className="font-bold text-gray-500">Quantité en Stock :</span>
                       <span className="font-black text-[#1B4332]">
-                        {p.quantite_totale} {p.unite === 'piece' ? 'pièce(s)' : 'bouteille(s)'}
-                        {p.casiers_pleins !== undefined && ` (${p.casiers_pleins} casier(s))`}
+                        {p.quantite_totale} {isBoutique || p.unite === 'piece' ? 'pièce(s)' : 'bouteille(s)'}
+                        {!isBoutique && p.casiers_pleins !== undefined && ` (${p.casiers_pleins} casier(s))`}
                       </span>
                     </div>
 
