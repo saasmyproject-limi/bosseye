@@ -265,8 +265,46 @@ export interface Paiement {
   abonnement_id?: string;
   montant: number;
   methode: MethodePaiement;
-  telephone_payeur: string;
   reference_transaction: string;
   statut: 'en_attente' | 'reussi' | 'echoue';
   created_at: string;
 }
+
+export type StatutReservation = 'en_attente' | 'soldee_recuperee' | 'annulee';
+
+export interface LigneReservation {
+  id: string;
+  reservation_id?: string;
+  produit_id: string;
+  variante_id?: string;
+  nom_produit: string;
+  detail_variante?: string;
+  quantite: number;
+  prix_unitaire: number;
+  sous_total: number;
+}
+
+export interface Reservation {
+  id: string;
+  etablissement_id: string;
+  numero_reservation: string; // Ex: "RES-2026-0042"
+  client_id?: string;
+  utilisateur_id: string;
+  
+  lignes: LigneReservation[];
+
+  montant_total: number;
+  acompte_paye: number;
+  reste_a_solder: number;
+  statut: StatutReservation;
+  date_limite_retrait?: string;
+  
+  compteur_relances?: number;
+  date_derniere_relance_whatsapp?: string;
+
+  created_at: string;
+
+  client?: Client;
+  utilisateur?: Utilisateur;
+}
+

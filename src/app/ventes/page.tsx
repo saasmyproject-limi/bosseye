@@ -24,6 +24,7 @@ import {
   Printer,
   ShieldAlert,
   Sparkles,
+  Bookmark,
   Send,
   X
 } from 'lucide-react';
@@ -35,6 +36,7 @@ import {
   Utilisateur,
   Client,
   Facture,
+  Reservation,
   CommandeEnLigne,
   Caisse,
   StatutLivraison,
@@ -65,7 +67,7 @@ export default function VentesPage() {
 
   // Modal Encaissement, Remise & Payment Mode
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit'>('cash');
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit' | 'reservation'>('cash');
   const [remiseInput, setRemiseInput] = useState<number>(0);
   const [montantVerseInput, setMontantVerseInput] = useState<number>(0);
   const [acompteCreditInput, setAcompteCreditInput] = useState<number>(0);
@@ -74,6 +76,7 @@ export default function VentesPage() {
   const [newClientNom, setNewClientNom] = useState<string>('');
   const [newClientPhone, setNewClientPhone] = useState<string>('');
   const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
+  const [lastCreatedReservation, setLastCreatedReservation] = useState<Reservation | null>(null);
 
   // --- MODAL CRÉATION COMMANDE LIVRAISON WHATSAPP ---
   const [isNewDeliveryModalOpen, setIsNewDeliveryModalOpen] = useState(false);
@@ -282,6 +285,58 @@ export default function VentesPage() {
     const rawTotal = isBarOrSnack ? currentTableTotal : cartTotal;
 
     if (itemsToProcess.length === 0) return;
+
+    // --- RÈGLEMENT PAR RÉSERVATION / MISE DE CÔTÉ ---
+    if (paymentMode === 'reservation') {
+      let activeClientId = selectedClientId;
+      if (isNewClientMode && newClientNom.trim() && newClientPhone.trim()) {
+        const createdC = offlineDB.addClient({
+          nom: newClientNom.trim(),
+          telephone_whatsapp: newClientPhone.trim(),
+        });
+        activeClientId = createdC.id;
+      }
+
+      const acompte = acompteCreditInput || montantVerseInput || 0;
+      const newRes = offlineDB.createReservation({
+        lignes: itemsToProcess.map((item: any) => {
+          let detail = '';
+          if (item.variante) {
+            const t = item.variante.taille ? `Taille ${item.variante.taille}` : '';
+            const c = item.variante.couleur ? `${item.variante.couleur}` : '';
+            detail = [t, c].filter(Boolean).join(' / ');
+          }
+          return {
+            produit_id: item.produit.id,
+            variante_id: item.variante?.id,
+            nom_produit: item.produit.nom,
+            detail_variante: detail,
+            quantite: item.quantite,
+            prix_unitaire: item.prix_unitaire,
+          };
+        }),
+        acompte_paye: acompte,
+        client_id: activeClientId || undefined,
+      });
+
+      setLastCreatedReservation(newRes);
+      if (isBarOrSnack) {
+        setTablesState((prev) => ({ ...prev, [activeTableNumber]: [] }));
+      } else {
+        setCart([]);
+      }
+
+      setIsPaymentModalOpen(false);
+      setRemiseInput(0);
+      setMontantVerseInput(0);
+      setAcompteCreditInput(0);
+      setSelectedClientId('');
+      setNewClientNom('');
+      setNewClientPhone('');
+      setIsNewClientMode(false);
+      loadData();
+      return;
+    }
 
     const netAPayerCalculated = Math.max(0, rawTotal - (remiseInput || 0));
     const isCreditMode = paymentMode === 'credit';
@@ -1060,13 +1115,14 @@ export default function VentesPage() {
               )}
 
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-2">Moyen de Règlement</label>
+                <label className="text-xs font-bold text-[#1B4332] block mb-2">Moyen de Règlement / Type de Vente</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { mode: 'cash', label: '💵 Cash Espèces' },
                     { mode: 'orange_money', label: '🟧 Orange Money' },
                     { mode: 'mtn_momo', label: '🟡 MTN MoMo' },
                     { mode: 'credit', label: '📝 Crédit Client' },
+                    { mode: 'reservation', label: '🔖 Réservation (Mise de Côté)' },
                   ].map((m) => (
                     <button
                       key={m.mode}
@@ -1083,11 +1139,94 @@ export default function VentesPage() {
                 </div>
               </div>
 
+              {/* Mode Réservation Spécifique */}
+              {paymentMode === 'reservation' && (
+                <div className="space-y-3 p-3.5 rounded-2xl bg-blue-50 border-2 border-blue-300">
+                  <div className="flex justify-between items-center pb-2 border-b border-blue-200 text-xs font-black text-blue-950">
+                    <span>🔖 RÉSERVATION & MISE DE CÔTÉ</span>
+                    <span className="font-serif text-base text-[#1B4332]">{currentNetAPayer.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+
+                  <p className="text-[11px] text-blue-900 font-bold">
+                    L'article restera bloqué en boutique pour le client jusqu'au versement du solde final lors du retrait.
+                  </p>
+
+                  <div>
+                    <label className="text-xs font-bold text-[#1B4332] block mb-1">Acompte de Réservation Versé Maintenant (FCFA) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={currentNetAPayer}
+                      placeholder="Ex: 1000"
+                      value={acompteCreditInput || ''}
+                      onChange={(e) => setAcompteCreditInput(Number(e.target.value))}
+                      className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-[#1B4332]">Identité du Client (Obligatoire pour le Suivi) *</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsNewClientMode(!isNewClientMode)}
+                        className="text-[11px] font-bold text-[#B8442C] hover:underline"
+                      >
+                        {isNewClientMode ? '← Choisir Client Existant' : '+ Nouveau Client'}
+                      </button>
+                    </div>
+
+                    {isNewClientMode ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Nom du client (ex: Carine)"
+                          value={newClientNom}
+                          onChange={(e) => setNewClientNom(e.target.value)}
+                          className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Tél WhatsApp (ex: 699000000)"
+                          value={newClientPhone}
+                          onChange={(e) => setNewClientPhone(e.target.value)}
+                          className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                        />
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedClientId}
+                        onChange={(e) => setSelectedClientId(e.target.value)}
+                        className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                      >
+                        <option value="">-- Sélectionner un client enregistré --</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nom} ({c.telephone_whatsapp})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-blue-200 text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 font-bold">Acompte Versé :</span>
+                      <span className="font-bold text-emerald-800">{(acompteCreditInput || 0).toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                    <div className="flex justify-between font-black text-sm text-blue-950">
+                      <span>Reste à Solder au Retrait :</span>
+                      <span>{Math.max(0, currentNetAPayer - (acompteCreditInput || 0)).toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* En cas de Versement Partiel ou de Crédit : Affichage du Reliquat Dû & Saisie Client */}
               {(() => {
                 const isPartialPayment = montantVerseInput > 0 && montantVerseInput < currentNetAPayer;
                 const isCreditMode = paymentMode === 'credit';
-                const isCreditOrPartial = isCreditMode || isPartialPayment;
+                const isCreditOrPartial = (isCreditMode || isPartialPayment) && paymentMode !== 'reservation';
                 const reliquatDuAmount = isCreditMode
                   ? Math.max(0, currentNetAPayer - (acompteCreditInput || 0))
                   : (isPartialPayment ? (currentNetAPayer - montantVerseInput) : 0);
@@ -1287,6 +1426,102 @@ export default function VentesPage() {
 
                 <button
                   onClick={() => setLastCreatedFacture(null)}
+                  className="py-3.5 px-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- MODAL CONFIRMATION & IMPRESSION TICKET DE RÉSERVATION & MISE DE CÔTÉ --- */}
+        {lastCreatedReservation && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-center space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center mx-auto text-2xl font-bold">
+                🔖
+              </div>
+              <h3 className="font-serif font-black text-xl text-[#1B4332]">
+                Article Mis de Côté & Réservé !
+              </h3>
+              <p className="text-xs text-gray-600 font-bold">
+                L'article est désormais retiré du stock disponible et conservé en boutique.
+              </p>
+
+              {/* TICKET DE RÉSERVATION THERMIQUE BLUETOOTH */}
+              <div className="p-4 rounded-2xl bg-white border border-[#E2D5C3] text-left text-xs font-mono space-y-2.5 shadow-inner">
+                <div className="text-center pb-2 border-b border-dashed border-gray-300">
+                  <p className="text-base font-sans font-black uppercase text-[#1B4332]">{etablissement?.nom}</p>
+                  <p className="text-[11px] text-gray-600 font-sans font-bold">Quartier : {etablissement?.ville} - {etablissement?.adresse}</p>
+                  <p className="text-[11px] text-[#B8442C] font-sans font-black">📞 Tél : {etablissement?.telephone || '699 00 00 00'}</p>
+                  <span className="inline-block bg-blue-100 text-blue-900 text-[10px] font-sans font-black px-2 py-0.5 rounded-full mt-1 border border-blue-300">
+                    REÇU DE RÉSERVATION & MISE DE CÔTÉ
+                  </span>
+                </div>
+
+                <div className="text-[11px] font-sans space-y-0.5 border-b border-dashed border-gray-300 pb-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-bold">N° Réservation :</span>
+                    <span className="font-black text-blue-950">{lastCreatedReservation.numero_reservation}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-bold">Date & Heure :</span>
+                    <span className="font-bold text-gray-700">
+                      {new Date(lastCreatedReservation.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })}
+                    </span>
+                  </div>
+                  {lastCreatedReservation.client && (
+                    <div className="flex justify-between text-[#1B4332] pt-0.5">
+                      <span className="font-bold">Client :</span>
+                      <span className="font-black">{lastCreatedReservation.client.nom} ({lastCreatedReservation.client.telephone_whatsapp})</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="py-1 border-b border-dashed border-gray-300 space-y-1.5">
+                  <div className="flex justify-between font-bold text-[10px] uppercase text-gray-400 pb-1">
+                    <span>Article Réservé (Conservé en boutique)</span>
+                    <span>Total</span>
+                  </div>
+                  {lastCreatedReservation.lignes?.map((l) => (
+                    <div key={l.id} className="flex justify-between text-xs">
+                      <div className="truncate pr-2">
+                        <p className="font-bold text-[#1B4332]">{l.quantite}x {l.nom_produit}</p>
+                        {l.detail_variante && <p className="text-[10px] text-gray-500 font-sans">{l.detail_variante}</p>}
+                      </div>
+                      <span className="font-black text-[#1B4332] whitespace-nowrap">{l.sous_total.toLocaleString('fr-FR')} F</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-1 text-xs font-sans space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 font-bold">VALEUR TOTALE ARTICLE :</span>
+                    <span className="font-black text-[#1B4332]">{lastCreatedReservation.montant_total.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-800 font-bold bg-emerald-50 p-1.5 rounded-xl border border-emerald-200 mt-1">
+                    <span>ACOMPTE PAYÉ MAINTENANT :</span>
+                    <span className="font-black">{(lastCreatedReservation.acompte_paye || 0).toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div className="flex justify-between text-[#1B4332] font-black bg-blue-50 p-2 rounded-xl border border-blue-300 mt-1">
+                    <span>SOLDE À REGLER AU RETRAIT :</span>
+                    <span className="font-black text-sm">{lastCreatedReservation.reste_a_solder.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 py-3.5 rounded-2xl bg-[#1B4332] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
+                >
+                  <Printer className="w-4 h-4 text-[#E8A33D]" />
+                  <span>Imprimer Ticket Réservation</span>
+                </button>
+
+                <button
+                  onClick={() => setLastCreatedReservation(null)}
                   className="py-3.5 px-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
                 >
                   Fermer

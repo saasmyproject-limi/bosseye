@@ -47,6 +47,7 @@ const KEYS = {
   CAISSES: 'oeko_caisses',
   REMBOURSEMENTS: 'oeko_remboursements',
   CHARGES: 'oeko_charges',
+  RESERVATIONS: 'oeko_reservations',
   OFFLINE_QUEUE: 'oeko_offline_queue',
   RESET_ZERO: 'oeko_db_reset_zero',
 };
@@ -1026,6 +1027,206 @@ export const offlineDB = {
       const data = localStorage.getItem(KEYS.CHARGES);
       return data ? JSON.parse(data) : SEED_CHARGES;
     } catch { return SEED_CHARGES; }
+  },
+
+  // --- RÉSERVATIONS & MISES DE CÔTÉ ---
+  getReservations(): Reservation[] {
+    try {
+      const etab = this.getEtablissement();
+      const clients = this.getAllClientsGlobal();
+      const users = this.getAllUtilisateursGlobal();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.RESERVATIONS);
+      if (!data && isResetZero) return [];
+      const all: Reservation[] = data ? JSON.parse(data) : [];
+
+      return all
+        .filter((r) => r && r.etablissement_id === etab.id)
+        .map((r) => ({
+          ...r,
+          client: clients.find((c) => c && c.id === r.client_id),
+          utilisateur: users.find((u) => u && u.id === r.utilisateur_id),
+        }));
+    } catch { return []; }
+  },
+
+  getAllReservationsGlobal(): Reservation[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.RESERVATIONS);
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
+  },
+
+  createReservation(params: {
+    lignes: Array<{
+      produit_id: string;
+      variante_id?: string;
+      nom_produit?: string;
+      detail_variante?: string;
+      quantite?: number;
+      prix_unitaire?: number;
+    }>;
+    acompte_paye: number;
+    client_id?: string;
+    date_limite_retrait?: string;
+  }): Reservation {
+    const etab = this.getEtablissement();
+    const currentUser = this.getCurrentUser();
+    const prods = this.getProduits();
+
+    let totalVal = 0;
+    const lignesRes = params.lignes.map((l, index) => {
+      const prod = prods.find((p) => p.id === l.produit_id);
+      const pName = l.nom_produit || prod?.nom || 'Article';
+      const qty = l.quantite || 1;
+      const pUnit = l.prix_unitaire || 0;
+      const sTotal = qty * pUnit;
+
+      totalVal += sTotal;
+
+      // Retirer du stock dispo pour bloquer l'article en réservation / mise de côté
+      if (prod) {
+        this.addMouvementStock({
+          produit_id: prod.id,
+          variante_id: l.variante_id,
+          type_mouvement: 'sortie',
+          quantite_bouteilles: qty,
+          utilisateur_id: currentUser.id,
+          note_motif: `Mise de Côté / Réservation Article`,
+        });
+      }
+
+      return {
+        id: `lig-res-${Date.now()}-${index}`,
+        produit_id: l.produit_id,
+        variante_id: l.variante_id,
+        nom_produit: pName,
+        detail_variante: l.detail_variante,
+        quantite: qty,
+        prix_unitaire: pUnit,
+        sous_total: sTotal,
+      };
+    });
+
+    const numSeq = Math.floor(100 + Math.random() * 900);
+    const resteASolder = Math.max(0, totalVal - (params.acompte_paye || 0));
+
+    const newRes: Reservation = {
+      id: `res-${Date.now()}`,
+      etablissement_id: etab.id,
+      numero_reservation: `RES-2026-${numSeq}`,
+      client_id: params.client_id,
+      utilisateur_id: currentUser.id,
+      lignes: lignesRes,
+      montant_total: totalVal,
+      acompte_paye: params.acompte_paye || 0,
+      reste_a_solder: resteASolder,
+      statut: 'en_attente',
+      date_limite_retrait: params.date_limite_retrait,
+      created_at: new Date().toISOString(),
+    };
+
+    const all = this.getAllReservationsGlobal();
+    const updated = [newRes, ...all];
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.RESERVATIONS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
+
+    return newRes;
+  },
+
+  solderReservation(reservationId: string, params: {
+    montant_regle: number;
+    methode: 'cash' | 'orange_money' | 'mtn_momo';
+  }): Facture | null {
+    const reservations = this.getReservations();
+    const res = reservations.find((r) => r.id === reservationId);
+    if (!res) return null;
+
+    const currentUser = this.getCurrentUser();
+
+    // 1. Passer la réservation en 'soldee_recuperee'
+    const updatedRes: Reservation = {
+      ...res,
+      reste_a_solder: 0,
+      statut: 'soldee_recuperee',
+    };
+
+    const allRes = this.getAllReservationsGlobal().map((r) => (r.id === reservationId ? updatedRes : r));
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.RESERVATIONS, JSON.stringify(allRes));
+    } catch (e) { console.error(e); }
+
+    // 2. Générer la Facture Clôturée Finale
+    const fac = this.createFacture({
+      lignes: res.lignes.map((l) => ({
+        produit_id: l.produit_id,
+        variante_id: l.variante_id,
+        nom_produit: l.nom_produit,
+        detail_variante: l.detail_variante,
+        quantite: l.quantite,
+        prix_unitaire: l.prix_unitaire,
+      })),
+      mode_paiement: params.methode,
+      montant_paye: res.montant_total,
+      montant_verse: params.montant_regle,
+      client_id: res.client_id,
+      transaction_id: `RETRAIT-${res.numero_reservation}`,
+      caissiere_id: currentUser.id,
+    });
+
+    return fac;
+  },
+
+  annulerReservation(reservationId: string): boolean {
+    const reservations = this.getReservations();
+    const res = reservations.find((r) => r.id === reservationId);
+    if (!res) return false;
+
+    const currentUser = this.getCurrentUser();
+
+    // Remettre le stock d'articles réservés en disponible
+    res.lignes.forEach((l) => {
+      this.addMouvementStock({
+        produit_id: l.produit_id,
+        variante_id: l.variante_id,
+        type_mouvement: 'entree',
+        quantite_bouteilles: l.quantite,
+        utilisateur_id: currentUser.id,
+        note_motif: `Annulation Réservation #${res.numero_reservation}`,
+      });
+    });
+
+    const updatedRes: Reservation = {
+      ...res,
+      statut: 'annulee',
+    };
+
+    const allRes = this.getAllReservationsGlobal().map((r) => (r.id === reservationId ? updatedRes : r));
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.RESERVATIONS, JSON.stringify(allRes));
+    } catch (e) { console.error(e); }
+
+    return true;
+  },
+
+  recordReservationWhatsAppRelance(reservationId: string) {
+    const all = this.getAllReservationsGlobal();
+    const updated = all.map((r) => {
+      if (r.id === reservationId) {
+        return {
+          ...r,
+          compteur_relances: (r.compteur_relances || 0) + 1,
+          date_derniere_relance_whatsapp: new Date().toISOString(),
+        };
+      }
+      return r;
+    });
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.RESERVATIONS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
   },
 
   // --- QUEUE DE SYNCHRO HORS-LIGNE ---

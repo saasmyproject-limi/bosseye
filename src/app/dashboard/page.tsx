@@ -23,6 +23,7 @@ import {
   Zap,
   ShoppingBag,
   CreditCard,
+  Bookmark,
   Send,
   Eye,
   Lock,
@@ -30,7 +31,7 @@ import {
 } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
-import { Etablissement, Utilisateur, Produit, MouvementStock, Facture } from '@/types';
+import { Etablissement, Utilisateur, Produit, MouvementStock, Facture, Reservation } from '@/types';
 
 export default function DashboardPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
@@ -83,6 +84,9 @@ export default function DashboardPage() {
   const comptabilite = offlineDB.getComptabiliteJournaliere('semaine');
   const facturesCredit = offlineDB.getFactures().filter((f) => f.statut === 'credit_encours' || f.montant_restant > 0);
   const totalCreditedAmount = facturesCredit.reduce((acc, f) => acc + f.montant_restant, 0);
+
+  const reservationsActives = offlineDB.getReservations().filter((r) => r.statut === 'en_attente');
+  const totalResteASolderReservations = reservationsActives.reduce((acc, r) => acc + r.reste_a_solder, 0);
 
   const daysLeftTrial = etablissement ? offlineDB.getTrialDaysRemaining(etablissement) : 7;
   const isTrialExpired = etablissement ? offlineDB.isTrialExpired(etablissement) : false;
@@ -219,6 +223,16 @@ export default function DashboardPage() {
             </h3>
             <p className="text-[11px] text-[#B8442C] font-bold">{facturesCredit.length} client(s) à crédit</p>
           </div>
+
+          <Link href="/reservations" className="bg-[#F3ECE0] hover:bg-[#EAE1D1] border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-2 transition-all block">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+              <Bookmark className="w-3.5 h-3.5 text-blue-700" /> Articles Réservés
+            </span>
+            <h3 className="font-serif font-black text-2xl text-[#1B4332]">
+              {reservationsActives.length} Réservation(s)
+            </h3>
+            <p className="text-[11px] text-blue-900 font-bold">{totalResteASolderReservations.toLocaleString('fr-FR')} F à solder au retrait</p>
+          </Link>
 
           <div className="bg-[#F3ECE0] border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-2">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Alertes Stock Bas</span>
