@@ -20,7 +20,8 @@ import {
   MessageSquare,
   ShoppingBag,
   Eye,
-  Truck
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import { Utilisateur, Etablissement } from '@/types';
@@ -34,9 +35,11 @@ export default function Sidebar() {
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
     loadInfo();
@@ -62,6 +65,19 @@ export default function Sidebar() {
   const isTrialExpired = etablissement ? offlineDB.isTrialExpired(etablissement) : false;
 
   const isEmployeBoutique = currentUser?.role === 'Employé';
+
+  const handleClearDatabase = () => {
+    offlineDB.clearAllDataToZero();
+    setShowClearConfirm(false);
+    setIsSelectorModalOpen(true);
+  };
+
+  const handleRestoreDemoData = () => {
+    offlineDB.restoreDemoSeedData();
+    setShowClearConfirm(false);
+    loadInfo();
+    router.refresh();
+  };
 
   const navItems = [
     {
@@ -162,8 +178,11 @@ export default function Sidebar() {
             </button>
           </div>
 
-          {/* Commerce Actif */}
-          <div className="p-3 rounded-2xl bg-[#0F291E] border border-[#2D6A4F] text-xs">
+          {/* Commerce Actif & Switcher */}
+          <div
+            onClick={() => setIsSelectorModalOpen(true)}
+            className="p-3 rounded-2xl bg-[#0F291E] border border-[#2D6A4F] text-xs cursor-pointer hover:border-[#E8A33D] transition-all"
+          >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Commerce Actif</span>
               <span className="text-[9px] font-black uppercase bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
@@ -171,7 +190,7 @@ export default function Sidebar() {
               </span>
             </div>
             <p className="font-serif font-black text-sm text-white truncate">{etablissement?.nom}</p>
-            <p className="text-[10px] text-gray-300 font-medium truncate">{etablissement?.adresse}</p>
+            <p className="text-[10px] text-[#E8A33D] font-bold underline mt-1">Changer ou Créer un commerce ➔</p>
           </div>
 
           <OfflineBadge />
@@ -208,8 +227,8 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* User Footer & PIN Switch */}
-        <div className="p-4 border-t border-[#2D6A4F] space-y-3 bg-[#0F291E]">
+        {/* User Footer & Reset Actions */}
+        <div className="p-4 border-t border-[#2D6A4F] space-y-2 bg-[#0F291E]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#2D6A4F] text-[#E8A33D] flex items-center justify-center font-black text-sm">
               {currentUser?.nom?.charAt(0) || 'U'}
@@ -222,13 +241,62 @@ export default function Sidebar() {
 
           <button
             onClick={() => setIsPinModalOpen(true)}
-            className="w-full py-2.5 px-3 rounded-xl bg-[#2D6A4F] hover:bg-[#3E8E68] text-white font-bold text-xs flex items-center justify-center gap-2 transition-all"
+            className="w-full py-2 px-3 rounded-xl bg-[#2D6A4F] hover:bg-[#3E8E68] text-white font-bold text-[11px] flex items-center justify-center gap-2 transition-all"
           >
             <Lock className="w-3.5 h-3.5 text-[#E8A33D]" />
-            <span>Changer d'utilisateur PIN</span>
+            <span>Changer PIN</span>
+          </button>
+
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            className="w-full py-2 px-3 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-200 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            <span>Vider la Base (Test à Zéro)</span>
           </button>
         </div>
       </aside>
+
+      {/* MODAL CONFIRMATION REMISE À ZÉRO */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-700 flex items-center justify-center mx-auto text-2xl font-bold">
+              🗑️
+            </div>
+            <h3 className="font-serif font-black text-xl text-[#1B4332]">
+              Vider la Base de Données à Zéro ?
+            </h3>
+            <p className="text-xs text-gray-600 font-bold leading-relaxed">
+              Cette action va supprimer tous les commerces, produits et factures actuels afin que vous puissiez tester la création d'un commerce de zéro.
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleClearDatabase}
+                className="w-full py-3.5 rounded-2xl bg-[#B8442C] text-white font-black text-xs shadow-md"
+              >
+                Tout Vider & Démarrer de Zéro ➔
+              </button>
+
+              <button
+                onClick={handleRestoreDemoData}
+                className="w-full py-3.5 rounded-2xl bg-[#1B4332] text-white font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-4 h-4 text-[#E8A33D]" />
+                <span>Recharger les Données Démo</span>
+              </button>
+
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="w-full py-2.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PIN Login Modal */}
       {isPinModalOpen && (
@@ -237,6 +305,18 @@ export default function Sidebar() {
           onClose={() => setIsPinModalOpen(false)}
           onSuccess={() => {
             setIsPinModalOpen(false);
+            loadInfo();
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* Bar / Commerce Selector Modal */}
+      {isSelectorModalOpen && (
+        <BarSelectorModal
+          isOpen={isSelectorModalOpen}
+          onClose={() => setIsSelectorModalOpen(false)}
+          onSelectSuccess={() => {
             loadInfo();
             router.refresh();
           }}

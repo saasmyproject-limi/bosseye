@@ -48,6 +48,7 @@ const KEYS = {
   REMBOURSEMENTS: 'oeko_remboursements',
   CHARGES: 'oeko_charges',
   OFFLINE_QUEUE: 'oeko_offline_queue',
+  RESET_ZERO: 'oeko_db_reset_zero',
 };
 
 // Helper pour déterminer le vocabulaire selon le type d'activité (œko)
@@ -79,6 +80,21 @@ export const offlineDB = {
     try {
       const activeId = typeof window !== 'undefined' ? localStorage.getItem(KEYS.ACTIVE_ETAB_ID) : null;
       const all = this.getEtablissements();
+      if (all.length === 0) {
+        return {
+          id: 'etab-nouveau',
+          nom: 'Nouveau Commerce œko',
+          type: 'boutique',
+          type_activite: 'boutique',
+          ville: 'Douala',
+          adresse: 'Nouveau commerce',
+          plan: 'Premium',
+          statut_abonnement: 'essai',
+          tarif_mensuel: 5000,
+          date_fin_essai: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+          date_prochain_paiement: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+        };
+      }
       if (activeId) {
         const found = all.find((e) => e && e.id === activeId);
         if (found) return this.normalizeEtablissement(found);
@@ -107,8 +123,11 @@ export const offlineDB = {
   getEtablissements(): Etablissement[] {
     try {
       if (typeof window === 'undefined') return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+      const isResetZero = localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       const data = localStorage.getItem(KEYS.ETABLISSEMENTS);
+
       if (!data) {
+        if (isResetZero) return [];
         localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
         return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
       }
@@ -193,6 +212,49 @@ export const offlineDB = {
     return newEtab;
   },
 
+  // --- PURGER LA BASE DE DONNÉES À ZÉRO (TEST FROM SCRATCH) ---
+  clearAllDataToZero() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.RESET_ZERO, 'true');
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify([]));
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify([]));
+        localStorage.setItem(KEYS.PRODUITS, JSON.stringify([]));
+        localStorage.setItem(KEYS.FACTURES, JSON.stringify([]));
+        localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify([]));
+        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify([]));
+        localStorage.setItem(KEYS.CLIENTS, JSON.stringify([]));
+        localStorage.setItem(KEYS.CAISSES, JSON.stringify([]));
+        localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify([]));
+        localStorage.setItem(KEYS.CHARGES, JSON.stringify([]));
+        localStorage.setItem(KEYS.REMBOURSEMENTS, JSON.stringify([]));
+        localStorage.removeItem(KEYS.ACTIVE_ETAB_ID);
+        localStorage.removeItem(KEYS.CURRENT_USER_ID);
+      }
+    } catch (e) { console.error(e); }
+  },
+
+  // --- RECHARGER LES DONNÉES DÉMO D'ORIGINE ---
+  restoreDemoSeedData() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(KEYS.RESET_ZERO);
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
+        localStorage.setItem(KEYS.PRODUITS, JSON.stringify(SEED_PRODUITS));
+        localStorage.setItem(KEYS.FACTURES, JSON.stringify(SEED_FACTURES));
+        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(SEED_COMMANDES_LIGNE));
+        localStorage.setItem(KEYS.CLIENTS, JSON.stringify(SEED_CLIENTS));
+        localStorage.setItem(KEYS.CAISSES, JSON.stringify(SEED_CAISSES));
+        localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(SEED_MOUVEMENTS));
+        localStorage.setItem(KEYS.CHARGES, JSON.stringify(SEED_CHARGES));
+        localStorage.setItem(KEYS.REMBOURSEMENTS, JSON.stringify(SEED_REMBOURSEMENTS));
+        localStorage.setItem(KEYS.ACTIVE_ETAB_ID, SEED_ETABLISSEMENT.id);
+        localStorage.setItem(KEYS.CURRENT_USER_ID, SEED_UTILISATEURS[0].id);
+      }
+    } catch (e) { console.error(e); }
+  },
+
   isTrialExpired(etab: Etablissement): boolean {
     if (etab.statut_abonnement === 'actif') return false;
     if (etab.statut_abonnement === 'expire') return true;
@@ -259,7 +321,14 @@ export const offlineDB = {
         const found = users.find((u) => u && u.id === currentId);
         if (found) return found;
       }
-      return users[0] || SEED_UTILISATEURS[0];
+      return users[0] || {
+        id: 'user-patron-defaut',
+        etablissement_id: 'etab-nouveau',
+        nom: 'Mme Patronne',
+        role: 'Patronne',
+        pin_code: '1234',
+        actif: true,
+      };
     } catch {
       return SEED_UTILISATEURS[0];
     }
@@ -276,9 +345,11 @@ export const offlineDB = {
   getUtilisateurs(): Utilisateur[] {
     try {
       const etab = this.getEtablissement();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.UTILISATEURS);
       if (!data) {
+        if (isResetZero) return [];
         localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
         return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etab.id);
       }
@@ -336,9 +407,11 @@ export const offlineDB = {
   getCaisses(): Caisse[] {
     try {
       const etab = this.getEtablissement();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_CAISSES.filter((c) => c && c.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.CAISSES);
       if (!data) {
+        if (isResetZero) return [];
         localStorage.setItem(KEYS.CAISSES, JSON.stringify(SEED_CAISSES));
         return SEED_CAISSES.filter((c) => c && c.etablissement_id === etab.id);
       }
@@ -351,9 +424,11 @@ export const offlineDB = {
   getCommandesEnLigne(): CommandeEnLigne[] {
     try {
       const etab = this.getEtablissement();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
       if (!data) {
+        if (isResetZero) return [];
         localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(SEED_COMMANDES_LIGNE));
         return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
       }
@@ -369,7 +444,6 @@ export const offlineDB = {
 
     const updatedCmd: CommandeEnLigne = { ...cmd, statut: newStatut };
 
-    // Si statut passe à 'livree_payee', auto-création de la facture et déstockage
     if (newStatut === 'livree_payee' && cmd.statut !== 'livree_payee') {
       const fac = this.createFacture({
         lignes: cmd.lignes.map((l) => ({
@@ -406,9 +480,11 @@ export const offlineDB = {
   getProduits(): Produit[] {
     try {
       const etab = this.getEtablissement();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.PRODUITS);
       if (!data) {
+        if (isResetZero) return [];
         localStorage.setItem(KEYS.PRODUITS, JSON.stringify(SEED_PRODUITS));
         return SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
       }
@@ -486,8 +562,10 @@ export const offlineDB = {
       const etab = this.getEtablissement();
       const users = this.getAllUtilisateursGlobal();
       const prods = this.getAllProduitsGlobal();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_MOUVEMENTS.filter((m) => m && m.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.MOUVEMENTS);
+      if (!data && isResetZero) return [];
       const list: MouvementStock[] = data ? JSON.parse(data) : SEED_MOUVEMENTS;
 
       return (list || [])
@@ -574,9 +652,11 @@ export const offlineDB = {
   getClients(): Client[] {
     try {
       const etab = this.getEtablissement();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_CLIENTS.filter((c) => c && c.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.CLIENTS);
       if (!data) {
+        if (isResetZero) return [];
         localStorage.setItem(KEYS.CLIENTS, JSON.stringify(SEED_CLIENTS));
         return SEED_CLIENTS.filter((c) => c && c.etablissement_id === etab.id);
       }
@@ -617,8 +697,10 @@ export const offlineDB = {
       const etab = this.getEtablissement();
       const users = this.getAllUtilisateursGlobal();
       const clients = this.getAllClientsGlobal();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_FACTURES.filter((f) => f && f.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.FACTURES);
+      if (!data && isResetZero) return [];
       const allFacs: Facture[] = data ? JSON.parse(data) : SEED_FACTURES;
 
       return allFacs
@@ -866,9 +948,13 @@ export const offlineDB = {
   getCharges(): ChargeJournaliere[] {
     try {
       const etab = this.getEtablissement();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       if (typeof window === 'undefined') return SEED_CHARGES.filter((c) => c && c.etablissement_id === etab.id);
       const data = localStorage.getItem(KEYS.CHARGES);
-      if (!data) return SEED_CHARGES.filter((c) => c && c.etablissement_id === etab.id);
+      if (!data) {
+        if (isResetZero) return [];
+        return SEED_CHARGES.filter((c) => c && c.etablissement_id === etab.id);
+      }
       const parsed: ChargeJournaliere[] = JSON.parse(data);
       return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
     } catch { return SEED_CHARGES; }
