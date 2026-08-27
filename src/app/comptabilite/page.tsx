@@ -348,10 +348,36 @@ export default function ComptabilitePage() {
 
             <form onSubmit={handleAddCharge} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Motif de la Dépense *</label>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1.5">Catégories Rapides de Dépense</label>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {[
+                    '🏢 Loyer du magasin/local',
+                    '👩‍💼 Salaire Vendeuse / Serveuse',
+                    '⚡ Électricité & Eau (ENEO)',
+                    '🚚 Transport & Livraison',
+                    '🧊 Sacs de glace en bloc',
+                    '📦 Emballages & Sacs',
+                    '🛠️ Entretien & Matériel',
+                  ].map((cat) => (
+                    <button
+                      type="button"
+                      key={cat}
+                      onClick={() => setChargeMotif(cat)}
+                      className={`text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition-all ${
+                        chargeMotif === cat
+                          ? 'bg-[#1B4332] text-white border-[#1B4332]'
+                          : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Motif / Libellé de la Dépense *</label>
                 <input
                   type="text"
-                  placeholder="Ex: Glace en bloc, Loyer partiel..."
+                  placeholder="Ex: Loyer du mois, Salaire Carine..."
                   value={chargeMotif}
                   onChange={(e) => setChargeMotif(e.target.value)}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3.5 text-[#1B4332] font-bold text-sm focus:outline-none focus:border-[#1B4332]"
@@ -359,9 +385,10 @@ export default function ComptabilitePage() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Montant (FCFA) *</label>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Montant de la Dépense (FCFA) *</label>
                 <input
                   type="number"
+                  min="0"
                   value={chargeMontant}
                   onChange={(e) => setChargeMontant(parseInt(e.target.value) || 0)}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3.5 text-[#1B4332] font-black text-base focus:outline-none focus:border-[#1B4332]"
@@ -372,7 +399,7 @@ export default function ComptabilitePage() {
                 type="submit"
                 className="w-full py-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-base shadow-md transition-transform active:scale-95"
               >
-                Enregistrer la Charge
+                Enregistrer la Charge & Déduire du Résultat Net
               </button>
             </form>
           </div>
