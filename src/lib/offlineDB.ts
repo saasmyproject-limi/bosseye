@@ -18,6 +18,8 @@ import {
   Caisse,
   TARIFS_ABONNEMENT,
   StatutLivraison,
+  Reservation,
+  LigneReservation,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
@@ -1161,7 +1163,7 @@ export const offlineDB = {
 
     // 2. Générer la Facture Clôturée Finale
     const fac = this.createFacture({
-      lignes: res.lignes.map((l) => ({
+      lignes: res.lignes.map((l: LigneReservation) => ({
         produit_id: l.produit_id,
         variante_id: l.variante_id,
         nom_produit: l.nom_produit,
@@ -1188,7 +1190,7 @@ export const offlineDB = {
     const currentUser = this.getCurrentUser();
 
     // Remettre le stock d'articles réservés en disponible
-    res.lignes.forEach((l) => {
+    res.lignes.forEach((l: LigneReservation) => {
       this.addMouvementStock({
         produit_id: l.produit_id,
         variante_id: l.variante_id,
