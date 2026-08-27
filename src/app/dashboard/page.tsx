@@ -90,13 +90,14 @@ export default function DashboardPage() {
 
   const handleAddMouvementRapide = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduitId || quantiteInput <= 0) return;
+    const targetProdId = selectedProduitId || (produits[0] ? produits[0].id : '');
+    if (!targetProdId || quantiteInput <= 0) return;
 
-    const prod = produits.find((p) => p.id === selectedProduitId);
+    const prod = produits.find((p) => p.id === targetProdId);
     if (!prod) return;
 
     offlineDB.addMouvementStock({
-      produit_id: selectedProduitId,
+      produit_id: targetProdId,
       type_mouvement: typeMvt,
       quantite_bouteilles: quantiteInput,
       utilisateur_id: currentUser?.id || 'user-1',

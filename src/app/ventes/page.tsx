@@ -47,10 +47,10 @@ export default function VentesPage() {
   const [caisses, setCaisses] = useState<Caisse[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Mode Onglet (Boutique: 'comptoir' | 'livraisons', Snack: 'serveuse' | 'caissiere')
+  // Mode Onglet pour Boutique
   const [activeTab, setActiveTab] = useState<'comptoir' | 'livraisons'>('comptoir');
 
-  // Boutique Cart State
+  // Panier Vente Comptoir (Boutique)
   const [cart, setCart] = useState<Array<{
     produit: Produit;
     variante?: VarianteProduit;
@@ -58,28 +58,34 @@ export default function VentesPage() {
     prix_unitaire: number;
   }>>([]);
 
-  // Selected variant for modal picker
+  // Variantes Modal Picker
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Produit | null>(null);
 
-  // Payment Modal State
+  // Modal Encaissement & Payment Mode
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit'>('cash');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
 
-  // Bar Open Tables State & Split
-  const [tables, setTables] = useState<Array<{
-    tableNumber: string;
-    isVip: boolean;
-    items: Array<{ produit: Produit; quantite: number }>;
-    status: 'libre' | 'occupee';
-  }>>([
-    { tableNumber: 'Table 01', isVip: false, items: [], status: 'libre' },
-    { tableNumber: 'Table 02', isVip: false, items: [], status: 'libre' },
-    { tableNumber: 'Table 03', isVip: false, items: [], status: 'libre' },
-    { tableNumber: 'Carré VIP 1', isVip: true, items: [], status: 'libre' },
-    { tableNumber: 'Carré VIP 2', isVip: true, items: [], status: 'libre' },
-  ]);
+  // --- GESTION DES TABLES BAR & SNACK ---
+  const [tablesState, setTablesState] = useState<Record<string, Array<{
+    produit: Produit;
+    quantite: number;
+    prix_unitaire: number;
+  }>>>({
+    'Table 01': [
+      {
+        produit: { id: 'prod-beaufort', nom: 'Beaufort Lager 65cl', categorie: 'Bière', unite: 'bouteille', quantite_totale: 100, seuil_alerte: 10, prix_vente_bouteille: 650, cout_achat_unitaire_cmp: 271, etablissement_id: '', actif: true },
+        quantite: 3,
+        prix_unitaire: 650,
+      },
+    ],
+    'Table 02': [],
+    'Table 03': [],
+    'Carré VIP 1': [],
+    'Carré VIP 2': [],
+  });
+
   const [activeTableNumber, setActiveTableNumber] = useState<string>('Table 01');
   const [splitCount, setSplitCount] = useState<number>(1);
   const [selectedCaisseId, setSelectedCaisseId] = useState<string>('');
@@ -104,7 +110,6 @@ export default function VentesPage() {
 
   const term = getTerminology(etablissement?.type_activite);
 
-  // Filter products by search query (Name, Category, SKU)
   const filteredProduits = produits.filter((p) => {
     if (!p) return false;
     const query = searchQuery.toLowerCase().trim();
@@ -142,7 +147,7 @@ export default function VentesPage() {
     }
   };
 
-  const handleUpdateQuantity = (index: number, delta: number) => {
+  const handleUpdateCartQuantity = (index: number, delta: number) => {
     setCart((prev) => {
       const updated = [...prev];
       const newQty = updated[index].quantite + delta;
@@ -154,13 +159,55 @@ export default function VentesPage() {
     });
   };
 
+  // --- BAR/SNACK TABLE ACTIONS ---
+  const handleAddDrinkToTable = (prod: Produit) => {
+    const price = prod.prix_vente_bouteille || prod.prix_vente_unitaire || 0;
+
+    setTablesState((prev) => {
+      const currentItems = prev[activeTableNumber] || [];
+      const existingIndex = currentItems.findIndex((item) => item.produit.id === prod.id);
+
+      let updatedItems;
+      if (existingIndex >= 0) {
+        updatedItems = [...currentItems];
+        updatedItems[existingIndex].quantite += 1;
+      } else {
+        updatedItems = [...currentItems, { produit: prod, quantite: 1, prix_unitaire: price }];
+      }
+
+      return {
+        ...prev,
+        [activeTableNumber]: updatedItems,
+      };
+    });
+  };
+
+  const handleUpdateTableItemQuantity = (tableNum: string, index: number, delta: number) => {
+    setTablesState((prev) => {
+      const currentItems = prev[tableNum] || [];
+      const updated = [...currentItems];
+      const newQty = updated[index].quantite + delta;
+      if (newQty <= 0) {
+        return { ...prev, [tableNum]: updated.filter((_, i) => i !== index) };
+      }
+      updated[index].quantite = newQty;
+      return { ...prev, [tableNum]: updated };
+    });
+  };
+
+  const currentTableItems = tablesState[activeTableNumber] || [];
+  const currentTableTotal = currentTableItems.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
+
   const cartTotal = cart.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
 
-  // --- CHECKOUT & FACTURE GENERATION ---
+  // --- FINALISER VENTE / ENCAISSER TABLE OU COMPTOIR ---
   const handleFinalizeSale = () => {
-    if (cart.length === 0) return;
+    const isBarOrSnack = etablissement?.type_activite !== 'boutique';
+    const itemsToProcess = isBarOrSnack ? currentTableItems : cart;
 
-    const lignes = cart.map((item) => {
+    if (itemsToProcess.length === 0) return;
+
+    const lignes = itemsToProcess.map((item: any) => {
       let detail = '';
       if (item.variante) {
         const t = item.variante.taille ? `Taille ${item.variante.taille}` : '';
@@ -182,16 +229,22 @@ export default function VentesPage() {
       lignes,
       mode_paiement: paymentMode,
       client_id: paymentMode === 'credit' ? selectedClientId : undefined,
+      transaction_id: isBarOrSnack ? activeTableNumber : 'COMPTOIR',
       caissiere_id: currentUser?.id,
     });
 
     setLastCreatedFacture(newFac);
-    setCart([]);
+
+    if (isBarOrSnack) {
+      setTablesState((prev) => ({ ...prev, [activeTableNumber]: [] }));
+    } else {
+      setCart([]);
+    }
+
     setIsPaymentModalOpen(false);
     loadData();
   };
 
-  // --- MISE À JOUR LIVRAISON COMMANDE EN LIGNE (BOUTIQUE) ---
   const handleUpdateStatutLivraison = (cmdId: string, nextStatut: StatutLivraison) => {
     offlineDB.updateStatutCommandeEnLigne(cmdId, nextStatut);
     loadData();
@@ -202,7 +255,7 @@ export default function VentesPage() {
       <Sidebar />
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 space-y-6">
-        {/* Top Activity Header */}
+        {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -221,7 +274,6 @@ export default function VentesPage() {
             </p>
           </div>
 
-          {/* Onglets spécialisés pour Boutique */}
           {etablissement?.type_activite === 'boutique' && (
             <div className="flex items-center gap-2 bg-[#F3ECE0] p-1.5 rounded-2xl border border-[#E2D5C3]">
               <button
@@ -248,7 +300,7 @@ export default function VentesPage() {
         {/* --- SECTEUR 1: BOUTIQUE (VENTE COMPTOIR DIRECTE & LIVRAISONS) --- */}
         {etablissement?.type_activite === 'boutique' && activeTab === 'comptoir' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Colonne Gauche: Catalogue Produits & Variantes (7 Cols) */}
+            {/* Catalogue Produits & Variantes (7 Cols) */}
             <div className="lg:col-span-7 space-y-4">
               <div className="relative">
                 <Search className="w-5 h-5 absolute left-4 top-3.5 text-gray-400" />
@@ -271,14 +323,14 @@ export default function VentesPage() {
                     <div
                       key={p.id}
                       onClick={() => handleAddProductToCart(p)}
-                      className="bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl p-4 hover:border-[#1B4332] transition-all cursor-pointer shadow-sm hover:shadow flex flex-col justify-between"
+                      className="bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl p-4 hover:border-[#1B4332] transition-all cursor-pointer shadow-sm flex flex-col justify-between"
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className="text-[10px] font-black uppercase text-[#B8442C] bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
                             {p.categorie}
                           </span>
-                          <span className={`text-[10px] font-bold ${stockTotal <= p.seuil_alerte ? 'text-red-600' : 'text-gray-500'}`}>
+                          <span className={`text-[10px] font-bold ${stockTotal <= p.seuil_alerte ? 'text-red-600 font-black' : 'text-gray-500'}`}>
                             Stock: {stockTotal} pièce(s)
                           </span>
                         </div>
@@ -304,7 +356,7 @@ export default function VentesPage() {
                         </span>
                         <button className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1 hover:bg-[#2D6A4F]">
                           <Plus className="w-3.5 h-3.5" />
-                          <span>{hasVariants ? 'Choisir Taille' : 'Ajouter'}</span>
+                          <span>{hasVariants ? 'Choisir Taille' : 'Ajouter au Panier'}</span>
                         </button>
                       </div>
                     </div>
@@ -313,13 +365,13 @@ export default function VentesPage() {
               </div>
             </div>
 
-            {/* Colonne Droite: Panier Comptoir & Encaissement (5 Cols) */}
+            {/* Ticket Facture Client Panier (5 Cols) */}
             <div className="lg:col-span-5 bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-lg flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-[#E2D5C3]">
                   <h2 className="font-serif font-black text-lg text-[#1B4332] flex items-center gap-2">
-                    <ShoppingBag className="w-5 h-5 text-[#B8442C]" />
-                    Panier Vente Comptoir
+                    <Receipt className="w-5 h-5 text-[#B8442C]" />
+                    Facture Ticket Client (Comptoir)
                   </h2>
                   <span className="text-xs font-bold text-gray-500">{cart.length} article(s)</span>
                 </div>
@@ -327,7 +379,7 @@ export default function VentesPage() {
                 {cart.length === 0 ? (
                   <div className="py-12 text-center text-gray-400 space-y-2">
                     <ShoppingBag className="w-12 h-12 mx-auto opacity-30 text-[#1B4332]" />
-                    <p className="text-xs font-bold">Cliquez sur un article pour l'ajouter au panier</p>
+                    <p className="text-xs font-bold">Cliquez sur un article à gauche pour l'ajouter sur la facture client</p>
                   </div>
                 ) : (
                   <div className="space-y-2.5 mt-4 max-h-[380px] overflow-y-auto pr-1">
@@ -350,14 +402,14 @@ export default function VentesPage() {
 
                         <div className="flex items-center gap-1.5 bg-[#F3ECE0] p-1 rounded-xl border border-[#E2D5C3]">
                           <button
-                            onClick={() => handleUpdateQuantity(index, -1)}
+                            onClick={() => handleUpdateCartQuantity(index, -1)}
                             className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
                           <span className="font-black text-xs px-2">{item.quantite}</span>
                           <button
-                            onClick={() => handleUpdateQuantity(index, 1)}
+                            onClick={() => handleUpdateCartQuantity(index, 1)}
                             className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -372,7 +424,7 @@ export default function VentesPage() {
               {/* Total & Action Encaissement */}
               <div className="pt-4 border-t border-[#E2D5C3] space-y-3">
                 <div className="flex items-center justify-between text-base">
-                  <span className="font-bold text-[#1B4332]">Total à encaisser :</span>
+                  <span className="font-bold text-[#1B4332]">Total Facture Client :</span>
                   <span className="font-serif font-black text-2xl text-[#1B4332]">
                     {cartTotal.toLocaleString('fr-FR')} FCFA
                   </span>
@@ -384,240 +436,198 @@ export default function VentesPage() {
                   className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-glow-brique disabled:opacity-50 transition-transform active:scale-95"
                 >
                   <Receipt className="w-5 h-5 text-white" />
-                  <span>Encaisser & Éditer Reçu</span>
+                  <span>Encaisser & Éditer Facture</span>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* --- SECTEUR 1 (SUITE): COMMANDES EN LIGNE & LIVRAISONS (BOUTIQUE) --- */}
-        {etablissement?.type_activite === 'boutique' && activeTab === 'livraisons' && (
-          <div className="space-y-4">
-            <h2 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
-              <Truck className="w-5 h-5 text-[#B8442C]" />
-              Suivi des Commandes en Ligne & Livraisons
-            </h2>
+        {/* --- SECTEUR 2: BAR & SNACK (GESTION INTERACTIVE DES TABLES ET BOISSONS) --- */}
+        {etablissement?.type_activite !== 'boutique' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Colonne Gauche: Tables & Catalogue de Boissons (7 Cols) */}
+            <div className="lg:col-span-7 space-y-5">
+              {/* Sélection des Tables */}
+              <div>
+                <h3 className="font-serif font-black text-base text-[#1B4332] mb-2.5">
+                  1. Cliquez sur une Table pour ouvrir sa Commande :
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {Object.keys(tablesState).map((tNum) => {
+                    const tItems = tablesState[tNum] || [];
+                    const isSelected = activeTableNumber === tNum;
+                    const isVip = tNum.includes('VIP');
+                    const tTotal = tItems.reduce((acc, i) => acc + i.quantite * i.prix_unitaire, 0);
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {commandesLigne.map((cmd) => (
-                <div key={cmd.id} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-[#B8442C]">
-                        {cmd.numero_commande}
-                      </span>
-                      <h3 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom}</h3>
-                      <p className="text-xs text-gray-600 font-bold">📱 {cmd.client_telephone}</p>
-                    </div>
-                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
-                      cmd.statut === 'livree_payee'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : cmd.statut === 'en_livraison'
-                        ? 'bg-amber-100 text-amber-900'
-                        : 'bg-blue-100 text-blue-900'
-                    }`}>
-                      {cmd.statut === 'livree_payee' ? '✓ Livrée & Payée' : cmd.statut === 'en_livraison' ? '🚚 En cours de livraison' : '⏳ En attente'}
-                    </span>
+                    return (
+                      <div
+                        key={tNum}
+                        onClick={() => setActiveTableNumber(tNum)}
+                        className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                          isSelected
+                            ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-md'
+                            : 'bg-[#F3ECE0] border-[#E2D5C3] text-[#1B4332] hover:border-[#1B4332]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-serif font-black text-base">{tNum}</span>
+                          {isVip && (
+                            <span className="text-[9px] font-black uppercase bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
+                              VIP
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold opacity-80">
+                          {tItems.length > 0 ? `${tTotal.toLocaleString('fr-FR')} F (${tItems.length} article)` : 'Table Libre'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Catalogue de Boissons & Plats pour la Table sélectionnée */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-serif font-black text-base text-[#1B4332]">
+                    2. Ajoutez des Boissons sur {activeTableNumber} :
+                  </h3>
+                  <span className="text-xs font-bold text-gray-500">Cliquez pour ajouter +1</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                  {filteredProduits.map((p) => {
+                    const price = p.prix_vente_bouteille || p.prix_vente_unitaire || 0;
+
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => handleAddDrinkToTable(p)}
+                        className="bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl p-3.5 hover:border-[#1B4332] cursor-pointer transition-all shadow-sm flex items-center justify-between gap-2"
+                      >
+                        <div>
+                          <span className="text-[9px] font-black uppercase text-[#B8442C] bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
+                            {p.categorie}
+                          </span>
+                          <h4 className="font-serif font-black text-sm text-[#1B4332] mt-1">{p.nom}</h4>
+                          <span className="font-serif font-black text-xs text-[#1B4332]/80">
+                            {price.toLocaleString('fr-FR')} FCFA
+                          </span>
+                        </div>
+
+                        <button className="w-8 h-8 rounded-xl bg-[#1B4332] text-white flex items-center justify-center hover:bg-[#2D6A4F]">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Colonne Droite: Ticket Facture Client de la Table Active (5 Cols) */}
+            <div className="lg:col-span-5 bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-lg flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex items-center justify-between pb-3 border-b border-[#E2D5C3]">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-[#B8442C]">Addition Ouverte</span>
+                    <h2 className="font-serif font-black text-xl text-[#1B4332]">{activeTableNumber}</h2>
                   </div>
+                  <span className="text-xs font-bold text-gray-500">{currentTableItems.length} conso(s)</span>
+                </div>
 
-                  <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
-                    <p className="text-gray-500 font-bold">📍 Adresse : {cmd.adresse_livraison}</p>
-                    {cmd.lignes.map((l, i) => (
-                      <div key={i} className="flex justify-between font-medium">
-                        <span>{l.quantite}x {l.nom_produit} ({l.detail_variante})</span>
-                        <span className="font-bold">{l.prix_unitaire.toLocaleString('fr-FR')} F</span>
+                {currentTableItems.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 space-y-2">
+                    <Beer className="w-12 h-12 mx-auto opacity-30 text-[#1B4332]" />
+                    <p className="text-xs font-bold">Cliquez sur une boisson à gauche pour l'ajouter à l'addition de {activeTableNumber}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 mt-4 max-h-[320px] overflow-y-auto pr-1">
+                    {currentTableItems.map((item, index) => (
+                      <div
+                        key={index}
+                        className="bg-[#FBF7EF] p-3 rounded-2xl border border-[#E2D5C3] flex items-center justify-between gap-2"
+                      >
+                        <div className="flex-1 truncate">
+                          <h4 className="font-bold text-xs text-[#1B4332] truncate">{item.produit.nom}</h4>
+                          <p className="text-[11px] font-black text-[#1B4332]/80 mt-0.5">
+                            {item.prix_unitaire.toLocaleString('fr-FR')} FCFA / bout.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 bg-[#F3ECE0] p-1 rounded-xl border border-[#E2D5C3]">
+                          <button
+                            onClick={() => handleUpdateTableItemQuantity(activeTableNumber, index, -1)}
+                            className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="font-black text-xs px-2">{item.quantite}</span>
+                          <button
+                            onClick={() => handleUpdateTableItemQuantity(activeTableNumber, index, 1)}
+                            className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
+                )}
 
-                  <div className="flex items-center justify-between pt-2 border-t border-[#E2D5C3]">
-                    <span className="font-serif font-black text-lg text-[#1B4332]">
-                      Total: {cmd.montant_total.toLocaleString('fr-FR')} FCFA
+                {/* Option Split Addition Divisible */}
+                {currentTableItems.length > 0 && (
+                  <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <Split className="w-4 h-4 text-[#B8442C]" />
+                      <span className="font-bold text-[#1B4332]">Split (Partage note) :</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setSplitCount(Math.max(1, splitCount - 1))}
+                        className="w-6 h-6 rounded-lg bg-[#F3ECE0] font-black text-xs"
+                      >
+                        -
+                      </button>
+                      <span className="font-black">{splitCount} pers.</span>
+                      <button
+                        onClick={() => setSplitCount(splitCount + 1)}
+                        className="w-6 h-6 rounded-lg bg-[#F3ECE0] font-black text-xs"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Total & Encaissement Table */}
+              <div className="pt-4 border-t border-[#E2D5C3] space-y-3">
+                <div className="flex items-center justify-between text-base">
+                  <span className="font-bold text-[#1B4332]">Total {activeTableNumber} :</span>
+                  <div className="text-right">
+                    <span className="font-serif font-black text-2xl text-[#1B4332]">
+                      {currentTableTotal.toLocaleString('fr-FR')} FCFA
                     </span>
-
-                    {cmd.statut !== 'livree_payee' && (
-                      <div className="flex items-center gap-2">
-                        {cmd.statut === 'en_attente' && (
-                          <button
-                            onClick={() => handleUpdateStatutLivraison(cmd.id, 'en_livraison')}
-                            className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold"
-                          >
-                            Passer En Livraison
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleUpdateStatutLivraison(cmd.id, 'livree_payee')}
-                          className="px-3 py-1.5 rounded-xl bg-[#B8442C] text-white text-xs font-bold"
-                        >
-                          Valider Livrée & Payée
-                        </button>
-                      </div>
+                    {splitCount > 1 && (
+                      <p className="text-[10px] text-[#B8442C] font-bold">
+                        Soit {Math.round(currentTableTotal / splitCount).toLocaleString('fr-FR')} FCFA / personne
+                      </p>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* --- SECTEUR 2: BAR (GESTION DES TABLES & ADDITIONS DIVISIBLES) --- */}
-        {etablissement?.type_activite === 'bar' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {tables.map((t) => (
-                <div
-                  key={t.tableNumber}
-                  onClick={() => setActiveTableNumber(t.tableNumber)}
-                  className={`p-5 rounded-3xl border-2 cursor-pointer transition-all ${
-                    activeTableNumber === t.tableNumber
-                      ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-md'
-                      : 'bg-[#F3ECE0] border-[#E2D5C3] text-[#1B4332]'
-                  }`}
+                <button
+                  disabled={currentTableItems.length === 0}
+                  onClick={() => setIsPaymentModalOpen(true)}
+                  className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-glow-brique disabled:opacity-50 transition-transform active:scale-95"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-serif font-black text-lg">{t.tableNumber}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.items.length > 0 ? 'bg-[#E8A33D] text-[#0F291E]' : 'bg-gray-300 text-gray-700'}`}>
-                      {t.items.length > 0 ? 'Occupée' : 'Libre'}
-                    </span>
-                  </div>
-                  <p className="text-xs opacity-80">{t.items.length} consommation(s)</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-md space-y-4">
-              <h3 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
-                <Beer className="w-5 h-5 text-[#B8442C]" />
-                Addition Ouverte : {activeTableNumber}
-              </h3>
-
-              {/* Option Split Addition Divisible */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3]">
-                <div className="flex items-center gap-3">
-                  <Split className="w-6 h-6 text-[#B8442C]" />
-                  <div>
-                    <h4 className="font-bold text-xs text-[#1B4332]">Addition Divisible (Split Note)</h4>
-                    <p className="text-[11px] text-gray-500">Divisez la note par personne au sein de la même table :</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSplitCount(Math.max(1, splitCount - 1))}
-                    className="w-9 h-9 rounded-xl bg-[#F3ECE0] font-black text-base border"
-                  >
-                    -
-                  </button>
-                  <span className="font-black text-sm px-2">{splitCount} Personne(s)</span>
-                  <button
-                    onClick={() => setSplitCount(splitCount + 1)}
-                    className="w-9 h-9 rounded-xl bg-[#F3ECE0] font-black text-base border"
-                  >
-                    +
-                  </button>
-                </div>
+                  <Receipt className="w-5 h-5 text-white" />
+                  <span>Encaisser & Clôturer {activeTableNumber}</span>
+                </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* --- SECTEUR 3: SNACK-BAR (FLUX 2 ÉTAPES & MULTI-CAISSES & CARRES VIP) --- */}
-        {etablissement?.type_activite === 'snack' && (
-          <div className="space-y-6">
-            {/* Multi-Caisses Selector */}
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
-              <h3 className="font-serif font-black text-base text-[#1B4332]">Sélection de la Caisse Active</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {caisses.map((c) => (
-                  <div
-                    key={c.id}
-                    onClick={() => setSelectedCaisseId(c.id)}
-                    className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center justify-between transition-all ${
-                      selectedCaisseId === c.id
-                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                        : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3]'
-                    }`}
-                  >
-                    <div>
-                      <h4 className="font-bold text-sm">{c.nom_caisse}</h4>
-                      <p className="text-[11px] opacity-80">Caissière : {c.caissiere_nom}</p>
-                    </div>
-                    <span className="font-serif font-black text-base">
-                      {c.total_encaisse_du_jour.toLocaleString('fr-FR')} F
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Tables Normales vs VIP */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {tables.map((t) => (
-                <div
-                  key={t.tableNumber}
-                  onClick={() => setActiveTableNumber(t.tableNumber)}
-                  className={`p-5 rounded-3xl border-2 cursor-pointer transition-all ${
-                    activeTableNumber === t.tableNumber
-                      ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-md'
-                      : 'bg-[#F3ECE0] border-[#E2D5C3] text-[#1B4332]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-serif font-black text-base">{t.tableNumber}</span>
-                    {t.isVip && (
-                      <span className="text-[9px] font-black uppercase bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
-                        VIP
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs opacity-80">Flux 2 étapes activé</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* --- MODAL SELECTION VARIANTE PRODUIT --- */}
-        {selectedProductForVariant && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
-              <h3 className="font-serif font-black text-xl text-[#1B4332] mb-1">
-                {selectedProductForVariant.nom}
-              </h3>
-              <p className="text-xs text-gray-600 mb-4">
-                Choisissez la taille et la couleur souhaitée par le client :
-              </p>
-
-              <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
-                {selectedProductForVariant.variantes?.map((v) => (
-                  <div
-                    key={v.id}
-                    onClick={() => handleAddProductToCart(selectedProductForVariant, v)}
-                    className="p-3.5 rounded-2xl border-2 border-[#E2D5C3] bg-[#FBF7EF] hover:border-[#1B4332] cursor-pointer flex items-center justify-between transition-all"
-                  >
-                    <div>
-                      <h4 className="font-bold text-sm text-[#1B4332]">
-                        Taille {v.taille} • Couleur {v.couleur}
-                      </h4>
-                      <span className="text-[11px] text-gray-500">SKU: {v.sku_code || 'N/A'}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-black text-sm text-[#1B4332]">
-                        {(v.prix_vente_override || selectedProductForVariant.prix_vente_unitaire || 0).toLocaleString('fr-FR')} FCFA
-                      </span>
-                      <p className="text-[10px] text-gray-500 font-bold">{v.quantite_stock} en stock</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => setSelectedProductForVariant(null)}
-                className="w-full py-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
-              >
-                Annuler
-              </button>
             </div>
           </div>
         )}
@@ -631,14 +641,14 @@ export default function VentesPage() {
               </h3>
 
               <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between">
-                <span className="font-bold text-xs text-[#1B4332]">Montant total :</span>
+                <span className="font-bold text-xs text-[#1B4332]">Montant total à régler :</span>
                 <span className="font-serif font-black text-xl text-[#1B4332]">
-                  {cartTotal.toLocaleString('fr-FR')} FCFA
+                  {(etablissement?.type_activite === 'boutique' ? cartTotal : currentTableTotal).toLocaleString('fr-FR')} FCFA
                 </span>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-2">Mode de Règlement</label>
+                <label className="text-xs font-bold text-[#1B4332] block mb-2">Moyen de Règlement</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { mode: 'cash', label: '💵 Cash Espèces' },
@@ -705,7 +715,7 @@ export default function VentesPage() {
                 ✓
               </div>
               <h3 className="font-serif font-black text-xl text-[#1B4332]">
-                Vente Clôturée & Enregistrée !
+                Facture Clôturée & Enregistrée !
               </h3>
               <p className="text-xs font-bold text-gray-600">
                 Facture n° <strong className="text-[#1B4332]">{lastCreatedFacture.numero_facture}</strong> • Total :{' '}
