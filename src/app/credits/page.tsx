@@ -57,17 +57,19 @@ export default function CreditsPage() {
   const getWhatsAppMessageText = (fac: Facture) => {
     const clientNom = fac.client?.nom || 'Cher Client';
     const etabNom = etablissement?.nom || 'notre établissement';
-    const montant = fac.montant_restant.toLocaleString('fr-FR');
+    const total = fac.montant_total.toLocaleString('fr-FR');
+    const avance = (fac.montant_paye || 0).toLocaleString('fr-FR');
+    const manquant = fac.montant_restant.toLocaleString('fr-FR');
     const facNum = fac.numero_facture;
 
     if (whatsappTemplate === 'fin_de_mois') {
-      return `Bonjour ${clientNom}, ${etabNom} vous souhaite un excellent mois ! Nous vous rappelons poliment le solde de ${montant} FCFA concernant la facture #${facNum}. Merci de votre confiance et à très bientôt !`;
+      return `Bonjour ${clientNom}, ${etabNom} vous souhaite un excellent mois ! Concernant votre facture #${facNum} de ${total} FCFA (avance reçue: ${avance} FCFA), nous vous rappelons poliment le manquant de ${manquant} FCFA à solder. Merci de votre confiance !`;
     } else if (whatsappTemplate === 'vip') {
-      return `Bonjour ${clientNom}, nous vous remercions chaleureusement pour votre fidélité auprès de ${etabNom}. Pour des raisons d'inventaire, nous vous invitons à solder le restant de ${montant} FCFA (Facture #${facNum}). Merci beaucoup !`;
+      return `Bonjour ${clientNom}, nous vous remercions chaleureusement pour votre fidélité auprès de ${etabNom}. Pour la facture #${facNum} (${total} FCFA, avance versée: ${avance} FCFA), nous vous invitons à solder le manquant restant de ${manquant} FCFA. Merci beaucoup !`;
     }
 
     // Default: Courtois
-    return `Bonjour ${clientNom}, ${etabNom} vous rappelle poliment qu'un solde restant de ${montant} FCFA est à régler pour la facture #${facNum}. Nous restons à votre disposition et vous remercions de votre confiance.`;
+    return `Bonjour ${clientNom}, ${etabNom} vous rappelle poliment qu'après votre avance de ${avance} FCFA sur la facture #${facNum} (Total: ${total} FCFA), il reste un manquant dû de ${manquant} FCFA à solder. Merci de votre confiance !`;
   };
 
   const handleSendWhatsApp = (fac: Facture) => {
@@ -110,14 +112,14 @@ export default function CreditsPage() {
             Argent à Récupérer & Fiches Clients
           </h1>
           <p className="text-xs text-gray-600 font-medium mt-0.5">
-            Suivez les créances en cours, enregistrez les remboursements et relancez vos clients poliment via WhatsApp en 1 clic.
+            Suivez les créances, visualisez les avances versées et les manquants dus, et relancez vos clients poliment via WhatsApp en 1 clic.
           </p>
         </div>
 
         {/* Dashboard Card Total Crédits */}
         <div className="p-6 rounded-3xl bg-[#B8442C] text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-80">Total Argent à Récupérer</span>
+            <span className="text-xs font-bold uppercase tracking-widest opacity-80">Total Argent à Récupérer (Manquants Dus)</span>
             <h2 className="font-serif font-black text-3xl sm:text-4xl mt-1">
               {totalArgentARecuperer.toLocaleString('fr-FR')} FCFA
             </h2>
@@ -127,17 +129,17 @@ export default function CreditsPage() {
           </div>
         </div>
 
-        {/* Liste des Factures à Crédit */}
+        {/* Liste des Factures à Crédit avec Avances et Manquants */}
         <div className="space-y-4">
           <h2 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-[#B8442C]" />
-            Créances & Factures Impayées
+            Créances, Avances & Manquants Dus
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {facturesCredit.map((fac) => (
               <div key={fac.id} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+                <div className="flex items-start justify-between pb-2 border-b border-[#E2D5C3]">
                   <div>
                     <span className="text-[10px] font-black uppercase text-[#B8442C]">
                       {fac.numero_facture}
@@ -147,11 +149,24 @@ export default function CreditsPage() {
                     </h3>
                     <p className="text-xs text-gray-600 font-bold">📱 {fac.client?.telephone_whatsapp || 'Non renseigné'}</p>
                   </div>
-                  <div className="text-right">
+
+                  <div className="text-right bg-[#FBF7EF] px-3 py-1.5 rounded-2xl border border-[#E2D5C3]">
+                    <span className="text-[10px] font-bold text-gray-500 block">MANQUANT DÛ</span>
                     <span className="font-serif font-black text-lg text-[#B8442C]">
                       {fac.montant_restant.toLocaleString('fr-FR')} FCFA
                     </span>
-                    <p className="text-[10px] text-gray-500 font-bold">sur {fac.montant_total.toLocaleString('fr-FR')} F</p>
+                  </div>
+                </div>
+
+                {/* Détail Avance et Total */}
+                <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3]">
+                  <div>
+                    <span className="text-gray-500 font-bold block text-[10px]">TOTAL INITIAL :</span>
+                    <span className="font-black text-[#1B4332]">{fac.montant_total.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 font-bold block text-[10px]">AVANCE REÇUE :</span>
+                    <span className="font-black text-emerald-800">{(fac.montant_paye || 0).toLocaleString('fr-FR')} FCFA</span>
                   </div>
                 </div>
 

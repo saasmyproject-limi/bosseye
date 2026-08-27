@@ -22,6 +22,7 @@ import {
   Moon,
   Zap,
   ShoppingBag,
+  CreditCard,
   Eye,
   Lock,
   Truck
@@ -201,6 +202,57 @@ export default function DashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* Section Suivi des Créances & Manquants Dus sur le Dashboard */}
+        {facturesCredit.length > 0 && (
+          <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase text-[#B8442C]">Suivi des Crédits</span>
+                <h3 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-[#B8442C]" />
+                  Clients Débiteurs (Avances & Manquants Dus)
+                </h3>
+              </div>
+              <Link href="/credits" className="text-xs font-bold text-[#B8442C] hover:underline flex items-center gap-1">
+                <span>Voir le volet Crédit complet</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {facturesCredit.map((fac) => (
+                <div key={fac.id} className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-black text-[#B8442C] uppercase">{fac.numero_facture}</span>
+                      <h4 className="font-bold text-xs text-[#1B4332] truncate">{fac.client?.nom || 'Client Inconnu'}</h4>
+                      <p className="text-[10px] text-gray-500 font-bold">📱 {fac.client?.telephone_whatsapp || 'N/A'}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] font-bold text-gray-400 block">MANQUANT DÛ</span>
+                      <span className="font-serif font-black text-sm text-[#B8442C]">
+                        {fac.montant_restant.toLocaleString('fr-FR')} F
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-[11px] pt-1.5 border-t border-[#E2D5C3]">
+                    <span className="text-gray-500 font-bold">Avance: <strong className="text-emerald-800">{(fac.montant_paye || 0).toLocaleString('fr-FR')} F</strong></span>
+                    <span className="text-gray-500 font-bold">Total: <strong className="text-[#1B4332]">{fac.montant_total.toLocaleString('fr-FR')} F</strong></span>
+                  </div>
+
+                  <Link
+                    href="/credits"
+                    className="w-full py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm mt-1"
+                  >
+                    <span>📱 Relancer WhatsApp</span>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Formulaire de Mouvement de Stock Rapide */}
         <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-sm space-y-4">

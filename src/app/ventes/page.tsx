@@ -68,6 +68,7 @@ export default function VentesPage() {
   const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit'>('cash');
   const [remiseInput, setRemiseInput] = useState<number>(0);
   const [montantVerseInput, setMontantVerseInput] = useState<number>(0);
+  const [acompteCreditInput, setAcompteCreditInput] = useState<number>(0);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
 
@@ -280,8 +281,10 @@ export default function VentesPage() {
     if (itemsToProcess.length === 0) return;
 
     const netAPayerCalculated = Math.max(0, rawTotal - (remiseInput || 0));
-    const verseVal = montantVerseInput || netAPayerCalculated;
-    const renduVal = Math.max(0, verseVal - netAPayerCalculated);
+    const isCredit = paymentMode === 'credit';
+    const acompte = isCredit ? (acompteCreditInput || 0) : netAPayerCalculated;
+    const verseVal = isCredit ? acompte : (montantVerseInput || netAPayerCalculated);
+    const renduVal = isCredit ? 0 : Math.max(0, verseVal - netAPayerCalculated);
 
     const lignes = itemsToProcess.map((item: any) => {
       let detail = '';
@@ -305,6 +308,7 @@ export default function VentesPage() {
       lignes,
       mode_paiement: paymentMode,
       remise: remiseInput || 0,
+      montant_paye: acompte,
       montant_verse: verseVal,
       montant_rendu: renduVal,
       client_id: paymentMode === 'credit' ? selectedClientId : undefined,
@@ -323,6 +327,7 @@ export default function VentesPage() {
     setIsPaymentModalOpen(false);
     setRemiseInput(0);
     setMontantVerseInput(0);
+    setAcompteCreditInput(0);
     loadData();
   };
 
@@ -1054,20 +1059,46 @@ export default function VentesPage() {
               </div>
 
               {paymentMode === 'credit' && (
-                <div>
-                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Sélectionner le Client à Crédit</label>
-                  <select
-                    value={selectedClientId}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332]"
-                  >
-                    <option value="">-- Choisir un client --</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nom} ({c.telephone_whatsapp})
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-3 p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3]">
+                  <div>
+                    <label className="text-xs font-bold text-[#1B4332] block mb-1">Sélectionner le Client à Crédit *</label>
+                    <select
+                      value={selectedClientId}
+                      onChange={(e) => setSelectedClientId(e.target.value)}
+                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    >
+                      <option value="">-- Choisir un client --</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nom} ({c.telephone_whatsapp})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-[#1B4332] block mb-1">Acompte / Avance Versée Maintenant (FCFA)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={currentNetAPayer}
+                      placeholder="Ex: 10000"
+                      value={acompteCreditInput || ''}
+                      onChange={(e) => setAcompteCreditInput(Number(e.target.value))}
+                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-[#E2D5C3] text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 font-bold">Avance Versée :</span>
+                      <span className="font-bold text-emerald-800">{(acompteCreditInput || 0).toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                    <div className="flex justify-between font-black text-sm text-[#B8442C]">
+                      <span>Manquant / Reste Dû à Crédit :</span>
+                      <span>{Math.max(0, currentNetAPayer - (acompteCreditInput || 0)).toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
