@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
-import { Package, AlertTriangle, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert } from 'lucide-react';
+import { Package, AlertTriangle, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import { Produit, Etablissement, VarianteProduit } from '@/types';
 
@@ -25,14 +25,18 @@ export default function ProduitsPage() {
   const [prixAchatCasier, setPrixAchatCasier] = useState<number>(6000);
   const [prixVenteBouteille, setPrixVenteBouteille] = useState<number>(600);
   const [prixAchatUnitaire, setPrixAchatUnitaire] = useState<number>(250);
-  const [prixVenteUnitaire, setPrixVenteUnitaire] = useState<number>(15000);
+  const [prixVenteUnitaire, setPrixVenteUnitaire] = useState<number>(1000);
 
   // Variantes pour Boutique (Taille / Couleur)
   const [taillesInput, setTaillesInput] = useState<string>('S, M, L, XL');
   const [couleursInput, setCouleursInput] = useState<string>('Noir, Blanc, Rouge');
 
-  // Modal d'Édition du Produit / Seuil d'Alerte
+  // Modal d'Édition Complète du Produit (Prix d'Achat, Prix de Vente, Stock, Seuil)
   const [editingProduit, setEditingProduit] = useState<Produit | null>(null);
+  const [editNom, setEditNom] = useState<string>('');
+  const [editCategorie, setEditCategorie] = useState<string>('');
+  const [editPrixAchatUnit, setEditPrixAchatUnit] = useState<number>(250);
+  const [editPrixVenteUnit, setEditPrixVenteUnit] = useState<number>(600);
   const [editSeuilAlerte, setEditSeuilAlerte] = useState<number>(5);
   const [editStockTotal, setEditStockTotal] = useState<number>(10);
 
@@ -49,9 +53,13 @@ export default function ProduitsPage() {
       if (etab.type_activite === 'boutique') {
         setUnite('piece');
         setCategorie('Vêtements');
+        setPrixAchatUnitaire(12000);
+        setPrixVenteUnitaire(25000);
       } else {
         setUnite('bouteille');
         setCategorie('Bière');
+        setPrixAchatUnitaire(250);
+        setPrixVenteBouteille(600);
       }
     } catch (e) { console.error(e); }
   };
@@ -68,6 +76,12 @@ export default function ProduitsPage() {
       p.categorie.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCat && matchSearch;
   });
+
+  // Gestion du changement de prix d'achat par casier -> Mise à jour du prix d'achat unitaire
+  const handlePrixCasierChange = (val: number) => {
+    setPrixAchatCasier(val);
+    setPrixAchatUnitaire(Math.round(val / bouteillesParCasier));
+  };
 
   const handleCreateProduct = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,7 +118,7 @@ export default function ProduitsPage() {
       ? quantiteTotalePiece
       : casiers * bouteillesParCasier + vrac;
 
-    const pAchatUnit = isBoutique ? prixAchatUnitaire : Math.round(prixAchatCasier / bouteillesParCasier);
+    const pAchatUnit = isBoutique ? prixAchatUnitaire : prixAchatUnitaire;
     const pVenteUnit = isBoutique ? prixVenteUnitaire : prixVenteBouteille;
 
     const newProd: Produit = {
@@ -136,14 +150,33 @@ export default function ProduitsPage() {
     loadData();
   };
 
+  const handleOpenEditModal = (p: Produit) => {
+    setEditingProduit(p);
+    setEditNom(p.nom);
+    setEditCategorie(p.categorie);
+    setEditPrixAchatUnit(p.cout_achat_unitaire_cmp || p.prix_achat_unitaire || 250);
+    setEditPrixVenteUnit(p.prix_vente_bouteille || p.prix_vente_unitaire || 600);
+    setEditSeuilAlerte(p.seuil_alerte || 5);
+    setEditStockTotal(p.quantite_totale || 10);
+  };
+
   const handleSaveEditProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduit) return;
+
+    const isBoutique = etablissement?.type_activite === 'boutique';
 
     const updated = produits.map((p) => {
       if (p.id !== editingProduit.id) return p;
       return {
         ...p,
+        nom: editNom.trim() || p.nom,
+        categorie: editCategorie.trim() || p.categorie,
+        prix_achat_unitaire: editPrixAchatUnit,
+        cout_achat_unitaire_cmp: editPrixAchatUnit,
+        prix_achat_casier: p.bouteilles_par_casier ? editPrixAchatUnit * p.bouteilles_par_casier : p.prix_achat_casier,
+        prix_vente_unitaire: editPrixVenteUnit,
+        prix_vente_bouteille: isBoutique ? undefined : editPrixVenteUnit,
         seuil_alerte: editSeuilAlerte,
         quantite_totale: editStockTotal,
       };
@@ -153,6 +186,13 @@ export default function ProduitsPage() {
     setEditingProduit(null);
     loadData();
   };
+
+  // Calculateurs de marge
+  const calcMargeUnit = prixVenteUnitaire - prixAchatUnitaire;
+  const calcTauxMarge = prixVenteUnitaire > 0 ? (calcMargeUnit / prixVenteUnitaire) * 100 : 0;
+
+  const editMargeUnit = editPrixVenteUnit - editPrixAchatUnit;
+  const editTauxMarge = editPrixVenteUnit > 0 ? (editMargeUnit / editPrixVenteUnit) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex flex-col lg:flex-row font-sans">
@@ -166,10 +206,10 @@ export default function ProduitsPage() {
               Gestion du {term.stockLabel}
             </span>
             <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
-              Catalogue & Seuils d'Alerte Personnalisés
+              Catalogue, Prix d'Achat / Vente & Marges
             </h1>
             <p className="text-xs text-[#1B4332]/70 font-medium">
-              Définissez la quantité initiale et le seuil de stock bas (ex: alerter à 5 casiers ou 3 pièces).
+              Saisissez ou modifiez les prix d'achat, prix de vente, stocks et seuils d'alerte pour calculer vos marges bénéficiaires.
             </p>
           </div>
 
@@ -213,7 +253,10 @@ export default function ProduitsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProduits.map((p) => {
             const isLowStock = (p.quantite_totale || 0) <= (p.seuil_alerte || 10);
-            const price = p.prix_vente_unitaire || p.prix_vente_bouteille || 0;
+            const pVente = p.prix_vente_unitaire || p.prix_vente_bouteille || 0;
+            const pAchat = p.cout_achat_unitaire_cmp || p.prix_achat_unitaire || 0;
+            const margeUnit = pVente - pAchat;
+            const tauxMarge = pVente > 0 ? (margeUnit / pVente) * 100 : 0;
 
             return (
               <div
@@ -239,9 +282,9 @@ export default function ProduitsPage() {
 
                   <h3 className="font-serif font-black text-lg text-[#1B4332]">{p.nom}</h3>
 
-                  <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1.5">
+                  <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-2">
                     <div className="flex justify-between">
-                      <span className="font-bold text-gray-500">Quantité en Stock :</span>
+                      <span className="font-bold text-gray-500">Stock Disponible :</span>
                       <span className="font-black text-[#1B4332]">
                         {p.quantite_totale} {etablissement?.type_activite === 'boutique' || p.unite === 'piece' ? 'pièce(s)' : 'bouteille(s)'}
                         {etablissement?.type_activite !== 'boutique' && p.casiers_pleins !== undefined && ` (${p.casiers_pleins} casier(s))`}
@@ -249,13 +292,27 @@ export default function ProduitsPage() {
                     </div>
 
                     <div className="flex justify-between">
-                      <span className="font-bold text-gray-500">Seuil d'Alerte Bas :</span>
+                      <span className="font-bold text-gray-500">Seuil d'Alerte :</span>
                       <span className="font-bold text-[#B8442C]">{p.seuil_alerte || 5} unité(s)</span>
                     </div>
 
-                    <div className="flex justify-between">
-                      <span className="font-bold text-gray-500">Prix de Vente :</span>
-                      <span className="font-black text-[#1B4332]">{price.toLocaleString('fr-FR')} FCFA</span>
+                    <div className="pt-2 border-t border-[#E2D5C3] grid grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-gray-500 font-bold block">Prix d'Achat CMP :</span>
+                        <span className="font-black text-gray-800">{pAchat.toLocaleString('fr-FR')} FCFA</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-bold block">Prix de Vente :</span>
+                        <span className="font-black text-[#1B4332]">{pVente.toLocaleString('fr-FR')} FCFA</span>
+                      </div>
+                    </div>
+
+                    {/* Marge Calculée en Direct */}
+                    <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between items-center text-[11px]">
+                      <span className="font-bold text-emerald-950">Marge Brute :</span>
+                      <span className="font-black text-emerald-900">
+                        +{margeUnit.toLocaleString('fr-FR')} F ({tauxMarge.toFixed(1)}%)
+                      </span>
                     </div>
                   </div>
 
@@ -272,19 +329,15 @@ export default function ProduitsPage() {
 
                 <div className="pt-2 border-t border-[#E2D5C3] flex items-center justify-between">
                   <span className="text-[11px] font-bold text-gray-500">
-                    Achat: {(p.prix_achat_unitaire || 0).toLocaleString('fr-FR')} F
+                    ID: {p.id.slice(0, 12)}
                   </span>
 
                   <button
-                    onClick={() => {
-                      setEditingProduit(p);
-                      setEditSeuilAlerte(p.seuil_alerte || 5);
-                      setEditStockTotal(p.quantite_totale || 10);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1 hover:bg-[#2D6A4F]"
+                    onClick={() => handleOpenEditModal(p)}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1.5 hover:bg-[#2D6A4F] shadow-sm"
                   >
                     <Edit2 className="w-3.5 h-3.5 text-[#E8A33D]" />
-                    <span>Modifier Seuil</span>
+                    <span>Modifier Prix & Stock</span>
                   </button>
                 </div>
               </div>
@@ -292,16 +345,21 @@ export default function ProduitsPage() {
           })}
         </div>
 
-        {/* MODAL CRÉATION PRODUIT AVEC QUANTITÉ ET SEUIL DE STOCK BAS EXPLICITES */}
+        {/* MODAL CRÉATION PRODUIT AVEC SAISIE DÉTAILLÉE DE PRIX D'ACHAT ET PRIX DE VENTE */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <form
               onSubmit={handleCreateProduct}
               className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
             >
-              <h3 className="font-serif font-black text-xl text-[#1B4332]">
-                Ajouter un {term.itemLabel}
-              </h3>
+              <div className="flex items-center justify-between border-b border-[#E2D5C3] pb-3">
+                <h3 className="font-serif font-black text-xl text-[#1B4332]">
+                  Ajouter un {term.itemLabel}
+                </h3>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="p-1 text-gray-500 hover:text-black">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               <div>
                 <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Produit / Article *</label>
@@ -328,18 +386,75 @@ export default function ProduitsPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Prix de Vente Unitaire (FCFA) *</label>
-                  <input
-                    type="number"
-                    value={etablissement?.type_activite === 'boutique' ? prixVenteUnitaire : prixVenteBouteille}
-                    onChange={(e) =>
-                      etablissement?.type_activite === 'boutique'
-                        ? setPrixVenteUnitaire(Number(e.target.value))
-                        : setPrixVenteBouteille(Number(e.target.value))
-                    }
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Unité de Mesure</label>
+                  <select
+                    value={unite}
+                    onChange={(e) => setUnite(e.target.value as any)}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
-                    required
-                  />
+                  >
+                    <option value="bouteille">Bouteille / Canette</option>
+                    <option value="casier">Casier</option>
+                    <option value="piece">Pièce / Article</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* SAISIE EXPLICITE DES PRIX D'ACHAT ET PRIX DE VENTE */}
+              <div className="p-4 rounded-2xl bg-[#FBF7EF] border-2 border-[#1B4332]/20 space-y-3">
+                <h4 className="font-serif font-black text-sm text-[#1B4332] flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-[#B8442C]" />
+                  1. Prix d'Achat & Prix de Vente *
+                </h4>
+
+                {etablissement?.type_activite !== 'boutique' && (
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 block mb-1">Prix d'Achat du Casier (FCFA)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={prixAchatCasier}
+                      onChange={(e) => handlePrixCasierChange(Number(e.target.value))}
+                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 block mb-1">Prix d'Achat Unitaire (CMP FCFA) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={prixAchatUnitaire}
+                      onChange={(e) => setPrixAchatUnitaire(Number(e.target.value))}
+                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 block mb-1">Prix de Vente Unitaire (FCFA) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={etablissement?.type_activite === 'boutique' ? prixVenteUnitaire : prixVenteBouteille}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setPrixVenteUnitaire(val);
+                        setPrixVenteBouteille(val);
+                      }}
+                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* BADGE DE CALCUL DE LA MARGE */}
+                <div className="p-2.5 rounded-xl bg-emerald-100 border border-emerald-300 flex justify-between items-center text-xs">
+                  <span className="font-bold text-emerald-950">Marge Brute Calculée :</span>
+                  <span className="font-serif font-black text-emerald-950">
+                    +{calcMargeUnit.toLocaleString('fr-FR')} FCFA ({calcTauxMarge.toFixed(1)}%)
+                  </span>
                 </div>
               </div>
 
@@ -347,15 +462,15 @@ export default function ProduitsPage() {
               <div className="p-4 rounded-2xl bg-[#FBF7EF] border-2 border-[#1B4332]/20 space-y-3">
                 <h4 className="font-serif font-black text-sm text-[#1B4332] flex items-center gap-2">
                   <Package className="w-4 h-4 text-[#B8442C]" />
-                  1. Quantité Initiale en Stock *
+                  2. Quantité Initiale en Stock *
                 </h4>
 
                 {etablissement?.type_activite === 'boutique' ? (
                   <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-1">Nombre total de pièces en rayon *</label>
+                    <label className="text-xs font-bold text-gray-700 block mb-1">Nombre total de pièces en stock *</label>
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       value={quantiteTotalePiece}
                       onChange={(e) => setQuantiteTotalePiece(Number(e.target.value))}
                       className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-3 text-sm font-black text-[#1B4332]"
@@ -391,11 +506,8 @@ export default function ProduitsPage() {
               <div className="p-4 rounded-2xl bg-amber-100/60 border-2 border-amber-300 space-y-2">
                 <h4 className="font-serif font-black text-sm text-amber-950 flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 text-amber-800" />
-                  2. Seuil d'Alerte Personnalisé (Stock Bas) *
+                  3. Seuil d'Alerte Personnalisé (Stock Bas) *
                 </h4>
-                <p className="text-[11px] text-amber-900 font-medium">
-                  Recevez une alerte de rupture dès que le stock descend en dessous de ce niveau :
-                </p>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -452,34 +564,109 @@ export default function ProduitsPage() {
           </div>
         )}
 
-        {/* MODAL ÉDITION DU SEUIL D'ALERTE PRODUIT */}
+        {/* MODAL ÉDITION COMPLÈTE DU PRODUIT (PRIX D'ACHAT, PRIX DE VENTE, STOCK, SEUIL) */}
         {editingProduit && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <form onSubmit={handleSaveEditProduct} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
-              <h3 className="font-serif font-black text-xl text-[#1B4332]">
-                Modifier le Seuil d'Alerte : {editingProduit.nom}
-              </h3>
-
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Seuil d'Alerte de Stock Bas (Unités) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={editSeuilAlerte}
-                  onChange={(e) => setEditSeuilAlerte(Number(e.target.value))}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-sm font-bold text-[#1B4332]"
-                />
+            <form onSubmit={handleSaveEditProduct} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-[#E2D5C3] pb-3">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-[#B8442C]">Modification de Fiche Produit</span>
+                  <h3 className="font-serif font-black text-xl text-[#1B4332]">
+                    {editingProduit.nom}
+                  </h3>
+                </div>
+                <button type="button" onClick={() => setEditingProduit(null)} className="p-1 text-gray-500 hover:text-black">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Quantité Totale en Stock *</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editStockTotal}
-                  onChange={(e) => setEditStockTotal(Number(e.target.value))}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-sm font-bold text-[#1B4332]"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Produit *</label>
+                  <input
+                    type="text"
+                    value={editNom}
+                    onChange={(e) => setEditNom(e.target.value)}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Catégorie *</label>
+                  <input
+                    type="text"
+                    value={editCategorie}
+                    onChange={(e) => setEditCategorie(e.target.value)}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* MODIFICATION DE PRIX D'ACHAT ET DE VENTE */}
+              <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-3">
+                <span className="text-xs font-bold text-[#1B4332] block">💵 Modification des Prix & Marges :</span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 block mb-1">Prix d'Achat CMP (FCFA) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editPrixAchatUnit}
+                      onChange={(e) => setEditPrixAchatUnit(Number(e.target.value))}
+                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 block mb-1">Prix de Vente (FCFA) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editPrixVenteUnit}
+                      onChange={(e) => setEditPrixVenteUnit(Number(e.target.value))}
+                      className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-xl bg-emerald-100 border border-emerald-300 flex justify-between items-center text-xs">
+                  <span className="font-bold text-emerald-950">Nouvelle Marge Calculée :</span>
+                  <span className="font-serif font-black text-emerald-950">
+                    +{editMargeUnit.toLocaleString('fr-FR')} FCFA ({editTauxMarge.toFixed(1)}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* MODIFICATION DE STOCK ET SEUIL */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Stock Total Disponible *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editStockTotal}
+                    onChange={(e) => setEditStockTotal(Number(e.target.value))}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Seuil d'Alerte Stock Bas *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editSeuilAlerte}
+                    onChange={(e) => setEditSeuilAlerte(Number(e.target.value))}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    required
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-2 pt-2">
