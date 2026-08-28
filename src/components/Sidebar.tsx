@@ -65,7 +65,7 @@ export default function Sidebar() {
   const daysLeftTrial = etablissement ? offlineDB.getTrialDaysRemaining(etablissement) : 7;
   const isTrialExpired = etablissement ? offlineDB.isTrialExpired(etablissement) : false;
 
-  const isEmployeBoutique = currentUser?.role === 'Employé';
+  const isServeuseOrNonPatron = ['Serveuse', 'Caissière', 'Employé'].includes(currentUser?.role || '');
 
   const handleClearDatabase = () => {
     offlineDB.clearAllDataToZero();
@@ -133,13 +133,17 @@ export default function Sidebar() {
       href: '/employes',
       icon: Users,
     },
-    {
-      name: 'Statut & Abonnement',
-      href: '/payer',
-      icon: Zap,
-      badge: isTrialExpired ? 'Expiré' : `${daysLeftTrial}j`,
-      badgeColor: isTrialExpired ? 'bg-red-600' : 'bg-emerald-700',
-    },
+    ...(!isServeuseOrNonPatron
+      ? [
+          {
+            name: 'Statut & Abonnement',
+            href: '/payer',
+            icon: Zap,
+            badge: isTrialExpired ? 'Expiré' : `${daysLeftTrial}j`,
+            badgeColor: isTrialExpired ? 'bg-red-600' : 'bg-emerald-700',
+          },
+        ]
+      : []),
   ];
 
   return (

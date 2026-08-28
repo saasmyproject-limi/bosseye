@@ -136,9 +136,39 @@ export default function VentesPage() {
     ],
     'Table 02': [{ id: 'c-t2-1', nom: 'Client 1 (Facture A)', items: [] }],
     'Table 03': [{ id: 'c-t3-1', nom: 'Client 1 (Facture A)', items: [] }],
-    'Carré VIP 1': [{ id: 'c-vip1-1', nom: 'Client 1 (Facture A)', items: [] }],
-    'Carré VIP 2': [{ id: 'c-vip2-1', nom: 'Client 1 (Facture A)', items: [] }],
   });
+
+  const handleAddTable = () => {
+    setTablesState((prev) => {
+      const existingNumbers = Object.keys(prev).map((name) => {
+        const match = name.match(/Table (\d+)/i);
+        return match ? parseInt(match[1], 10) : 0;
+      });
+      const maxNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+      const nextNum = String(maxNum + 1).padStart(2, '0');
+      const newTableName = `Table ${nextNum}`;
+      return {
+        ...prev,
+        [newTableName]: [{ id: `c-${newTableName}-${Date.now()}`, nom: 'Client 1 (Facture A)', items: [] }],
+      };
+    });
+  };
+
+  const handleDeleteTable = (tNum: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (Object.keys(tablesState).length <= 1) return;
+    setTablesState((prev) => {
+      const copy = { ...prev };
+      delete copy[tNum];
+      return copy;
+    });
+    if (activeTableNumber === tNum) {
+      const remaining = Object.keys(tablesState).filter((t) => t !== tNum);
+      if (remaining.length > 0) {
+        handleSelectTable(remaining[0]);
+      }
+    }
+  };
 
   const [activeTableNumber, setActiveTableNumber] = useState<string>('Table 01');
   const [activeClientId, setActiveClientId] = useState<string>('c-t1-pierre');
@@ -960,12 +990,23 @@ export default function VentesPage() {
             <div className="lg:col-span-7 space-y-5">
               {/* 1. SELECTION DE TABLE */}
               <div>
-                <h3 className="font-serif font-black text-base text-[#1B4332] mb-2.5 flex items-center justify-between">
-                  <span>1. Sélectionnez une Table pour le Bar :</span>
-                  <span className="text-xs font-bold text-gray-500">
-                    {Object.keys(tablesState).length} table(s) disponible(s)
-                  </span>
-                </h3>
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-2.5">
+                  <h3 className="font-serif font-black text-base text-[#1B4332]">
+                    1. Sélectionnez une Table pour le Bar :
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500">
+                      {Object.keys(tablesState).length} table(s)
+                    </span>
+                    <button
+                      onClick={handleAddTable}
+                      className="px-3 py-1 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1.5 hover:bg-[#2D6A4F] shadow-sm transition-all active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#E8A33D]" />
+                      <span>+ Ajouter une Table</span>
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {Object.keys(tablesState).map((tNum) => {
                     const clientsInTable = tablesState[tNum] || [];
@@ -984,7 +1025,7 @@ export default function VentesPage() {
                       <div
                         key={tNum}
                         onClick={() => handleSelectTable(tNum)}
-                        className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                        className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all relative group ${
                           isSelected
                             ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-md'
                             : 'bg-[#F3ECE0] border-[#E2D5C3] text-[#1B4332] hover:border-[#1B4332]'
@@ -992,11 +1033,24 @@ export default function VentesPage() {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-serif font-black text-base">{tNum}</span>
-                          {isVip && (
-                            <span className="text-[9px] font-black uppercase bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
-                              VIP
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {isVip && (
+                              <span className="text-[9px] font-black uppercase bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
+                                VIP
+                              </span>
+                            )}
+                            {totalConsos === 0 && Object.keys(tablesState).length > 1 && (
+                              <button
+                                title="Supprimer cette table vide"
+                                onClick={(e) => handleDeleteTable(tNum, e)}
+                                className={`p-1 rounded-lg text-xs opacity-60 hover:opacity-100 ${
+                                  isSelected ? 'hover:bg-red-900 text-red-200' : 'hover:bg-red-100 text-red-600'
+                                }`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <p className="text-xs font-bold opacity-90">
                           {totalConsos > 0 ? `${tTotal.toLocaleString('fr-FR')} F (${totalConsos} conso)` : 'Table Libre'}

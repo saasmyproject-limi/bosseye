@@ -7,6 +7,7 @@ import { offlineDB } from '@/lib/offlineDB';
 import { Utilisateur, RoleUtilisateur } from '@/types';
 
 export default function EmployesPage() {
+  const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -20,6 +21,9 @@ export default function EmployesPage() {
 
   useEffect(() => {
     loadUsers();
+    try {
+      setCurrentUser(offlineDB.getCurrentUser());
+    } catch (e) { console.error(e); }
   }, []);
 
   const loadUsers = () => {
@@ -28,7 +32,10 @@ export default function EmployesPage() {
     } catch (e) { console.error(e); }
   };
 
+  const canAddEmployee = ['Patron', 'Patronne', 'Directeur', 'Gérant'].includes(currentUser?.role || '');
+
   const handleOpenDialog = () => {
+    if (!canAddEmployee) return;
     setNom('');
     setRole('Employé');
     setPinCode('');
@@ -40,6 +47,10 @@ export default function EmployesPage() {
 
   const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAddEmployee) {
+      setErrorMsg('Seul le patron ou le gérant peut ajouter un employé à son compte.');
+      return;
+    }
     if (!nom.trim()) {
       setErrorMsg('Le nom complet est obligatoire');
       return;
@@ -63,6 +74,7 @@ export default function EmployesPage() {
   };
 
   const handleToggleStatus = (id: string) => {
+    if (!canAddEmployee) return;
     offlineDB.toggleUtilisateurStatus(id);
     loadUsers();
   };
@@ -83,13 +95,20 @@ export default function EmployesPage() {
             </h1>
           </div>
 
-          <button
-            onClick={handleOpenDialog}
-            className="py-2.5 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs flex items-center gap-2 shadow-md transition-transform active:scale-95"
-          >
-            <UserPlus className="w-4 h-4 text-[#E8A33D]" />
-            <span>+ Créer Utilisateur (PIN)</span>
-          </button>
+          {canAddEmployee ? (
+            <button
+              onClick={handleOpenDialog}
+              className="py-2.5 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs flex items-center gap-2 shadow-md transition-transform active:scale-95"
+            >
+              <UserPlus className="w-4 h-4 text-[#E8A33D]" />
+              <span>+ Créer Utilisateur (PIN)</span>
+            </button>
+          ) : (
+            <div className="py-2.5 px-4 rounded-2xl bg-amber-100 border border-amber-300 text-amber-950 font-bold text-xs flex items-center gap-2 shadow-sm">
+              <Lock className="w-4 h-4 text-amber-800" />
+              <span>Seul le patron peut ajouter un employé</span>
+            </div>
+          )}
         </div>
 
         {/* Users List */}

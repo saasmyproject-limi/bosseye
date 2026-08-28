@@ -4,10 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { CreditCard, ShieldCheck, CheckCircle2, Phone, Zap, Lock, Calendar, History, ArrowRight } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
-import { Etablissement, MethodePaiement, Paiement, TARIFS_ABONNEMENT } from '@/types';
+import Link from 'next/link';
+import { Utilisateur, Etablissement, MethodePaiement, Paiement, TARIFS_ABONNEMENT } from '@/types';
 
 export default function PayerPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
+  const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
   const [methode, setMethode] = useState<MethodePaiement>('Orange Money');
   const [telephone, setTelephone] = useState<string>('');
   const [reference, setReference] = useState<string>('');
@@ -21,9 +23,13 @@ export default function PayerPage() {
   const loadData = () => {
     try {
       const etab = offlineDB.getEtablissement();
+      const user = offlineDB.getCurrentUser();
       setEtablissement(etab);
+      setCurrentUser(user);
     } catch (e) { console.error(e); }
   };
+
+  const isServeuseOrNonPatron = ['Serveuse', 'Caissière', 'Employé'].includes(currentUser?.role || '');
 
   const term = getTerminology(etablissement?.type_activite);
   const daysLeft = etablissement ? offlineDB.getTrialDaysRemaining(etablissement) : 7;
@@ -33,7 +39,7 @@ export default function PayerPage() {
 
   const handlePayer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!telephone.trim() || !reference.trim()) return;
+    if (isServeuseOrNonPatron || !telephone.trim() || !reference.trim()) return;
 
     setIsProcessing(true);
     setTimeout(() => {
@@ -56,7 +62,29 @@ export default function PayerPage() {
       <Sidebar />
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 space-y-6">
-        {/* Header */}
+        {isServeuseOrNonPatron ? (
+          <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-8 max-w-xl mx-auto text-center space-y-4 shadow-md mt-12">
+            <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-3xl font-bold">
+              🔒
+            </div>
+            <h2 className="font-serif font-black text-2xl text-[#1B4332]">
+              Accès Restreint — Gestion de l'Abonnement
+            </h2>
+            <p className="text-xs text-gray-700 font-bold leading-relaxed">
+              La serveuse ne peut pas ajouter d'abonnement. Seul le patron ou le gérant contrôle et peut gérer le compte et le règlement de l'abonnement du commerce.
+            </p>
+            <div className="pt-2">
+              <Link
+                href="/ventes"
+                className="inline-block py-3.5 px-6 rounded-2xl bg-[#1B4332] text-white font-black text-xs shadow-md hover:bg-[#2D6A4F] transition-all"
+              >
+                ← Retour à la Gestion des Ventes
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
         <div className="pb-4 border-b border-[#E2D5C3]">
           <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full border border-[#B8442C]/30">
             Abonnement œko ({etablissement?.type_activite?.toUpperCase() || 'COMMERCE'})
@@ -231,6 +259,8 @@ export default function PayerPage() {
             </form>
           </div>
         </div>
+        </>
+        )}
       </main>
     </div>
   );

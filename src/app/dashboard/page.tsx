@@ -142,27 +142,31 @@ export default function DashboardPage() {
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 space-y-6">
         {/* Banner statut abonnement */}
-        {isTrialExpired ? (
-          <div className="p-4 rounded-2xl bg-red-100 border-2 border-red-300 text-red-950 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Lock className="w-5 h-5 text-red-700" />
-              <span className="font-bold text-xs">Période d'essai 7 jours expirée. Veuillez procéder au paiement MoMo.</span>
-            </div>
-            <Link href="/payer" className="px-3 py-1.5 rounded-xl bg-red-700 text-white font-bold text-xs">
-              S'abonner
-            </Link>
-          </div>
-        ) : daysLeftTrial <= 2 ? (
-          <div className="p-4 rounded-2xl bg-amber-100 border-2 border-amber-300 text-amber-950 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-amber-700" />
-              <span className="font-bold text-xs">Il reste {daysLeftTrial} jour(s) d'essai gratuit. Pensez à vous abonner !</span>
-            </div>
-            <Link href="/payer" className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white font-bold text-xs">
-              Activer Abonnement
-            </Link>
-          </div>
-        ) : null}
+        {!['Serveuse', 'Caissière', 'Employé'].includes(currentUser?.role || '') && (
+          <>
+            {isTrialExpired ? (
+              <div className="p-4 rounded-2xl bg-red-100 border-2 border-red-300 text-red-950 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-red-700" />
+                  <span className="font-bold text-xs">Période d'essai 7 jours expirée. Veuillez procéder au paiement MoMo.</span>
+                </div>
+                <Link href="/payer" className="px-3 py-1.5 rounded-xl bg-red-700 text-white font-bold text-xs">
+                  S'abonner
+                </Link>
+              </div>
+            ) : daysLeftTrial <= 2 ? (
+              <div className="p-4 rounded-2xl bg-amber-100 border-2 border-amber-300 text-amber-950 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-700" />
+                  <span className="font-bold text-xs">Il reste {daysLeftTrial} jour(s) d'essai gratuit. Pensez à vous abonner !</span>
+                </div>
+                <Link href="/payer" className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white font-bold text-xs">
+                  Activer Abonnement
+                </Link>
+              </div>
+            ) : null}
+          </>
+        )}
 
         {/* Banner de Bienvenue Personalisee */}
         <div className="bg-[#1B4332] text-white rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
