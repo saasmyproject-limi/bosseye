@@ -363,6 +363,23 @@ export const offlineDB = {
     }
   },
 
+  getUtilisateursByEtablissementId(etabId: string): Utilisateur[] {
+    try {
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
+      if (typeof window === 'undefined') return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etabId);
+      const data = localStorage.getItem(KEYS.UTILISATEURS);
+      if (!data) {
+        if (isResetZero) return [];
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
+        return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etabId);
+      }
+      const parsed: Utilisateur[] = JSON.parse(data);
+      return (parsed || []).filter((u) => u && u.etablissement_id === etabId);
+    } catch {
+      return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etabId);
+    }
+  },
+
   loginWithPin(code: string): { success: boolean; user?: Utilisateur; message?: string } {
     const users = this.getUtilisateurs();
     const match = users.find((u) => u && u.actif && u.pin_code === code.trim());

@@ -359,9 +359,13 @@ export default function LandingPage() {
         <PinLoginModal
           isOpen={isPinModalOpen}
           onClose={() => setIsPinModalOpen(false)}
-          onSuccess={() => {
+          onSuccess={(u) => {
             setIsPinModalOpen(false);
-            router.push('/dashboard');
+            if (u?.role === 'Serveuse' || u?.role === 'Employé' || u?.role === 'Caissière') {
+              router.push('/ventes');
+            } else {
+              router.push('/dashboard');
+            }
           }}
         />
       )}

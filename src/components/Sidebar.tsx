@@ -318,10 +318,14 @@ export default function Sidebar() {
         <PinLoginModal
           isOpen={isPinModalOpen}
           onClose={() => setIsPinModalOpen(false)}
-          onSuccess={() => {
+          onSuccess={(u) => {
             setIsPinModalOpen(false);
             loadInfo();
-            router.refresh();
+            if (u?.role === 'Serveuse' || u?.role === 'Employé' || u?.role === 'Caissière') {
+              router.push('/ventes');
+            } else {
+              router.push('/dashboard');
+            }
           }}
         />
       )}
