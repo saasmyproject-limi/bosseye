@@ -65,6 +65,7 @@ export default function Sidebar() {
   const daysLeftTrial = etablissement ? offlineDB.getTrialDaysRemaining(etablissement) : 7;
   const isTrialExpired = etablissement ? offlineDB.isTrialExpired(etablissement) : false;
 
+  const isEmployeBoutique = currentUser?.role === 'Employé';
   const isServeuseOrNonPatron = ['Serveuse', 'Caissière', 'Employé'].includes(currentUser?.role || '');
 
   const handleClearDatabase = () => {
