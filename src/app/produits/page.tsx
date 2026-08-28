@@ -479,7 +479,7 @@ export default function ProduitsPage() {
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-bold text-gray-700 block mb-1">Nombre de Casiers pleins</label>
+                      <label className="text-xs font-bold text-gray-700 block mb-1">Casiers pleins ({bouteillesParCasier} btl/casier)</label>
                       <input
                         type="number"
                         min="0"
@@ -487,9 +487,10 @@ export default function ProduitsPage() {
                         onChange={(e) => setCasiers(Number(e.target.value))}
                         className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-3 text-sm font-black text-[#1B4332]"
                       />
+                      <span className="text-[10px] text-gray-500 font-bold block mt-1">📦 Casiers intacts non entamés</span>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-gray-700 block mb-1">Bouteilles vrac</label>
+                      <label className="text-xs font-bold text-gray-700 block mb-1">Bouteilles vrac (Isolées)</label>
                       <input
                         type="number"
                         min="0"
@@ -497,6 +498,7 @@ export default function ProduitsPage() {
                         onChange={(e) => setVrac(Number(e.target.value))}
                         className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-3 text-sm font-black text-[#1B4332]"
                       />
+                      <span className="text-[10px] text-gray-500 font-bold block mt-1">🍾 Bouteilles seules hors casier (ex: au frigo)</span>
                     </div>
                   </div>
                 )}
