@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
-import { Package, AlertTriangle, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X } from 'lucide-react';
+import { Package, AlertTriangle, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import { Produit, Etablissement, VarianteProduit } from '@/types';
 
@@ -19,23 +19,24 @@ export default function ProduitsPage() {
   const [unite, setUnite] = useState<'bouteille' | 'casier' | 'piece'>('bouteille');
   const [casiers, setCasiers] = useState<number>(5);
   const [vrac, setVrac] = useState<number>(0);
-  const [bouteillesParCasier, setBouteillesParCasier] = useState<12 | 24>(24);
+  const [bouteillesParCasier, setBouteillesParCasier] = useState<number>(12);
   const [quantiteTotalePiece, setQuantiteTotalePiece] = useState<number>(10);
   const [seuilAlerte, setSeuilAlerte] = useState<number>(5);
   const [prixAchatCasier, setPrixAchatCasier] = useState<number>(6000);
   const [prixVenteBouteille, setPrixVenteBouteille] = useState<number>(600);
-  const [prixAchatUnitaire, setPrixAchatUnitaire] = useState<number>(250);
-  const [prixVenteUnitaire, setPrixVenteUnitaire] = useState<number>(1000);
+  const [prixAchatUnitaire, setPrixAchatUnitaire] = useState<number>(500);
+  const [prixVenteUnitaire, setPrixVenteUnitaire] = useState<number>(600);
 
   // Variantes pour Boutique (Taille / Couleur)
   const [taillesInput, setTaillesInput] = useState<string>('S, M, L, XL');
   const [couleursInput, setCouleursInput] = useState<string>('Noir, Blanc, Rouge');
 
-  // Modal d'Édition Complète du Produit (Prix d'Achat, Prix de Vente, Stock, Seuil)
+  // Modal d'Édition Complète du Produit
   const [editingProduit, setEditingProduit] = useState<Produit | null>(null);
   const [editNom, setEditNom] = useState<string>('');
   const [editCategorie, setEditCategorie] = useState<string>('');
-  const [editPrixAchatUnit, setEditPrixAchatUnit] = useState<number>(250);
+  const [editBouteillesParCasier, setEditBouteillesParCasier] = useState<number>(12);
+  const [editPrixAchatUnit, setEditPrixAchatUnit] = useState<number>(500);
   const [editPrixVenteUnit, setEditPrixVenteUnit] = useState<number>(600);
   const [editSeuilAlerte, setEditSeuilAlerte] = useState<number>(5);
   const [editStockTotal, setEditStockTotal] = useState<number>(10);
@@ -58,8 +59,9 @@ export default function ProduitsPage() {
       } else {
         setUnite('bouteille');
         setCategorie('Bière');
-        setPrixAchatUnitaire(250);
+        setPrixAchatUnitaire(500);
         setPrixVenteBouteille(600);
+        setBouteillesParCasier(12);
       }
     } catch (e) { console.error(e); }
   };
@@ -77,10 +79,32 @@ export default function ProduitsPage() {
     return matchCat && matchSearch;
   });
 
-  // Gestion du changement de prix d'achat par casier -> Mise à jour du prix d'achat unitaire
+  // Ajustement automatique du nombre d'unités par pack/casier selon la catégorie ou le nom
+  const handleCategorySelect = (catName: string) => {
+    setCategorie(catName);
+    if (catName.toLowerCase().includes('vin') || catName.toLowerCase().includes('jus')) {
+      setBouteillesParCasier(6);
+      setPrixAchatUnitaire(Math.round(prixAchatCasier / 6));
+    } else if (nom.toLowerCase().includes('guinness') || nom.toLowerCase().includes('malta')) {
+      setBouteillesParCasier(24);
+      setPrixAchatUnitaire(Math.round(prixAchatCasier / 24));
+    } else {
+      setBouteillesParCasier(12);
+      setPrixAchatUnitaire(Math.round(prixAchatCasier / 12));
+    }
+  };
+
+  // Changement du nombre de bouteilles par casier/carton
+  const handleBouteillesParCasierChange = (val: number) => {
+    const num = Math.max(1, val);
+    setBouteillesParCasier(num);
+    setPrixAchatUnitaire(Math.round(prixAchatCasier / num));
+  };
+
+  // Changement de prix achat casier
   const handlePrixCasierChange = (val: number) => {
     setPrixAchatCasier(val);
-    setPrixAchatUnitaire(Math.round(val / bouteillesParCasier));
+    setPrixAchatUnitaire(Math.round(val / (bouteillesParCasier || 12)));
   };
 
   const handleCreateProduct = (e: React.FormEvent) => {
@@ -118,7 +142,7 @@ export default function ProduitsPage() {
       ? quantiteTotalePiece
       : casiers * bouteillesParCasier + vrac;
 
-    const pAchatUnit = isBoutique ? prixAchatUnitaire : prixAchatUnitaire;
+    const pAchatUnit = prixAchatUnitaire;
     const pVenteUnit = isBoutique ? prixVenteUnitaire : prixVenteBouteille;
 
     const newProd: Produit = {
@@ -154,7 +178,8 @@ export default function ProduitsPage() {
     setEditingProduit(p);
     setEditNom(p.nom);
     setEditCategorie(p.categorie);
-    setEditPrixAchatUnit(p.cout_achat_unitaire_cmp || p.prix_achat_unitaire || 250);
+    setEditBouteillesParCasier(p.bouteilles_par_casier || 12);
+    setEditPrixAchatUnit(p.cout_achat_unitaire_cmp || p.prix_achat_unitaire || 500);
     setEditPrixVenteUnit(p.prix_vente_bouteille || p.prix_vente_unitaire || 600);
     setEditSeuilAlerte(p.seuil_alerte || 5);
     setEditStockTotal(p.quantite_totale || 10);
@@ -172,9 +197,10 @@ export default function ProduitsPage() {
         ...p,
         nom: editNom.trim() || p.nom,
         categorie: editCategorie.trim() || p.categorie,
+        bouteilles_par_casier: isBoutique ? undefined : editBouteillesParCasier,
         prix_achat_unitaire: editPrixAchatUnit,
         cout_achat_unitaire_cmp: editPrixAchatUnit,
-        prix_achat_casier: p.bouteilles_par_casier ? editPrixAchatUnit * p.bouteilles_par_casier : p.prix_achat_casier,
+        prix_achat_casier: editBouteillesParCasier ? editPrixAchatUnit * editBouteillesParCasier : p.prix_achat_casier,
         prix_vente_unitaire: editPrixVenteUnit,
         prix_vente_bouteille: isBoutique ? undefined : editPrixVenteUnit,
         seuil_alerte: editSeuilAlerte,
@@ -188,8 +214,10 @@ export default function ProduitsPage() {
   };
 
   // Calculateurs de marge
-  const calcMargeUnit = prixVenteUnitaire - prixAchatUnitaire;
-  const calcTauxMarge = prixVenteUnitaire > 0 ? (calcMargeUnit / prixVenteUnitaire) * 100 : 0;
+  const calcMargeUnit = (etablissement?.type_activite === 'boutique' ? prixVenteUnitaire : prixVenteBouteille) - prixAchatUnitaire;
+  const calcTauxMarge = (etablissement?.type_activite === 'boutique' ? prixVenteUnitaire : prixVenteBouteille) > 0
+    ? (calcMargeUnit / (etablissement?.type_activite === 'boutique' ? prixVenteUnitaire : prixVenteBouteille)) * 100
+    : 0;
 
   const editMargeUnit = editPrixVenteUnit - editPrixAchatUnit;
   const editTauxMarge = editPrixVenteUnit > 0 ? (editMargeUnit / editPrixVenteUnit) * 100 : 0;
@@ -206,10 +234,10 @@ export default function ProduitsPage() {
               Gestion du {term.stockLabel}
             </span>
             <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
-              Catalogue, Prix d'Achat / Vente & Marges
+              Catalogue & Conditionnements (Casiers 12, 24 / Cartons 6)
             </h1>
             <p className="text-xs text-[#1B4332]/70 font-medium">
-              Saisissez ou modifiez les prix d'achat, prix de vente, stocks et seuils d'alerte pour calculer vos marges bénéficiaires.
+              Configurez la contenance exacte des casiers (12 ou 24 btl), cartons de vin (6 btl) ou palettes de jus (6 ou 12 btl).
             </p>
           </div>
 
@@ -257,6 +285,7 @@ export default function ProduitsPage() {
             const pAchat = p.cout_achat_unitaire_cmp || p.prix_achat_unitaire || 0;
             const margeUnit = pVente - pAchat;
             const tauxMarge = pVente > 0 ? (margeUnit / pVente) * 100 : 0;
+            const packagingSize = p.bouteilles_par_casier || 12;
 
             return (
               <div
@@ -284,12 +313,21 @@ export default function ProduitsPage() {
 
                   <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-2">
                     <div className="flex justify-between">
-                      <span className="font-bold text-gray-500">Stock Disponible :</span>
+                      <span className="font-bold text-gray-500">Stock Total :</span>
                       <span className="font-black text-[#1B4332]">
                         {p.quantite_totale} {etablissement?.type_activite === 'boutique' || p.unite === 'piece' ? 'pièce(s)' : 'bouteille(s)'}
-                        {etablissement?.type_activite !== 'boutique' && p.casiers_pleins !== undefined && ` (${p.casiers_pleins} casier(s))`}
+                        {etablissement?.type_activite !== 'boutique' && p.casiers_pleins !== undefined && ` (${p.casiers_pleins} casier(s) de ${packagingSize})`}
                       </span>
                     </div>
+
+                    {etablissement?.type_activite !== 'boutique' && (
+                      <div className="flex justify-between text-[11px]">
+                        <span className="font-bold text-gray-500">Conditionnement :</span>
+                        <span className="font-bold text-[#1B4332] bg-[#E2D5C3]/40 px-2 py-0.5 rounded-md">
+                          📦 {packagingSize} unité(s) / carton-casier
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex justify-between">
                       <span className="font-bold text-gray-500">Seuil d'Alerte :</span>
@@ -345,7 +383,7 @@ export default function ProduitsPage() {
           })}
         </div>
 
-        {/* MODAL CRÉATION PRODUIT AVEC SAISIE DÉTAILLÉE DE PRIX D'ACHAT ET PRIX DE VENTE */}
+        {/* MODAL CRÉATION PRODUIT AVEC SELECTION DU CONDITIONNEMENT (12, 24, 6, ETC.) */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <form
@@ -365,7 +403,7 @@ export default function ProduitsPage() {
                 <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Produit / Article *</label>
                 <input
                   type="text"
-                  placeholder={etablissement?.type_activite === 'boutique' ? 'Ex: Robe de Soirée Éléganza' : 'Ex: Beaufort Lager 65cl'}
+                  placeholder={etablissement?.type_activite === 'boutique' ? 'Ex: Robe de Soirée Éléganza' : 'Ex: Beaufort Lager 65cl ou Petite Guinness'}
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
@@ -378,8 +416,9 @@ export default function ProduitsPage() {
                   <label className="text-xs font-bold text-[#1B4332] block mb-1">Catégorie *</label>
                   <input
                     type="text"
+                    placeholder="Bière, Jus, Vin, Liqueur..."
                     value={categorie}
-                    onChange={(e) => setCategorie(e.target.value)}
+                    onChange={(e) => handleCategorySelect(e.target.value)}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
                     required
                   />
@@ -399,6 +438,48 @@ export default function ProduitsPage() {
                 </div>
               </div>
 
+              {/* SELECTION DU TYPE DE CONDITIONNEMENT (PACKAGING) */}
+              {etablissement?.type_activite !== 'boutique' && (
+                <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
+                  <label className="text-xs font-bold text-[#1B4332] block">
+                    📦 Type de Conditionnement (Nombre de Bouteilles par Casier/Carton/Palette) *
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { num: 12, label: '🍺 Casier de 12 (Bière Standard)' },
+                      { num: 24, label: '🍺 Casier de 24 (Pt. Guinness / Malta)' },
+                      { num: 6, label: '🍷 Carton de 6 (Vins / Jus)' },
+                      { num: 12, label: '🧃 Palette de 12 (Jus)' },
+                    ].map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleBouteillesParCasierChange(preset.num)}
+                        className={`p-2 rounded-xl border text-[11px] font-bold transition-all text-left ${
+                          bouteillesParCasier === preset.num
+                            ? 'bg-[#1B4332] text-white border-[#1B4332]'
+                            : 'bg-[#F3ECE0] text-[#1B4332] border-[#E2D5C3]'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-xs font-bold text-gray-600">Nombre exact par casier/carton :</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={bouteillesParCasier}
+                      onChange={(e) => handleBouteillesParCasierChange(Number(e.target.value))}
+                      className="w-20 bg-[#F3ECE0] border border-[#E2D5C3] rounded-lg p-1.5 text-xs font-black text-[#1B4332]"
+                    />
+                    <span className="text-xs text-gray-500 font-bold">bouteilles / pack</span>
+                  </div>
+                </div>
+              )}
+
               {/* SAISIE EXPLICITE DES PRIX D'ACHAT ET PRIX DE VENTE */}
               <div className="p-4 rounded-2xl bg-[#FBF7EF] border-2 border-[#1B4332]/20 space-y-3">
                 <h4 className="font-serif font-black text-sm text-[#1B4332] flex items-center gap-2">
@@ -408,7 +489,9 @@ export default function ProduitsPage() {
 
                 {etablissement?.type_activite !== 'boutique' && (
                   <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-1">Prix d'Achat du Casier (FCFA)</label>
+                    <label className="text-xs font-bold text-gray-700 block mb-1">
+                      Prix d'Achat du Casier / Carton de {bouteillesParCasier} bouteilles (FCFA)
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -479,7 +562,7 @@ export default function ProduitsPage() {
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-bold text-gray-700 block mb-1">Casiers pleins ({bouteillesParCasier} btl/casier)</label>
+                      <label className="text-xs font-bold text-gray-700 block mb-1">Casiers / Cartons pleins ({bouteillesParCasier} btl/unite)</label>
                       <input
                         type="number"
                         min="0"
@@ -487,7 +570,7 @@ export default function ProduitsPage() {
                         onChange={(e) => setCasiers(Number(e.target.value))}
                         className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-3 text-sm font-black text-[#1B4332]"
                       />
-                      <span className="text-[10px] text-gray-500 font-bold block mt-1">📦 Casiers intacts non entamés</span>
+                      <span className="text-[10px] text-gray-500 font-bold block mt-1">📦 Emballages intacts non entamés</span>
                     </div>
                     <div>
                       <label className="text-xs font-bold text-gray-700 block mb-1">Bouteilles vrac (Isolées)</label>
@@ -498,7 +581,7 @@ export default function ProduitsPage() {
                         onChange={(e) => setVrac(Number(e.target.value))}
                         className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-xl p-3 text-sm font-black text-[#1B4332]"
                       />
-                      <span className="text-[10px] text-gray-500 font-bold block mt-1">🍾 Bouteilles seules hors casier (ex: au frigo)</span>
+                      <span className="text-[10px] text-gray-500 font-bold block mt-1">🍾 Bouteilles seules (ex: au frigo)</span>
                     </div>
                   </div>
                 )}
@@ -566,7 +649,7 @@ export default function ProduitsPage() {
           </div>
         )}
 
-        {/* MODAL ÉDITION COMPLÈTE DU PRODUIT (PRIX D'ACHAT, PRIX DE VENTE, STOCK, SEUIL) */}
+        {/* MODAL ÉDITION COMPLÈTE DU PRODUIT (PRIX D'ACHAT, PRIX DE VENTE, CONDITIONNEMENT, STOCK, SEUIL) */}
         {editingProduit && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <form onSubmit={handleSaveEditProduct} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -605,6 +688,23 @@ export default function ProduitsPage() {
                   />
                 </div>
               </div>
+
+              {/* REGLAGE DU CONDITIONNEMENT */}
+              {etablissement?.type_activite !== 'boutique' && (
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Contenance du Casier / Carton / Palette</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={editBouteillesParCasier}
+                      onChange={(e) => setEditBouteillesParCasier(Number(e.target.value))}
+                      className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    />
+                    <span className="text-xs text-gray-600 font-bold shrink-0">bouteilles / casier</span>
+                  </div>
+                </div>
+              )}
 
               {/* MODIFICATION DE PRIX D'ACHAT ET DE VENTE */}
               <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-3">

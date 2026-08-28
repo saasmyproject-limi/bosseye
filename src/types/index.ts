@@ -82,7 +82,7 @@ export interface Produit {
   unite: 'bouteille' | 'casier' | 'piece' | 'unite';
   casiers_pleins?: number;
   bouteilles_vrac?: number;
-  bouteilles_par_casier?: 12 | 24;
+  bouteilles_par_casier?: number;
   quantite_totale: number; // Générique pour bouteilles ou pièces
   seuil_alerte: number;
   prix_achat_casier?: number;
