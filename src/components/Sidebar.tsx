@@ -105,11 +105,15 @@ export default function Sidebar() {
       badge: pendingCreditsCount > 0 ? `${pendingCreditsCount}` : null,
       badgeColor: 'bg-[#B8442C]',
     },
-    {
-      name: 'Réservations / Mise de Côté',
-      href: '/reservations',
-      icon: Bookmark,
-    },
+    ...(etablissement?.type_activite === 'boutique'
+      ? [
+          {
+            name: 'Réservations / Mise de Côté',
+            href: '/reservations',
+            icon: Bookmark,
+          },
+        ]
+      : []),
     ...(!isEmployeBoutique
       ? [
           {

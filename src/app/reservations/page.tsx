@@ -122,6 +122,27 @@ export default function ReservationsPage() {
       <Sidebar />
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 space-y-6">
+        {/* Banner non-boutique */}
+        {etablissement && etablissement.type_activite !== 'boutique' && (
+          <div className="p-4 rounded-2xl bg-amber-100 border-2 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">ℹ️</span>
+              <div>
+                <h4 className="font-serif font-black text-sm text-amber-900">Réservation réservée à l'activité Boutique</h4>
+                <p className="text-xs font-medium text-amber-800">
+                  Les réservations et mises de côté ne s'appliquent pas au Bar & Snack. Au bar, les boissons sont commandées et gérées directement sur les tables.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/ventes"
+              className="px-4 py-2 rounded-xl bg-[#1B4332] text-white font-bold text-xs shadow hover:bg-[#2D6A4F] whitespace-nowrap"
+            >
+              Aller à la Gestion des Tables ➔
+            </a>
+          </div>
+        )}
+
         {/* Header */}
         <div className="pb-4 border-b border-[#E2D5C3] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

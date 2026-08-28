@@ -224,15 +224,17 @@ export default function DashboardPage() {
             <p className="text-[11px] text-[#B8442C] font-bold">{facturesCredit.length} client(s) à crédit</p>
           </div>
 
-          <Link href="/reservations" className="bg-[#F3ECE0] hover:bg-[#EAE1D1] border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-2 transition-all block">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-              <Bookmark className="w-3.5 h-3.5 text-blue-700" /> Articles Réservés
-            </span>
-            <h3 className="font-serif font-black text-2xl text-[#1B4332]">
-              {reservationsActives.length} Réservation(s)
-            </h3>
-            <p className="text-[11px] text-blue-900 font-bold">{totalResteASolderReservations.toLocaleString('fr-FR')} F à solder au retrait</p>
-          </Link>
+          {etablissement?.type_activite === 'boutique' && (
+            <Link href="/reservations" className="bg-[#F3ECE0] hover:bg-[#EAE1D1] border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-2 transition-all block">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                <Bookmark className="w-3.5 h-3.5 text-blue-700" /> Articles Réservés
+              </span>
+              <h3 className="font-serif font-black text-2xl text-[#1B4332]">
+                {reservationsActives.length} Réservation(s)
+              </h3>
+              <p className="text-[11px] text-blue-900 font-bold">{totalResteASolderReservations.toLocaleString('fr-FR')} F à solder au retrait</p>
+            </Link>
+          )}
 
           <div className="bg-[#F3ECE0] border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-2">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Alertes Stock Bas</span>

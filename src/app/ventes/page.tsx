@@ -27,7 +27,12 @@ import {
   Sparkles,
   Bookmark,
   Send,
-  X
+  X,
+  User,
+  UserPlus,
+  Edit2,
+  RotateCcw,
+  FileText
 } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import {
@@ -43,6 +48,18 @@ import {
   StatutLivraison,
 } from '@/types';
 
+export interface ClientOrderItem {
+  produit: Produit;
+  quantite: number;
+  prix_unitaire: number;
+}
+
+export interface TableClientOrder {
+  id: string;
+  nom: string;
+  items: ClientOrderItem[];
+}
+
 export default function VentesPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
@@ -55,7 +72,7 @@ export default function VentesPage() {
   // Mode Onglet pour Boutique
   const [activeTab, setActiveTab] = useState<'comptoir' | 'livraisons'>('comptoir');
 
-  // Panier Vente Comptoir (Feuille Facture Client Directe)
+  // Panier Vente Comptoir (Feuille Facture Client Directe - Boutique)
   const [cart, setCart] = useState<Array<{
     produit: Produit;
     variante?: VarianteProduit;
@@ -91,26 +108,44 @@ export default function VentesPage() {
     prix_unitaire: number;
   }>>([]);
 
-  // --- GESTION DES TABLES BAR & SNACK ---
-  const [tablesState, setTablesState] = useState<Record<string, Array<{
-    produit: Produit;
-    quantite: number;
-    prix_unitaire: number;
-  }>>>({
+  // --- GESTION DES TABLES BAR & SNACK (MULTI-FACTURES CLIENTS PAR TABLE) ---
+  const [tablesState, setTablesState] = useState<Record<string, TableClientOrder[]>>({
     'Table 01': [
       {
-        produit: { id: 'prod-beaufort', nom: 'Beaufort Lager 65cl', categorie: 'Bière', unite: 'bouteille', quantite_totale: 100, seuil_alerte: 10, prix_vente_bouteille: 650, cout_achat_unitaire_cmp: 271, etablissement_id: '', actif: true },
-        quantite: 3,
-        prix_unitaire: 650,
+        id: 'c-t1-pierre',
+        nom: 'Pierre (Facture A)',
+        items: [
+          {
+            produit: { id: 'prod-beaufort', nom: 'Beaufort Lager 65cl', categorie: 'Bière', unite: 'bouteille', quantite_totale: 100, seuil_alerte: 10, prix_vente_bouteille: 650, cout_achat_unitaire_cmp: 271, etablissement_id: '', actif: true },
+            quantite: 5,
+            prix_unitaire: 650,
+          },
+        ],
+      },
+      {
+        id: 'c-t1-raoul',
+        nom: 'Raoul (Facture B)',
+        items: [
+          {
+            produit: { id: 'prod-33export', nom: '33 Export 65cl', categorie: 'Bière', unite: 'bouteille', quantite_totale: 120, seuil_alerte: 10, prix_vente_bouteille: 500, cout_achat_unitaire_cmp: 250, etablissement_id: '', actif: true },
+            quantite: 5,
+            prix_unitaire: 500,
+          },
+        ],
       },
     ],
-    'Table 02': [],
-    'Table 03': [],
-    'Carré VIP 1': [],
-    'Carré VIP 2': [],
+    'Table 02': [{ id: 'c-t2-1', nom: 'Client 1 (Facture A)', items: [] }],
+    'Table 03': [{ id: 'c-t3-1', nom: 'Client 1 (Facture A)', items: [] }],
+    'Carré VIP 1': [{ id: 'c-vip1-1', nom: 'Client 1 (Facture A)', items: [] }],
+    'Carré VIP 2': [{ id: 'c-vip2-1', nom: 'Client 1 (Facture A)', items: [] }],
   });
 
   const [activeTableNumber, setActiveTableNumber] = useState<string>('Table 01');
+  const [activeClientId, setActiveClientId] = useState<string>('c-t1-pierre');
+  const [checkoutTarget, setCheckoutTarget] = useState<'client_actuel' | 'toute_la_table'>('toute_la_table');
+  const [editingClientNameId, setEditingClientNameId] = useState<string | null>(null);
+  const [editingClientNameValue, setEditingClientNameValue] = useState<string>('');
+
   const [splitCount, setSplitCount] = useState<number>(1);
   const [selectedCaisseId, setSelectedCaisseId] = useState<string>('');
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -145,6 +180,38 @@ export default function VentesPage() {
     const matchSku = (p.variantes || []).some((v) => (v.sku_code || '').toLowerCase().includes(query));
     return matchName || matchCat || matchSku;
   });
+
+  // --- SELECTION DE TABLE ROBUSTE ---
+  const handleSelectTable = (tNum: string) => {
+    setActiveTableNumber(tNum);
+    setTablesState((prev) => {
+      const clients = prev[tNum];
+      if (!clients || clients.length === 0) {
+        const newClient: TableClientOrder = { id: `c-${tNum}-${Date.now()}`, nom: 'Client 1 (Facture A)', items: [] };
+        setActiveClientId(newClient.id);
+        return { ...prev, [tNum]: [newClient] };
+      } else {
+        setActiveClientId(clients[0].id);
+        return prev;
+      }
+    });
+  };
+
+  // --- HELPERS D'ACCÈS TABLE & CLIENT ACTIF ---
+  const currentTableClients = tablesState[activeTableNumber] || [{ id: `c-${activeTableNumber}-1`, nom: 'Client 1 (Facture A)', items: [] }];
+  const activeClient = currentTableClients.find((c) => c.id === activeClientId) || currentTableClients[0] || { id: `c-${activeTableNumber}-1`, nom: 'Client 1 (Facture A)', items: [] };
+
+  const currentTableTotal = currentTableClients.reduce(
+    (acc, client) => acc + client.items.reduce((cAcc, i) => cAcc + i.quantite * i.prix_unitaire, 0),
+    0
+  );
+
+  const activeClientTotal = activeClient.items.reduce((acc, i) => acc + i.quantite * i.prix_unitaire, 0);
+
+  const totalConsosTableCount = currentTableClients.reduce(
+    (acc, client) => acc + client.items.reduce((cAcc, i) => cAcc + i.quantite, 0),
+    0
+  );
 
   // --- BOUTIQUE CART ACTIONS ---
   const handleAddProductToCart = (prod: Produit, variante?: VarianteProduit) => {
@@ -240,58 +307,182 @@ export default function VentesPage() {
     loadData();
   };
 
-  // --- BAR/SNACK TABLE ACTIONS ---
+  // --- BAR/SNACK TABLE ACTIONS MULTI-CLIENTS ---
   const handleAddDrinkToTable = (prod: Produit) => {
     const price = prod.prix_vente_bouteille || prod.prix_vente_unitaire || 0;
 
     setTablesState((prev) => {
-      const currentItems = prev[activeTableNumber] || [];
-      const existingIndex = currentItems.findIndex((item) => item.produit.id === prod.id);
-
-      let updatedItems;
-      if (existingIndex >= 0) {
-        updatedItems = [...currentItems];
-        updatedItems[existingIndex].quantite += 1;
-      } else {
-        updatedItems = [...currentItems, { produit: prod, quantite: 1, prix_unitaire: price }];
+      let clients = prev[activeTableNumber];
+      if (!clients || clients.length === 0) {
+        const newClient: TableClientOrder = { id: `c-${activeTableNumber}-${Date.now()}`, nom: 'Client 1 (Facture A)', items: [] };
+        clients = [newClient];
       }
+
+      let targetId = activeClientId;
+      if (!clients.some((c) => c.id === targetId)) {
+        targetId = clients[0].id;
+        setActiveClientId(targetId);
+      }
+
+      const updatedClients = clients.map((c) => {
+        if (c.id === targetId) {
+          const existingIdx = c.items.findIndex((item) => item.produit.id === prod.id);
+          let newItems = [...c.items];
+          if (existingIdx >= 0) {
+            newItems[existingIdx] = {
+              ...newItems[existingIdx],
+              quantite: newItems[existingIdx].quantite + 1,
+            };
+          } else {
+            newItems.push({ produit: prod, quantite: 1, prix_unitaire: price });
+          }
+          return { ...c, items: newItems };
+        }
+        return c;
+      });
 
       return {
         ...prev,
-        [activeTableNumber]: updatedItems,
+        [activeTableNumber]: updatedClients,
       };
     });
   };
 
-  const handleUpdateTableItemQuantity = (tableNum: string, index: number, delta: number) => {
+  const handleUpdateClientItemQuantity = (tableNum: string, clientId: string, index: number, delta: number) => {
     setTablesState((prev) => {
-      const currentItems = prev[tableNum] || [];
-      const updated = [...currentItems];
-      const newQty = updated[index].quantite + delta;
-      if (newQty <= 0) {
-        return { ...prev, [tableNum]: updated.filter((_, i) => i !== index) };
-      }
-      updated[index].quantite = newQty;
-      return { ...prev, [tableNum]: updated };
+      const clients = prev[tableNum] || [];
+      const updatedClients = clients.map((c) => {
+        if (c.id === clientId) {
+          const newItems = [...c.items];
+          const newQty = newItems[index].quantite + delta;
+          if (newQty <= 0) {
+            return { ...c, items: newItems.filter((_, i) => i !== index) };
+          }
+          newItems[index] = { ...newItems[index], quantite: newQty };
+          return { ...c, items: newItems };
+        }
+        return c;
+      });
+      return { ...prev, [tableNum]: updatedClients };
     });
   };
 
-  const currentTableItems = tablesState[activeTableNumber] || [];
-  const currentTableTotal = currentTableItems.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
+  const handleAddClientToTable = (tableNum: string) => {
+    const newId = `c-${tableNum}-${Date.now()}`;
+    setTablesState((prev) => {
+      const clients = prev[tableNum] || [];
+      const newNum = clients.length + 1;
+      const letter = String.fromCharCode(64 + newNum);
+      const newClient: TableClientOrder = {
+        id: newId,
+        nom: `Client ${newNum} (Facture ${letter})`,
+        items: [],
+      };
+      return { ...prev, [tableNum]: [...clients, newClient] };
+    });
+    setActiveClientId(newId);
+  };
+
+  const handleRenameClient = (tableNum: string, clientId: string, newName: string) => {
+    if (!newName.trim()) return;
+    setTablesState((prev) => {
+      const clients = prev[tableNum] || [];
+      const updatedClients = clients.map((c) => (c.id === clientId ? { ...c, nom: newName.trim() } : c));
+      return { ...prev, [tableNum]: updatedClients };
+    });
+    setEditingClientNameId(null);
+  };
+
+  const handleRemoveClientFromTable = (tableNum: string, clientId: string) => {
+    setTablesState((prev) => {
+      const clients = prev[tableNum] || [];
+      if (clients.length <= 1) {
+        return {
+          ...prev,
+          [tableNum]: [{ id: clients[0].id, nom: clients[0].nom, items: [] }],
+        };
+      }
+      const filtered = clients.filter((c) => c.id !== clientId);
+      return { ...prev, [tableNum]: filtered };
+    });
+    if (activeClientId === clientId) {
+      const clients = tablesState[tableNum] || [];
+      const remaining = clients.filter((c) => c.id !== clientId);
+      if (remaining.length > 0) setActiveClientId(remaining[0].id);
+    }
+  };
+
+  // --- ACTION TOURNEES / DOUBLER ---
+  const handleDoubleTourneeClient = (tableNum: string, clientId: string) => {
+    setTablesState((prev) => {
+      const clients = prev[tableNum] || [];
+      const updatedClients = clients.map((c) => {
+        if (c.id === clientId) {
+          const doubledItems = c.items.map((item) => ({
+            ...item,
+            quantite: item.quantite * 2,
+          }));
+          return { ...c, items: doubledItems };
+        }
+        return c;
+      });
+      return { ...prev, [tableNum]: updatedClients };
+    });
+  };
+
+  const handleDoubleTourneeTable = (tableNum: string) => {
+    setTablesState((prev) => {
+      const clients = prev[tableNum] || [];
+      const updatedClients = clients.map((c) => ({
+        ...c,
+        items: c.items.map((item) => ({ ...item, quantite: item.quantite * 2 })),
+      }));
+      return { ...prev, [tableNum]: updatedClients };
+    });
+  };
 
   const cartTotal = cart.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
 
   // --- FINALISER VENTE / ENCAISSER TABLE OU COMPTOIR ---
   const handleFinalizeSale = () => {
     const isBarOrSnack = etablissement?.type_activite !== 'boutique';
-    const itemsToProcess = isBarOrSnack ? currentTableItems : cart;
-    const rawTotal = isBarOrSnack ? currentTableTotal : cartTotal;
+
+    let itemsToProcess: Array<{ produit: Produit; variante?: VarianteProduit; quantite: number; prix_unitaire: number; detail_variante?: string }> = [];
+    let rawTotal = 0;
+
+    if (isBarOrSnack) {
+      if (checkoutTarget === 'client_actuel') {
+        itemsToProcess = activeClient.items.map((item) => ({
+          produit: item.produit,
+          quantite: item.quantite,
+          prix_unitaire: item.prix_unitaire,
+          detail_variante: `Facture Client : ${activeClient.nom}`,
+        }));
+        rawTotal = activeClientTotal;
+      } else {
+        // Toute la table itemisée par client/facture
+        currentTableClients.forEach((c) => {
+          c.items.forEach((item) => {
+            itemsToProcess.push({
+              produit: item.produit,
+              quantite: item.quantite,
+              prix_unitaire: item.prix_unitaire,
+              detail_variante: `Facture : ${c.nom}`,
+            });
+          });
+        });
+        rawTotal = currentTableTotal;
+      }
+    } else {
+      itemsToProcess = cart;
+      rawTotal = cartTotal;
+    }
 
     if (itemsToProcess.length === 0) return;
 
-    // --- RÈGLEMENT PAR RÉSERVATION / MISE DE CÔTÉ ---
-    if (paymentMode === 'reservation') {
-      let activeClientId = selectedClientId;
+    // --- RÈGLEMENT PAR RÉSERVATION (SEULEMENT POUR BOUTIQUE) ---
+    if (paymentMode === 'reservation' && etablissement?.type_activite === 'boutique') {
+      let activeCId = selectedClientId;
       if (isNewClientMode) {
         if (!newClientNom.trim() || !newClientPhone.trim()) {
           alert('Veuillez renseigner le Nom et le Numéro WhatsApp du client pour enregistrer la réservation.');
@@ -301,7 +492,7 @@ export default function VentesPage() {
           nom: newClientNom.trim(),
           telephone_whatsapp: newClientPhone.trim(),
         });
-        activeClientId = createdC.id;
+        activeCId = createdC.id;
       } else if (!selectedClientId) {
         alert('Veuillez sélectionner un client existant ou en ajouter un nouveau pour enregistrer la réservation.');
         return;
@@ -310,7 +501,7 @@ export default function VentesPage() {
       const acompte = acompteCreditInput || montantVerseInput || 0;
       const newRes = offlineDB.createReservation({
         lignes: itemsToProcess.map((item: any) => {
-          let detail = '';
+          let detail = item.detail_variante || '';
           if (item.variante) {
             const t = item.variante.taille ? `Taille ${item.variante.taille}` : '';
             const c = item.variante.couleur ? `${item.variante.couleur}` : '';
@@ -326,15 +517,11 @@ export default function VentesPage() {
           };
         }),
         acompte_paye: acompte,
-        client_id: activeClientId || undefined,
+        client_id: activeCId || undefined,
       });
 
       setLastCreatedReservation(newRes);
-      if (isBarOrSnack) {
-        setTablesState((prev) => ({ ...prev, [activeTableNumber]: [] }));
-      } else {
-        setCart([]);
-      }
+      setCart([]);
 
       setIsPaymentModalOpen(false);
       setRemiseInput(0);
@@ -353,15 +540,15 @@ export default function VentesPage() {
     const isPartialPayment = montantVerseInput > 0 && montantVerseInput < netAPayerCalculated;
     const isCreditOrPartial = isCreditMode || isPartialPayment;
 
-    // Gérer l'enregistrement du Client (sélection existant ou création rapide)
-    let activeClientId = selectedClientId;
+    // Gérer l'enregistrement du Client
+    let activeCId = selectedClientId;
     if (isCreditOrPartial) {
       if (isNewClientMode && newClientNom.trim() && newClientPhone.trim()) {
         const createdC = offlineDB.addClient({
           nom: newClientNom.trim(),
           telephone_whatsapp: newClientPhone.trim(),
         });
-        activeClientId = createdC.id;
+        activeCId = createdC.id;
       }
     }
 
@@ -373,7 +560,7 @@ export default function VentesPage() {
     const renduVal = (isCreditMode || isPartialPayment) ? 0 : Math.max(0, verseVal - netAPayerCalculated);
 
     const lignes = itemsToProcess.map((item: any) => {
-      let detail = '';
+      let detail = item.detail_variante || '';
       if (item.variante) {
         const t = item.variante.taille ? `Taille ${item.variante.taille}` : '';
         const c = item.variante.couleur ? `${item.variante.couleur}` : '';
@@ -392,20 +579,36 @@ export default function VentesPage() {
 
     const newFac = offlineDB.createFacture({
       lignes,
-      mode_paiement: paymentMode,
+      mode_paiement: paymentMode === 'reservation' ? 'cash' : paymentMode,
       remise: remiseInput || 0,
       montant_paye: acompte,
       montant_verse: verseVal,
       montant_rendu: renduVal,
-      client_id: activeClientId || undefined,
-      transaction_id: isBarOrSnack ? activeTableNumber : 'COMPTOIR',
+      client_id: activeCId || undefined,
+      transaction_id: isBarOrSnack ? `${activeTableNumber}${checkoutTarget === 'client_actuel' ? ` (${activeClient.nom})` : ''}` : 'COMPTOIR',
       caissiere_id: currentUser?.id,
     });
 
     setLastCreatedFacture(newFac);
 
     if (isBarOrSnack) {
-      setTablesState((prev) => ({ ...prev, [activeTableNumber]: [] }));
+      if (checkoutTarget === 'client_actuel') {
+        setTablesState((prev) => {
+          const clientsList = prev[activeTableNumber] || [];
+          const remaining = clientsList.filter((c) => c.id !== activeClient.id);
+          if (remaining.length === 0) {
+            remaining.push({ id: `c-${activeTableNumber}-${Date.now()}`, nom: 'Client 1 (Facture A)', items: [] });
+          }
+          return { ...prev, [activeTableNumber]: remaining };
+        });
+        const remaining = currentTableClients.filter((c) => c.id !== activeClient.id);
+        if (remaining.length > 0) setActiveClientId(remaining[0].id);
+      } else {
+        setTablesState((prev) => ({
+          ...prev,
+          [activeTableNumber]: [{ id: `c-${activeTableNumber}-${Date.now()}`, nom: 'Client 1 (Facture A)', items: [] }],
+        }));
+      }
     } else {
       setCart([]);
     }
@@ -426,7 +629,13 @@ export default function VentesPage() {
     loadData();
   };
 
-  const currentRawTotal = etablissement?.type_activite === 'boutique' ? cartTotal : currentTableTotal;
+  const currentRawTotal =
+    etablissement?.type_activite === 'boutique'
+      ? cartTotal
+      : checkoutTarget === 'client_actuel'
+      ? activeClientTotal
+      : currentTableTotal;
+
   const currentNetAPayer = Math.max(0, currentRawTotal - (remiseInput || 0));
   const currentMonnaieRendue = Math.max(0, (montantVerseInput || currentNetAPayer) - currentNetAPayer);
 
@@ -744,27 +953,38 @@ export default function VentesPage() {
           </div>
         )}
 
-        {/* --- SECTEUR 2: BAR & SNACK (GESTION INTERACTIVE DES TABLES ET BOISSONS) --- */}
+        {/* --- SECTEUR 2: BAR & SNACK (GESTION MULTI-FACTURES PAR TABLE) --- */}
         {etablissement?.type_activite !== 'boutique' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Colonne Gauche: Tables & Catalogue de Boissons (7 Cols) */}
             <div className="lg:col-span-7 space-y-5">
+              {/* 1. SELECTION DE TABLE */}
               <div>
-                <h3 className="font-serif font-black text-base text-[#1B4332] mb-2.5">
-                  1. Cliquez sur une Table pour ouvrir sa Commande :
+                <h3 className="font-serif font-black text-base text-[#1B4332] mb-2.5 flex items-center justify-between">
+                  <span>1. Sélectionnez une Table pour le Bar :</span>
+                  <span className="text-xs font-bold text-gray-500">
+                    {Object.keys(tablesState).length} table(s) disponible(s)
+                  </span>
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {Object.keys(tablesState).map((tNum) => {
-                    const tItems = tablesState[tNum] || [];
+                    const clientsInTable = tablesState[tNum] || [];
                     const isSelected = activeTableNumber === tNum;
                     const isVip = tNum.includes('VIP');
-                    const tTotal = tItems.reduce((acc, i) => acc + i.quantite * i.prix_unitaire, 0);
+                    const tTotal = clientsInTable.reduce(
+                      (acc, c) => acc + c.items.reduce((iAcc, i) => iAcc + i.quantite * i.prix_unitaire, 0),
+                      0
+                    );
+                    const totalConsos = clientsInTable.reduce(
+                      (acc, c) => acc + c.items.reduce((iAcc, i) => iAcc + i.quantite, 0),
+                      0
+                    );
 
                     return (
                       <div
                         key={tNum}
-                        onClick={() => setActiveTableNumber(tNum)}
-                        className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                        onClick={() => handleSelectTable(tNum)}
+                        className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
                           isSelected
                             ? 'bg-[#1B4332] border-[#1B4332] text-white shadow-md'
                             : 'bg-[#F3ECE0] border-[#E2D5C3] text-[#1B4332] hover:border-[#1B4332]'
@@ -778,8 +998,11 @@ export default function VentesPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs font-bold opacity-80">
-                          {tItems.length > 0 ? `${tTotal.toLocaleString('fr-FR')} F (${tItems.length} article)` : 'Table Libre'}
+                        <p className="text-xs font-bold opacity-90">
+                          {totalConsos > 0 ? `${tTotal.toLocaleString('fr-FR')} F (${totalConsos} conso)` : 'Table Libre'}
+                        </p>
+                        <p className="text-[10px] opacity-75 font-semibold mt-0.5">
+                          📄 {clientsInTable.length} facture(s) client(s)
                         </p>
                       </div>
                     );
@@ -787,12 +1010,111 @@ export default function VentesPage() {
                 </div>
               </div>
 
+              {/* BARRE D'ONGLETS FACTURES / CLIENTS SUR LA TABLE ACTIVE */}
+              <div className="bg-[#F3ECE0] p-4 rounded-3xl border-2 border-[#E2D5C3] space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-[#B8442C]" />
+                    <h3 className="font-serif font-black text-base text-[#1B4332]">
+                      2. Factures Clients Ouvertes sur la {activeTableNumber} :
+                    </h3>
+                  </div>
+
+                  <button
+                    onClick={() => handleAddClientToTable(activeTableNumber)}
+                    className="px-3 py-1.5 rounded-xl bg-[#1B4332] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-[#2D6A4F]"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-[#E8A33D]" />
+                    <span>+ Ajouter une Facture Client</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {currentTableClients.map((client) => {
+                    const isSelectedClient = client.id === activeClientId;
+                    const cTotal = client.items.reduce((acc, i) => acc + i.quantite * i.prix_unitaire, 0);
+                    const cQty = client.items.reduce((acc, i) => acc + i.quantite, 0);
+
+                    return (
+                      <div
+                        key={client.id}
+                        onClick={() => setActiveClientId(client.id)}
+                        className={`px-3.5 py-2 rounded-2xl border cursor-pointer flex items-center gap-2 text-xs font-bold transition-all shadow-sm ${
+                          isSelectedClient
+                            ? 'bg-[#1B4332] text-white border-[#1B4332]'
+                            : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                        }`}
+                      >
+                        {editingClientNameId === client.id ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editingClientNameValue}
+                              onChange={(e) => setEditingClientNameValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleRenameClient(activeTableNumber, client.id, editingClientNameValue);
+                                }
+                              }}
+                              className="px-2 py-0.5 rounded text-xs text-black border border-gray-400 w-28 font-bold"
+                            />
+                            <button
+                              onClick={() => handleRenameClient(activeTableNumber, client.id, editingClientNameValue)}
+                              className="text-[10px] bg-emerald-700 text-white px-2 py-0.5 rounded font-black"
+                            >
+                              OK
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span>📄 {client.nom}</span>
+                            <button
+                              title="Nommer le client / facture"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingClientNameId(client.id);
+                                setEditingClientNameValue(client.nom);
+                              }}
+                              className="opacity-70 hover:opacity-100"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                            <span
+                              className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                isSelectedClient ? 'bg-[#E8A33D] text-[#0F291E]' : 'bg-[#E2D5C3] text-[#1B4332]'
+                              }`}
+                            >
+                              {cQty > 0 ? `${cTotal.toLocaleString('fr-FR')} F` : '0 F'}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* CATALOGUE DES BOISSONS (AJOUT SUR LE CLIENT SELECTIONNÉ) */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-serif font-black text-base text-[#1B4332]">
-                    2. Ajoutez des Boissons sur {activeTableNumber} :
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h3 className="font-serif font-black text-base text-[#1B4332] flex items-center gap-2">
+                    <span>3. Cliquez sur une Boisson pour l'ajouter sur la <strong>Facture de {activeClient.nom}</strong> ({activeTableNumber}) :</span>
                   </h3>
-                  <span className="text-xs font-bold text-gray-500">Cliquez pour ajouter +1</span>
+                  <span className="text-xs font-black text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-1 rounded-xl border border-[#B8442C]/30">
+                    🎯 Cible : {activeClient.nom}
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3.5 top-3 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher une bière, soft ou boisson..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-10 pr-4 py-2.5 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
@@ -803,7 +1125,7 @@ export default function VentesPage() {
                       <div
                         key={p.id}
                         onClick={() => handleAddDrinkToTable(p)}
-                        className="bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl p-3.5 hover:border-[#1B4332] cursor-pointer transition-all shadow-sm flex items-center justify-between gap-2"
+                        className="bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl p-3.5 hover:border-[#1B4332] hover:bg-emerald-50 cursor-pointer transition-all shadow-sm flex items-center justify-between gap-2 active:scale-95"
                       >
                         <div>
                           <span className="text-[9px] font-black uppercase text-[#B8442C] bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
@@ -815,8 +1137,15 @@ export default function VentesPage() {
                           </span>
                         </div>
 
-                        <button className="w-8 h-8 rounded-xl bg-[#1B4332] text-white flex items-center justify-center hover:bg-[#2D6A4F]">
-                          <Plus className="w-4 h-4" />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddDrinkToTable(p);
+                          }}
+                          className="w-9 h-9 rounded-xl bg-[#1B4332] text-white flex items-center justify-center hover:bg-[#2D6A4F] shadow font-bold text-xs"
+                        >
+                          <Plus className="w-4 h-4 text-[#E8A33D]" />
                         </button>
                       </div>
                     );
@@ -825,120 +1154,175 @@ export default function VentesPage() {
               </div>
             </div>
 
-            {/* Ticket Facture Client de la Table Active (5 Cols) */}
+            {/* TICKET ADDITION CLIENT DE LA TABLE ACTIVE (5 Cols) */}
             <div className="lg:col-span-5 bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-5 shadow-lg flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between pb-3 border-b border-[#E2D5C3]">
                   <div>
-                    <span className="text-[10px] font-black uppercase text-[#B8442C]">Addition Ouverte</span>
-                    <h2 className="font-serif font-black text-xl text-[#1B4332]">{activeTableNumber}</h2>
+                    <span className="text-[10px] font-black uppercase text-[#B8442C]">Addition Ouverte {activeTableNumber}</span>
+                    <h2 className="font-serif font-black text-xl text-[#1B4332]">
+                      Facture : {activeClient.nom}
+                    </h2>
                   </div>
-                  <span className="text-xs font-bold text-gray-500">{currentTableItems.length} conso(s)</span>
+                  <span className="text-xs font-bold text-gray-500">
+                    {totalConsosTableCount} conso(s) au total sur la table
+                  </span>
                 </div>
 
-                {currentTableItems.length === 0 ? (
-                  <div className="py-12 text-center text-gray-400 space-y-2">
-                    <Beer className="w-12 h-12 mx-auto opacity-30 text-[#1B4332]" />
-                    <p className="text-xs font-bold">Cliquez sur une boisson à gauche pour l'ajouter à l'addition de {activeTableNumber}</p>
+                {/* ACTION RAPIDE: OFFRIR UNE TOURNÉE / DOUBLER LA COMMANDE */}
+                <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
+                  <span className="text-[10px] font-black uppercase text-gray-500 block">
+                    🍻 Gestion des Tournées & Offres :
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      disabled={activeClient.items.length === 0}
+                      onClick={() => handleDoubleTourneeClient(activeTableNumber, activeClient.id)}
+                      className="py-2 px-2.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow disabled:opacity-40 transition-all"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-[#E8A33D]" />
+                      <span>Doubler la Facture de {activeClient.nom.split(' ')[0]}</span>
+                    </button>
+
+                    <button
+                      disabled={totalConsosTableCount === 0}
+                      onClick={() => handleDoubleTourneeTable(activeTableNumber)}
+                      className="py-2 px-2.5 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-[11px] flex items-center justify-center gap-1 shadow disabled:opacity-40 transition-all"
+                    >
+                      <Beer className="w-3.5 h-3.5 text-[#E8A33D]" />
+                      <span>Tournée Toute la Table</span>
+                    </button>
                   </div>
-                ) : (
-                  <div className="space-y-2.5 mt-4 max-h-[320px] overflow-y-auto pr-1">
-                    {currentTableItems.map((item, index) => (
-                      <div
-                        key={index}
-                        className="bg-[#FBF7EF] p-3 rounded-2xl border border-[#E2D5C3] flex items-center justify-between gap-2"
-                      >
-                        <div className="flex-1 truncate">
-                          <h4 className="font-bold text-xs text-[#1B4332] truncate">{item.produit.nom}</h4>
-                          <p className="text-[11px] font-black text-[#1B4332]/80 mt-0.5">
-                            {item.prix_unitaire.toLocaleString('fr-FR')} FCFA / bout.
-                          </p>
-                        </div>
+                </div>
 
-                        <div className="flex items-center gap-1.5 bg-[#F3ECE0] p-1 rounded-xl border border-[#E2D5C3]">
-                          <button
-                            onClick={() => handleUpdateTableItemQuantity(activeTableNumber, index, -1)}
-                            className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="font-black text-xs px-2">{item.quantite}</span>
-                          <button
-                            onClick={() => handleUpdateTableItemQuantity(activeTableNumber, index, 1)}
-                            className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                {/* LISTE DES CONSO DU CLIENT SELECTIONNÉ */}
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-600">
+                    <span>Articles sur la Facture de {activeClient.nom} :</span>
+                    <span className="font-black text-[#1B4332]">{activeClientTotal.toLocaleString('fr-FR')} FCFA</span>
                   </div>
-                )}
 
-                {currentTableItems.length > 0 && (
-                  <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <Split className="w-4 h-4 text-[#B8442C]" />
-                      <span className="font-bold text-[#1B4332]">Split (Partage note) :</span>
+                  {activeClient.items.length === 0 ? (
+                    <div className="py-8 text-center text-gray-400 space-y-1 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3]">
+                      <Beer className="w-8 h-8 mx-auto opacity-30 text-[#1B4332]" />
+                      <p className="text-xs font-bold">Aucune conso sur la facture de {activeClient.nom}</p>
+                      <p className="text-[10px]">Cliquez sur les boissons à gauche pour en ajouter</p>
                     </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                      {activeClient.items.map((item, index) => (
+                        <div
+                          key={index}
+                          className="bg-[#FBF7EF] p-2.5 rounded-2xl border border-[#E2D5C3] flex items-center justify-between gap-2 shadow-sm"
+                        >
+                          <div className="flex-1 truncate">
+                            <h4 className="font-bold text-xs text-[#1B4332] truncate">{item.produit.nom}</h4>
+                            <p className="text-[10px] font-black text-[#1B4332]/80">
+                              {item.prix_unitaire.toLocaleString('fr-FR')} FCFA / u
+                            </p>
+                          </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => setSplitCount(Math.max(1, splitCount - 1))}
-                        className="w-6 h-6 rounded-lg bg-[#F3ECE0] font-black text-xs"
-                      >
-                        -
-                      </button>
-                      <span className="font-black">{splitCount} pers.</span>
-                      <button
-                        onClick={() => setSplitCount(splitCount + 1)}
-                        className="w-6 h-6 rounded-lg bg-[#F3ECE0] font-black text-xs"
-                      >
-                        +
-                      </button>
+                          <div className="flex items-center gap-1 bg-[#F3ECE0] p-1 rounded-xl border border-[#E2D5C3]">
+                            <button
+                              onClick={() => handleUpdateClientItemQuantity(activeTableNumber, activeClient.id, index, -1)}
+                              className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="font-black text-xs px-1.5">{item.quantite}</span>
+                            <button
+                              onClick={() => handleUpdateClientItemQuantity(activeTableNumber, activeClient.id, index, 1)}
+                              className="p-1 rounded-lg bg-[#FBF7EF] text-[#1B4332] hover:bg-gray-200"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </div>
+
+                {/* VUE RECAPITULATIVE DES AUTRES FACTURES DE LA TABLE */}
+                {currentTableClients.length > 1 && (
+                  <div className="mt-3 p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-1.5 text-xs">
+                    <span className="font-bold text-[#1B4332] block">Récapitulatif des autres factures clients sur {activeTableNumber} :</span>
+                    {currentTableClients.map((c) => {
+                      const cTot = c.items.reduce((acc, i) => acc + i.quantite * i.prix_unitaire, 0);
+                      const cCount = c.items.reduce((acc, i) => acc + i.quantite, 0);
+                      return (
+                        <div key={c.id} className="flex justify-between items-center text-[11px]">
+                          <span className="font-semibold text-gray-700">{c.nom} ({cCount} conso)</span>
+                          <span className="font-bold text-[#1B4332]">{cTot.toLocaleString('fr-FR')} FCFA</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
+              {/* CHOIX DE CIBLE D'ENCAISSEMENT & BOUTONS */}
               <div className="pt-4 border-t border-[#E2D5C3] space-y-3">
-                <div className="flex items-center justify-between text-base">
-                  <span className="font-bold text-[#1B4332]">Total {activeTableNumber} :</span>
-                  <div className="text-right">
-                    <span className="font-serif font-black text-2xl text-[#1B4332]">
-                      {currentTableTotal.toLocaleString('fr-FR')} FCFA
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-xs text-gray-600 font-bold">
+                    <span>Choix de Facture à Encaisser :</span>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="checkoutTarget"
+                          checked={checkoutTarget === 'client_actuel'}
+                          onChange={() => setCheckoutTarget('client_actuel')}
+                        />
+                        <span>{activeClient.nom.split(' ')[0]} ({activeClientTotal.toLocaleString('fr-FR')} F)</span>
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="checkoutTarget"
+                          checked={checkoutTarget === 'toute_la_table'}
+                          onChange={() => setCheckoutTarget('toute_la_table')}
+                        />
+                        <span>Toute la Table ({currentTableTotal.toLocaleString('fr-FR')} F)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-base pt-1">
+                    <span className="font-bold text-[#1B4332]">
+                      {checkoutTarget === 'client_actuel' ? `Montant Facture ${activeClient.nom} :` : `Grand Total Table (${activeTableNumber}) :`}
                     </span>
-                    {splitCount > 1 && (
-                      <p className="text-[10px] text-[#B8442C] font-bold">
-                        Soit {Math.round(currentTableTotal / splitCount).toLocaleString('fr-FR')} FCFA / personne
-                      </p>
-                    )}
+                    <span className="font-serif font-black text-2xl text-[#1B4332]">
+                      {(checkoutTarget === 'client_actuel' ? activeClientTotal : currentTableTotal).toLocaleString('fr-FR')} FCFA
+                    </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    disabled={currentTableItems.length === 0}
+                    disabled={activeClientTotal === 0}
                     onClick={() => {
-                      setPaymentMode('reservation');
-                      setIsPaymentModalOpen(true);
-                    }}
-                    className="py-3.5 px-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 transition-all active:scale-95"
-                  >
-                    <Bookmark className="w-4 h-4 text-white" />
-                    <span>🔖 Mettre de Côté</span>
-                  </button>
-
-                  <button
-                    disabled={currentTableItems.length === 0}
-                    onClick={() => {
+                      setCheckoutTarget('client_actuel');
                       setPaymentMode('cash');
                       setIsPaymentModalOpen(true);
                     }}
-                    className="py-3.5 px-3 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-glow-brique disabled:opacity-50 transition-all active:scale-95"
+                    className="py-3.5 px-2.5 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs flex items-center justify-center gap-1 shadow-md disabled:opacity-40 transition-all active:scale-95"
+                  >
+                    <Receipt className="w-4 h-4 text-[#E8A33D]" />
+                    <span>Encaisser {activeClient.nom.split(' ')[0]} ({activeClientTotal.toLocaleString('fr-FR')} F)</span>
+                  </button>
+
+                  <button
+                    disabled={currentTableTotal === 0}
+                    onClick={() => {
+                      setCheckoutTarget('toute_la_table');
+                      setPaymentMode('cash');
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="py-3.5 px-2.5 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs flex items-center justify-center gap-1 shadow-glow-brique disabled:opacity-40 transition-all active:scale-95"
                   >
                     <Receipt className="w-4 h-4 text-white" />
-                    <span>Encaisser {activeTableNumber}</span>
+                    <span>Encaisser Toute la Table ({currentTableTotal.toLocaleString('fr-FR')} F)</span>
                   </button>
                 </div>
               </div>
@@ -1110,7 +1494,7 @@ export default function VentesPage() {
                     {paymentMode === 'reservation' ? '🔖 Mise de Côté & Réservation' : 'Règlement & Édition Facture'}
                   </span>
                   <h3 className="font-serif font-black text-xl text-[#1B4332]">
-                    {paymentMode === 'reservation' ? 'Réservation d\'Article en Boutique' : 'Encaissement & Édition de Ticket'}
+                    {paymentMode === 'reservation' ? 'Réservation d\'Article en Boutique' : `Encaissement ${etablissement?.type_activite !== 'boutique' ? (checkoutTarget === 'client_actuel' ? activeClient.nom : activeTableNumber) : 'Vente'}`}
                   </h3>
                 </div>
                 <button
@@ -1186,7 +1570,9 @@ export default function VentesPage() {
                     { mode: 'orange_money', label: '🟧 Orange Money' },
                     { mode: 'mtn_momo', label: '🟡 MTN MoMo' },
                     { mode: 'credit', label: '📝 Crédit Client' },
-                    { mode: 'reservation', label: '🔖 Réservation (Mise de Côté)' },
+                    ...(etablissement?.type_activite === 'boutique'
+                      ? [{ mode: 'reservation', label: '🔖 Réservation (Mise de Côté)' }]
+                      : []),
                   ].map((m) => (
                     <button
                       key={m.mode}
@@ -1203,8 +1589,8 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              {/* Mode Réservation Spécifique */}
-              {paymentMode === 'reservation' && (
+              {/* Mode Réservation Spécifique (Boutique Uniquement) */}
+              {paymentMode === 'reservation' && etablissement?.type_activite === 'boutique' && (
                 <div className="space-y-3 p-3.5 rounded-2xl bg-blue-50 border-2 border-blue-300">
                   <div className="flex justify-between items-center pb-2 border-b border-blue-200 text-xs font-black text-blue-950">
                     <span>🔖 RÉSERVATION & MISE DE CÔTÉ</span>
@@ -1279,14 +1665,14 @@ export default function VentesPage() {
                       <span className="font-bold text-emerald-800">{(acompteCreditInput || 0).toLocaleString('fr-FR')} FCFA</span>
                     </div>
                     <div className="flex justify-between font-black text-sm text-blue-950">
-                      <span>Reste à Solder au Retrait :</span>
+                      <span>Solde à Régler au Retrait :</span>
                       <span>{Math.max(0, currentNetAPayer - (acompteCreditInput || 0)).toLocaleString('fr-FR')} FCFA</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* En cas de Versement Partiel ou de Crédit : Affichage du Reliquat Dû & Saisie Client */}
+              {/* En cas de Versement Partiel ou de Crédit */}
               {(() => {
                 const isPartialPayment = montantVerseInput > 0 && montantVerseInput < currentNetAPayer;
                 const isCreditMode = paymentMode === 'credit';
@@ -1380,7 +1766,7 @@ export default function VentesPage() {
           </div>
         )}
 
-        {/* --- MODAL CONFIRMATION & IMPRESSION TICKET THERMIQUE BLUETOOTH (COMPLET 11 POINTS) --- */}
+        {/* --- MODAL CONFIRMATION & IMPRESSION TICKET THERMIQUE BLUETOOTH --- */}
         {lastCreatedFacture && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-center space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1420,10 +1806,10 @@ export default function VentesPage() {
                   </div>
                 </div>
 
-                {/* 6. Liste des Articles, Déclinaisons & Prix */}
+                {/* 6. Liste des Articles, Déclinaisons & Prix (Avec Client si Bar) */}
                 <div className="py-1 border-b border-dashed border-gray-300 space-y-1.5">
                   <div className="flex justify-between font-bold text-[10px] uppercase text-gray-400 pb-1">
-                    <span>Article (Déclinaison)</span>
+                    <span>Article (Déclinaison / Client)</span>
                     <span>Total</span>
                   </div>
                   {lastCreatedFacture.lignes?.map((l) => {
@@ -1503,7 +1889,7 @@ export default function VentesPage() {
           </div>
         )}
 
-        {/* --- MODAL CONFIRMATION & IMPRESSION TICKET DE RÉSERVATION & MISE DE CÔTÉ --- */}
+        {/* --- MODAL CONFIRMATION & IMPRESSION TICKET DE RÉSERVATION --- */}
         {lastCreatedReservation && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl relative text-center space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1585,7 +1971,7 @@ export default function VentesPage() {
                   className="flex-1 py-3.5 rounded-2xl bg-[#1B4332] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
                 >
                   <Printer className="w-4 h-4 text-[#E8A33D]" />
-                  <span>Imprimer Ticket Réservation</span>
+                  <span>Imprimer Reçu Bluetooth</span>
                 </button>
 
                 <button
