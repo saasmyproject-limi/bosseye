@@ -1,24 +1,31 @@
 {
-  "name": "TAKAM BAR",
-  "short_name": "TAKAM BAR",
-  "description": "Gestion Caisse & Stock Snack/Bar Chic Yaoundé",
-  "start_url": "/caisse",
+  "name": "Œko — L'œil du patron",
+  "short_name": "Œko",
+  "description": "SaaS de gestion pour boutiques, bars et snack-bars au Cameroun (ventes, stocks, crédits, comptabilité).",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#111111",
-  "theme_color": "#FF6B00",
-  "orientation": "portrait",
+  "orientation": "any",
+  "background_color": "#FBF7EF",
+  "theme_color": "#1B4332",
   "icons": [
     {
-      "src": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=192&h=192&q=80",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=512&h=512&q=80",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
