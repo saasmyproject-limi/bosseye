@@ -81,27 +81,29 @@ export default function Sidebar() {
     router.refresh();
   };
 
+  const act = etablissement?.type_activite || 'snack';
+
   const navItems = [
     {
       name: 'Tableau de Bord',
-      href: '/dashboard',
+      href: `/${act}/dashboard`,
       icon: LayoutDashboard,
     },
     {
       name: term.salesScreenTitle,
-      href: '/ventes',
+      href: `/${act}/ventes`,
       icon: etablissement?.type_activite === 'boutique' ? ShoppingBag : LayoutDashboard,
     },
     {
       name: term.stockLabel,
-      href: '/produits',
+      href: `/${act}/produits`,
       icon: Package,
       badge: lowStockCount > 0 ? `${lowStockCount} bas` : null,
       badgeColor: 'bg-amber-600',
     },
     {
       name: 'Argent à Récupérer',
-      href: '/credits',
+      href: `/${act}/credits`,
       icon: CreditCard,
       badge: pendingCreditsCount > 0 ? `${pendingCreditsCount}` : null,
       badgeColor: 'bg-[#B8442C]',
@@ -110,7 +112,7 @@ export default function Sidebar() {
       ? [
           {
             name: 'Réservations / Mise de Côté',
-            href: '/reservations',
+            href: '/boutique/reservations',
             icon: Bookmark,
           },
         ]
@@ -119,26 +121,26 @@ export default function Sidebar() {
       ? [
           {
             name: 'Comptabilité & Marge CMP',
-            href: '/comptabilite',
+            href: '/commun/comptabilite',
             icon: BarChart3,
           },
         ]
       : []),
     {
       name: 'Mouvements & Historique',
-      href: '/mouvements',
+      href: '/commun/mouvements',
       icon: History,
     },
     {
       name: term.sellerLabel,
-      href: '/employes',
+      href: '/commun/employes',
       icon: Users,
     },
     ...(!isServeuseOrNonPatron
       ? [
           {
             name: 'Statut & Abonnement',
-            href: '/payer',
+            href: '/commun/payer',
             icon: Zap,
             badge: isTrialExpired ? 'Expiré' : `${daysLeftTrial}j`,
             badgeColor: isTrialExpired ? 'bg-red-600' : 'bg-emerald-700',
@@ -322,9 +324,9 @@ export default function Sidebar() {
             setIsPinModalOpen(false);
             loadInfo();
             if (u?.role === 'Serveuse' || u?.role === 'Employé' || u?.role === 'Caissière') {
-              router.push('/ventes');
+              router.push(`/${act}/ventes`);
             } else {
-              router.push('/dashboard');
+              router.push(`/${act}/dashboard`);
             }
           }}
         />

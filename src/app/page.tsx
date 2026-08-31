@@ -35,6 +35,7 @@ import {
 import OfflineBadge from '@/components/OfflineBadge';
 import BarSelectorModal from '@/components/BarSelectorModal';
 import PinLoginModal from '@/components/PinLoginModal';
+import { offlineDB } from '@/lib/offlineDB';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -361,10 +362,12 @@ export default function LandingPage() {
           onClose={() => setIsPinModalOpen(false)}
           onSuccess={(u) => {
             setIsPinModalOpen(false);
+            const etab = offlineDB.getEtablissement();
+            const act = etab?.type_activite || 'snack';
             if (u?.role === 'Serveuse' || u?.role === 'Employé' || u?.role === 'Caissière') {
-              router.push('/ventes');
+              router.push(`/${act}/ventes`);
             } else {
-              router.push('/dashboard');
+              router.push(`/${act}/dashboard`);
             }
           }}
         />
