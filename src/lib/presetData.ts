@@ -52,6 +52,7 @@ export const SEED_ETABLISSEMENTS_LIST: Etablissement[] = [
     nom: 'BOUTIQUE ÉLÉGANCE AKWA',
     type: 'boutique',
     type_activite: 'boutique',
+    secteur_boutique: 'Vêtements & Mode',
     ville: 'Douala',
     adresse: 'Rue Joffre - Akwa',
     plan: 'Premium',

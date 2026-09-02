@@ -29,6 +29,7 @@ import { Utilisateur, Etablissement } from '@/types';
 import BarSelectorModal from './BarSelectorModal';
 import OfflineBadge from './OfflineBadge';
 import PinLoginModal from './PinLoginModal';
+import EtablissementSettingsModal from './EtablissementSettingsModal';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -37,6 +38,7 @@ export default function Sidebar() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
@@ -265,6 +267,13 @@ export default function Sidebar() {
           </button>
 
           <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-full py-2 px-3 rounded-xl bg-[#2D6A4F]/80 hover:bg-[#2D6A4F] text-white font-bold text-[11px] flex items-center justify-center gap-2 transition-all border border-[#E8A33D]/30"
+          >
+            <span>⚙️ Paramètres Commerce & Secteur</span>
+          </button>
+
+          <button
             onClick={() => setShowClearConfirm(true)}
             className="w-full py-2 px-3 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-200 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all"
           >
@@ -343,6 +352,12 @@ export default function Sidebar() {
           }}
         />
       )}
+      {/* MODAL PARAMÈTRES ETAB */}
+      <EtablissementSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSuccess={loadInfo}
+      />
     </>
   );
 }

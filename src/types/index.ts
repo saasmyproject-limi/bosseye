@@ -29,6 +29,7 @@ export interface Etablissement {
   nom: string;
   type: TypeEtablissement;
   type_activite: TypeActivite;
+  secteur_boutique?: string; // Ex: 'Vêtements', 'Téléphones/Électronique', 'Pharmacie/Médicaments', 'Électroménager', 'Alimentation générale', etc.
   ville: string;
   adresse: string;
   telephone?: string;

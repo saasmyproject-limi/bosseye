@@ -156,10 +156,27 @@ export const offlineDB = {
     }
   },
 
+  updateEtablissement(id: string, updates: Partial<Etablissement>): Etablissement | null {
+    const etabs = this.getEtablissements();
+    const existing = etabs.find((e) => e.id === id);
+    if (!existing) return null;
+    const updated = { ...existing, ...updates };
+    const all = etabs.map((e) => (e.id === id ? updated : e));
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(all));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return updated;
+  },
+
   createEtablissement(params: {
     nom: string;
     type?: TypeEtablissement;
     type_activite: TypeActivite;
+    secteur_boutique?: string;
     ville: string;
     adresse: string;
     patronNom: string;
@@ -178,6 +195,7 @@ export const offlineDB = {
       nom: params.nom,
       type: params.type || (act as TypeEtablissement),
       type_activite: act,
+      secteur_boutique: params.secteur_boutique,
       ville: params.ville,
       adresse: params.adresse,
       plan: 'Premium',
@@ -540,6 +558,125 @@ export const offlineDB = {
       const newAll = [...produits, ...allOther];
       if (typeof window !== 'undefined') localStorage.setItem(KEYS.PRODUITS, JSON.stringify(newAll));
     } catch (e) { console.error(e); }
+  },
+
+  bulkAddOrUpdateStock(
+    items: Array<{
+      nom: string;
+      categorie: string;
+      quantite: number;
+      prix_achat?: number;
+      prix_vente?: number;
+    }>,
+    usageType: 'initial' | 'reapprovisionnement' | 'physique' = 'reapprovisionnement'
+  ): { addedCount: number; updatedCount: number } {
+    const etab = this.getEtablissement();
+    const currentProds = this.getProduits();
+    const user = this.getCurrentUser();
+    const nowIso = new Date().toISOString();
+
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    const newProdsList = [...currentProds];
+    const newMvtsList: MouvementStock[] = [];
+
+    items.forEach((item, idx) => {
+      const cleanNom = (item.nom || 'Article Sans Nom').trim();
+      if (!cleanNom) return;
+
+      const qty = Math.max(0, Number(item.quantite) || 1);
+      const pxAchat = Math.max(0, Number(item.prix_achat) || 0);
+      const pxVente = Math.max(0, Number(item.prix_vente) || 0);
+      const cat = (item.categorie || 'À vérifier').trim();
+
+      const existingIndex = newProdsList.findIndex(
+        (p) => p && p.nom && p.nom.trim().toLowerCase() === cleanNom.toLowerCase()
+      );
+
+      if (existingIndex >= 0) {
+        const p = newProdsList[existingIndex];
+        const oldQty = p.quantite_totale || 0;
+        const newQty = oldQty + qty;
+
+        newProdsList[existingIndex] = {
+          ...p,
+          quantite_totale: newQty,
+          bouteilles_vrac: (p.bouteilles_vrac || 0) + qty,
+          prix_achat_unitaire: pxAchat > 0 ? pxAchat : p.prix_achat_unitaire,
+          prix_vente_unitaire: pxVente > 0 ? pxVente : p.prix_vente_unitaire,
+          prix_vente_bouteille: pxVente > 0 ? pxVente : p.prix_vente_bouteille,
+          prix_achat_casier: pxAchat > 0 ? pxAchat * (p.bouteilles_par_casier || 12) : p.prix_achat_casier,
+        };
+        updatedCount++;
+
+        newMvtsList.push({
+          id: `mvt-${Date.now()}-${idx}`,
+          etablissement_id: etab.id,
+          produit_id: p.id,
+          type_mouvement: 'entree',
+          quantite_bouteilles: qty,
+          utilisateur_id: user.id,
+          note_motif: `Arrivage / Scan IA (${usageType})`,
+          sync_status: typeof navigator !== 'undefined' && !navigator.onLine ? 'pending_offline' : 'synced',
+          client_timestamp: nowIso,
+          created_at: nowIso,
+        });
+      } else {
+        const newProdId = `prod-${Date.now()}-${idx}`;
+        const isBoutique = etab.type_activite === 'boutique';
+        const newProd: Produit = {
+          id: newProdId,
+          etablissement_id: etab.id,
+          nom: cleanNom,
+          categorie: cat,
+          unite: isBoutique ? 'piece' : 'bouteille',
+          bouteilles_par_casier: 12,
+          bouteilles_vrac: isBoutique ? 0 : qty,
+          casiers_pleins: 0,
+          quantite_totale: qty,
+          seuil_alerte: 5,
+          prix_achat_unitaire: pxAchat,
+          prix_vente_unitaire: pxVente,
+          prix_vente_bouteille: pxVente,
+          prix_achat_casier: pxAchat * 12,
+          cout_achat_unitaire_cmp: pxAchat,
+          actif: true,
+          created_at: nowIso,
+        };
+        newProdsList.push(newProd);
+        addedCount++;
+
+        newMvtsList.push({
+          id: `mvt-${Date.now()}-${idx}`,
+          etablissement_id: etab.id,
+          produit_id: newProdId,
+          type_mouvement: 'entree',
+          quantite_bouteilles: qty,
+          utilisateur_id: user.id,
+          note_motif: `Création & Scan IA (${usageType})`,
+          sync_status: typeof navigator !== 'undefined' && !navigator.onLine ? 'pending_offline' : 'synced',
+          client_timestamp: nowIso,
+          created_at: nowIso,
+        });
+      }
+    });
+
+    this.saveProduits(newProdsList);
+
+    if (newMvtsList.length > 0) {
+      const allMvts = this.getAllMouvementsGlobal();
+      const updatedAllMvts = [...newMvtsList, ...allMvts];
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(updatedAllMvts));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    return { addedCount, updatedCount };
   },
 
   getAllProduitsGlobal(): Produit[] {

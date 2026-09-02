@@ -14,17 +14,62 @@ export default function PWAInstaller() {
   const [syncToast, setSyncToast] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
 
   useEffect(() => {
-    // 1. Enregistrement du Service Worker
+    let registrationRef: ServiceWorkerRegistration | null = null;
+
+    // Fonction de vérification silencieuse de nouvelle version du Service Worker
+    const checkSWUpdate = () => {
+      if (registrationRef) {
+        registrationRef.update().catch((err) => {
+          console.debug('[PWA] Vérification de mise à jour SW en arrière-plan:', err);
+        });
+      } else if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then((reg) => {
+          if (reg) {
+            registrationRef = reg;
+            reg.update().catch(() => {});
+          }
+        });
+      }
+    };
+
+    // 1. Enregistrement du Service Worker & Vérification automatique au démarrage
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
+          registrationRef = reg;
           console.log('[PWA] ServiceWorker enregistré avec succès:', reg.scope);
+          // Vérification immédiate dès l'ouverture de l'app
+          reg.update().catch(() => {});
         })
         .catch((err) => {
           console.warn('[PWA] Échec enregistrement ServiceWorker:', err);
         });
     }
+
+    // Déclencheur 1: Changement de visibilité (sortie de veille de la tablette / ouverture de l'app)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkSWUpdate();
+      }
+    };
+
+    // Déclencheur 2: Focus de la fenêtre / tablette
+    const handleWindowFocus = () => {
+      checkSWUpdate();
+    };
+
+    // Déclencheur 3: Événement personnalisé (ex: changement de code PIN)
+    const handleCustomUpdateCheck = () => {
+      checkSWUpdate();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('oeko-check-sw-update', handleCustomUpdateCheck);
+
+    // Déclencheur 4: Vérification périodique d'arrière-plan (toutes les 15 minutes)
+    const updateInterval = setInterval(checkSWUpdate, 15 * 60 * 1000);
 
     // 2. Détection du mode Plein Écran / Standalone
     const checkStandalone = () => {
@@ -50,11 +95,12 @@ export default function PWAInstaller() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // 5. Gestion statut Réseau & Synchronisation Automatique
+    // 5. Gestion statut Réseau & Synchronisation Automatique + Verification SW
     setIsOnline(navigator.onLine);
 
     const handleOnline = () => {
       setIsOnline(true);
+      checkSWUpdate();
       // Synchronisation automatique silencieuse
       try {
         const synced = offlineDB.syncOfflineQueue();
@@ -75,9 +121,13 @@ export default function PWAInstaller() {
     window.addEventListener('offline', handleOffline);
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('oeko-check-sw-update', handleCustomUpdateCheck);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(updateInterval);
     };
   }, []);
 

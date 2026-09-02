@@ -38,6 +38,7 @@ export default function BarSelectorModal({
   // Form State pour création d'un nouveau commerce œko
   const [typeActivite, setTypeActivite] = useState<TypeActivite>('boutique');
   const [nomCommerce, setNomCommerce] = useState('');
+  const [secteurBoutique, setSecteurBoutique] = useState('Vêtements & Mode');
   const [ville, setVille] = useState('Douala');
   const [adresse, setAdresse] = useState('');
   const [patronNom, setPatronNom] = useState('');
@@ -56,10 +57,12 @@ export default function BarSelectorModal({
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nomCommerce.trim() || !adresse.trim() || !patronNom.trim()) return;
+    if (typeActivite === 'boutique' && !secteurBoutique.trim()) return;
 
     const newEtab = offlineDB.createEtablissement({
       nom: nomCommerce.trim(),
       type_activite: typeActivite,
+      secteur_boutique: typeActivite === 'boutique' ? (secteurBoutique || 'Vêtements & Mode') : undefined,
       ville,
       adresse: adresse.trim(),
       patronNom: patronNom.trim(),
@@ -225,6 +228,51 @@ export default function BarSelectorModal({
                 </div>
               </div>
             </div>
+
+            {/* Champ spécifique Boutique: Que vendez-vous ? */}
+            {typeActivite === 'boutique' && (
+              <div className="p-4 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-3">
+                <label className="text-xs font-bold text-[#1B4332] block">
+                  2. Que vendez-vous principalement dans votre Boutique ? *
+                </label>
+                <p className="text-[11px] text-gray-600 font-medium">
+                  Cette information permettra à l'IA d'adapter la détection automatique de votre stock.
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: '👗 Vêtements & Mode', val: 'Vêtements & Mode' },
+                    { label: '📱 Téléphones & Électronique', val: 'Téléphones & Électronique' },
+                    { label: '💊 Pharmacie & Médicaments', val: 'Pharmacie & Médicaments' },
+                    { label: '🔌 Électroménager', val: 'Électroménager' },
+                    { label: '🛒 Alimentation générale', val: 'Alimentation générale' },
+                    { label: '👞 Chaussures & Maroquinerie', val: 'Chaussures & Maroquinerie' },
+                  ].map((chip) => (
+                    <button
+                      key={chip.val}
+                      type="button"
+                      onClick={() => setSecteurBoutique(chip.val)}
+                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all ${
+                        secteurBoutique === chip.val
+                          ? 'bg-[#1B4332] text-white shadow-md'
+                          : 'bg-white text-[#1B4332] border border-[#E2D5C3] hover:bg-[#E2D5C3]/40'
+                      }`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Ou précisez en texte libre (ex: Vêtements traditionnels, Pagne)..."
+                  value={secteurBoutique}
+                  onChange={(e) => setSecteurBoutique(e.target.value)}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  required
+                />
+              </div>
+            )}
 
             {/* Informations du commerce */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

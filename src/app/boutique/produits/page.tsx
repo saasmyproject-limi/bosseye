@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
-import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle } from 'lucide-react';
+import StockAiScannerModal from '@/components/StockAiScannerModal';
+import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { Produit, Etablissement, VarianteProduit } from '@/types';
 
@@ -12,6 +13,7 @@ export default function BoutiqueProduitsPage() {
   const [filterCategory, setFilterCategory] = useState<string>('tous');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAiScanOpen, setIsAiScanOpen] = useState(false);
 
   // Formulaire d'ajout d'article
   const [nom, setNom] = useState('');
@@ -170,13 +172,23 @@ export default function BoutiqueProduitsPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="py-3 px-5 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2 transition-transform active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nouvel Article</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAiScanOpen(true)}
+              className="py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 border border-[#E8A33D]"
+            >
+              <Sparkles className="w-4 h-4 text-[#E8A33D]" />
+              <span>📸 Saisie Rapide IA / CSV</span>
+            </button>
+
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="py-3 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2 transition-transform active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nouvel Article</span>
+            </button>
+          </div>
         </div>
 
         {/* Filtres et Recherche */}
@@ -501,6 +513,13 @@ export default function BoutiqueProduitsPage() {
             </form>
           </div>
         )}
+
+        {/* Modal Scan IA Stock */}
+        <StockAiScannerModal
+          isOpen={isAiScanOpen}
+          onClose={() => setIsAiScanOpen(false)}
+          onSuccess={loadData}
+        />
       </main>
     </div>
   );

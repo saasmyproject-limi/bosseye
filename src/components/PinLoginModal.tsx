@@ -38,6 +38,11 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
       }
       setPin('');
       setError('');
+
+      // Déclencheur silencieux de vérification de mise à jour SW à l'ouverture du modal PIN (changement d'utilisateur)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('oeko-check-sw-update'));
+      }
     }
   }, [isOpen]);
 
