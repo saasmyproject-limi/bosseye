@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { History, Plus, Minus, AlertTriangle, Search, Filter, RefreshCcw } from 'lucide-react';
-import Sidebar from '@/components/Sidebar';
+import AppLayout from '@/components/AppLayout';
 import { offlineDB } from '@/lib/offlineDB';
 import { MouvementStock } from '@/types';
 
@@ -45,10 +45,7 @@ export default function CommunMouvementsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex">
-      <Sidebar />
-
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pb-28 lg:pb-8 space-y-6">
+    <AppLayout>
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#E2D5C3]">
           <div>
@@ -163,7 +160,6 @@ export default function CommunMouvementsPage() {
             </table>
           </div>
         </div>
-      </main>
-    </div>
+    </AppLayout>
   );
 }

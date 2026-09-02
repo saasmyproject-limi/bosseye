@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Sidebar from '@/components/Sidebar';
+import AppLayout from '@/components/AppLayout';
 import StockAiScannerModal from '@/components/StockAiScannerModal';
 import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
@@ -154,10 +154,7 @@ export default function BoutiqueProduitsPage() {
   const editTauxMarge = editPrixVenteUnit > 0 ? (editMargeUnit / editPrixVenteUnit) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex flex-col lg:flex-row font-sans">
-      <Sidebar />
-
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pb-28 lg:pb-8 space-y-6">
+    <AppLayout>
         {/* Top Bar Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
           <div>
@@ -520,7 +517,6 @@ export default function BoutiqueProduitsPage() {
           onClose={() => setIsAiScanOpen(false)}
           onSuccess={loadData}
         />
-      </main>
-    </div>
+    </AppLayout>
   );
 }

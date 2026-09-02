@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Sidebar from '@/components/Sidebar';
+import AppLayout from '@/components/AppLayout';
 import { CreditCard, CheckCircle2, Zap, Lock, Calendar } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import Link from 'next/link';
@@ -58,10 +58,7 @@ export default function CommunPayerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex flex-col lg:flex-row font-sans">
-      <Sidebar />
-
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pb-28 lg:pb-8 space-y-6">
+    <AppLayout>
         {isServeuseOrNonPatron ? (
           <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-8 max-w-xl mx-auto text-center space-y-4 shadow-md mt-12">
             <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto text-3xl font-bold">
@@ -256,7 +253,6 @@ export default function CommunPayerPage() {
             </div>
           </>
         )}
-      </main>
-    </div>
+    </AppLayout>
   );
 }

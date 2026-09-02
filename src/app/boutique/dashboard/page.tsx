@@ -18,7 +18,7 @@ import {
   BarChart3,
   History
 } from 'lucide-react';
-import Sidebar from '@/components/Sidebar';
+import AppLayout from '@/components/AppLayout';
 import { offlineDB } from '@/lib/offlineDB';
 import { Etablissement, Utilisateur, Produit, MouvementStock, Facture, Reservation } from '@/types';
 
@@ -121,10 +121,7 @@ export default function BoutiqueDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] flex flex-col lg:flex-row font-sans">
-      <Sidebar />
-
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pb-28 lg:pb-8 space-y-6">
+    <AppLayout>
         {/* Banner statut abonnement */}
         {!['Serveuse', 'Caissière', 'Employé'].includes(currentUser?.role || '') && isTrialExpired && (
           <div className="p-4 rounded-2xl bg-red-100 border-2 border-red-300 text-red-950 flex items-center justify-between shadow-sm">
@@ -454,7 +451,6 @@ export default function BoutiqueDashboardPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </AppLayout>
   );
 }
