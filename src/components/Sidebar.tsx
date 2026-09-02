@@ -156,10 +156,11 @@ export default function Sidebar() {
       {/* Bouton Mobile Open */}
       <button
         onClick={() => setIsMobileOpen(true)}
-        className="lg:hidden fixed bottom-4 right-4 z-40 p-3.5 bg-[#1B4332] text-white rounded-2xl shadow-xl flex items-center gap-2 border border-[#E8A33D]"
+        className="lg:hidden fixed bottom-4 left-4 z-40 w-12 h-12 rounded-2xl bg-[#1B4332] text-white shadow-xl flex items-center justify-center border border-[#E8A33D] hover:bg-[#2D6A4F] active:scale-95 transition-all"
+        title="Menu œko"
+        aria-label="Menu œko"
       >
         <Menu className="w-6 h-6" />
-        <span className="font-bold text-xs">Menu œko</span>
       </button>
 
       {/* Backdrop Mobile */}
