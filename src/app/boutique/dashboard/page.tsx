@@ -225,6 +225,82 @@ export default function BoutiqueDashboardPage() {
           </div>
         </div>
 
+        {/* Section Répartition du Stock par Catégorie et par Article */}
+        <div className="p-5 rounded-3xl bg-white border border-[#E2D5C3] shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-[#1B4332]" />
+              <h2 className="font-serif font-black text-lg text-[#1B4332]">
+                Répartition du Stock par Catégorie & Articles
+              </h2>
+            </div>
+            <span className="text-xs font-bold text-gray-500">
+              {Object.keys(
+                produits.reduce((acc, p) => {
+                  acc[p.categorie || 'Autres'] = true;
+                  return acc;
+                }, {} as Record<string, boolean>)
+              ).length}{' '}
+              catégories actives
+            </span>
+          </div>
+
+          {produits.length === 0 ? (
+            <div className="p-6 text-center bg-[#FBF7EF] rounded-2xl border border-dashed border-[#E2D5C3]">
+              <p className="text-sm font-bold text-gray-600">Aucun produit enregistré en stock pour le moment.</p>
+              <Link
+                href="/boutique/produits"
+                className="inline-block mt-2 text-xs font-black text-[#B8442C] underline"
+              >
+                + Saisir du stock maintenant
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(
+                produits.reduce((acc, p) => {
+                  const cat = p.categorie || 'Autres';
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(p);
+                  return acc;
+                }, {} as Record<string, Produit[]>)
+              ).map(([catNom, catProds]) => {
+                const totalPiecesCat = catProds.reduce((sum, p) => sum + (p.quantite_totale || 0), 0);
+                return (
+                  <div key={catNom} className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]/70">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#B8442C]"></span>
+                        <h3 className="font-serif font-black text-sm text-[#1B4332]">{catNom}</h3>
+                      </div>
+                      <span className="font-black text-xs text-[#1B4332] bg-white px-2.5 py-0.5 rounded-full border border-[#E2D5C3]">
+                        {totalPiecesCat} pcs
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                      {catProds.map((prod) => (
+                        <div key={prod.id} className="flex justify-between items-center text-xs">
+                          <span className="font-medium text-gray-700 truncate max-w-[170px]">{prod.nom}</span>
+                          <span
+                            className={`font-bold px-2 py-0.5 rounded ${
+                              prod.quantite_totale <= prod.seuil_alerte
+                                ? 'bg-red-100 text-red-800 font-black'
+                                : 'bg-white text-[#1B4332] border border-[#E2D5C3]'
+                            }`}
+                          >
+                            {prod.quantite_totale} en stock
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Section Actions Rapides & Stock Alerte */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Formulaire d'Ajustement Rapide de Stock Boutique */}

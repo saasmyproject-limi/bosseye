@@ -43,7 +43,7 @@ export default function StockAiScannerModal({
 }: StockAiScannerModalProps) {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [activeTab, setActiveTab] = useState<'photo' | 'excel'>('photo');
-  const [usageType, setUsageType] = useState<'reapprovisionnement' | 'initial' | 'physique'>('reapprovisionnement');
+  const [usageType, setUsageType] = useState<'reapprovisionnement' | 'initial'>('reapprovisionnement');
 
   // Step 1: Upload state
   const [images, setImages] = useState<string[]>([]);
@@ -345,13 +345,10 @@ export default function StockAiScannerModal({
             </div>
             <div>
               <h2 className="font-serif font-black text-lg sm:text-xl text-[#1B4332] flex items-center gap-2">
-                <span>Saisie Rapide de Stock IA</span>
-                <span className="text-[10px] bg-[#E8A33D] text-[#0F291E] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Claude Vision
-                </span>
+                <span>📸 Inventaire & Arrivages de Stock</span>
               </h2>
               <p className="text-xs text-gray-600 font-bold">
-                Scan de reçu/cahier d'inventaire & Import Excel/CSV
+                Scan de reçu / bon de livraison & Import Excel / CSV
               </p>
             </div>
           </div>
@@ -375,7 +372,7 @@ export default function StockAiScannerModal({
               </span>
             </div>
             <span className="hidden sm:inline-block text-[11px] bg-[#2D6A4F] text-emerald-200 px-2 py-0.5 rounded-lg">
-              Adaptation IA Active
+              Reconnaissance Automatique
             </span>
           </div>
         )}
@@ -438,7 +435,7 @@ export default function StockAiScannerModal({
                   <label className="text-xs font-bold text-[#1B4332] block mb-2">
                     Contexte de la saisie *
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setUsageType('reapprovisionnement')}
@@ -470,23 +467,6 @@ export default function StockAiScannerModal({
                       </h4>
                       <p className="text-[10px] opacity-80 font-medium">
                         Cahier d'inventaire papier ou stock de démarrage lors de l'inscription.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setUsageType('physique')}
-                      className={`p-3 rounded-2xl border-2 text-left space-y-1 transition-all ${
-                        usageType === 'physique'
-                          ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                          : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3]'
-                      }`}
-                    >
-                      <h4 className="font-bold text-xs flex items-center gap-1.5">
-                        <span>📸 Étagère / Casiers</span>
-                      </h4>
-                      <p className="text-[10px] opacity-80 font-medium">
-                        Photo directe des produits physiques pour estimation visuelle rapide.
                       </p>
                     </button>
                   </div>
@@ -551,12 +531,12 @@ export default function StockAiScannerModal({
                   {isAnalyzing ? (
                     <>
                       <RefreshCcw className="w-5 h-5 animate-spin" />
-                      <span>Analyse de l'image en cours par Claude IA Vision...</span>
+                      <span>Détection des articles en cours...</span>
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-5 h-5 text-white" />
-                      <span>Analyser avec l'IA Claude Vision ➔</span>
+                      <Sparkles className="w-5 h-5 text-[#E8A33D]" />
+                      <span>Détecter les articles ➔</span>
                     </>
                   )}
                 </button>

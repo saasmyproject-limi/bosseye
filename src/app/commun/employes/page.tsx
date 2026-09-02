@@ -140,8 +140,14 @@ export default function CommunEmployesPage() {
                 <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
                   <div className="flex justify-between items-center font-bold text-gray-700">
                     <span>Code PIN d'accès :</span>
-                    <span className="font-black text-[#1B4332] bg-white px-2 py-0.5 rounded border border-[#E2D5C3]">
-                      🔑 {u.pin_code}
+                    <span
+                      className={`font-black px-2 py-0.5 rounded border ${
+                        canAddEmployee || u.id === currentUser?.id
+                          ? 'text-[#1B4332] bg-white border-[#E2D5C3]'
+                          : 'text-gray-500 bg-gray-100 border-gray-300 font-mono'
+                      }`}
+                    >
+                      {canAddEmployee || u.id === currentUser?.id ? `🔑 ${u.pin_code}` : '🔑 •••• (Confidentiel)'}
                     </span>
                   </div>
                   {u.telephone && (
