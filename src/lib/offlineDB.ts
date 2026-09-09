@@ -20,6 +20,10 @@ import {
   StatutLivraison,
   Reservation,
   LigneReservation,
+  ClotureJournaliere,
+  ClotureMensuelle,
+  PalierTarifaire,
+  ExemplaireArticle,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
@@ -50,6 +54,9 @@ const KEYS = {
   REMBOURSEMENTS: 'oeko_remboursements',
   CHARGES: 'oeko_charges',
   RESERVATIONS: 'oeko_reservations',
+  CLOTURES_JOURNALIERES: 'oeko_clotures_journalieres',
+  CLOTURES_MENSUELLES: 'oeko_clotures_mensuelles',
+  PALIERS_TARIFAIRES: 'oeko_paliers_tarifaires',
   OFFLINE_QUEUE: 'oeko_offline_queue',
   RESET_ZERO: 'oeko_db_reset_zero',
 };
@@ -895,6 +902,22 @@ export const offlineDB = {
     }
   },
 
+  getRemboursementsGlobal(): RemboursementCredit[] {
+    try {
+      if (typeof window === 'undefined') return SEED_REMBOURSEMENTS;
+      const data = localStorage.getItem(KEYS.REMBOURSEMENTS);
+      return data ? JSON.parse(data) : SEED_REMBOURSEMENTS;
+    } catch {
+      return SEED_REMBOURSEMENTS;
+    }
+  },
+
+  getRemboursements(): RemboursementCredit[] {
+    const etab = this.getEtablissement();
+    const all = this.getRemboursementsGlobal();
+    return all.filter((r) => r && r.etablissement_id === etab.id);
+  },
+
   createFacture(params: {
     lignes: Array<{
       produit_id: string;
@@ -1409,4 +1432,278 @@ export const offlineDB = {
     } catch (e) { console.error(e); }
     return syncedCount;
   },
+
+  // --- GÉNÉRATEUR D'IDENTIFIANT UNIQUE ARTICLE (MODE À L'UNITÉ) ---
+  generateUniqueArticleCode(): string {
+    const randomNum = Math.floor(100000 + Math.random() * 900000);
+    return `OKO-${randomNum}`;
+  },
+
+  // --- CLÔTURES JOURNALIÈRES FIGÉES ---
+  getCloturesJournalieres(): ClotureJournaliere[] {
+    const etab = this.getEtablissement();
+    try {
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.CLOTURES_JOURNALIERES);
+      const all: ClotureJournaliere[] = data ? JSON.parse(data) : [];
+      return all.filter((c) => c && c.etablissement_id === etab.id);
+    } catch { return []; }
+  },
+
+  cloturerJournee(dateTarget?: string, createdByNom?: string): ClotureJournaliere {
+    const etab = this.getEtablissement();
+    const user = this.getCurrentUser();
+    const dateStr = dateTarget || new Date().toISOString().split('T')[0];
+
+    const factures = this.getFactures().filter((f) => f.created_at.startsWith(dateStr) && f.statut !== 'annulee');
+    const mvts = this.getMouvements().filter((m) => m.created_at.startsWith(dateStr) && m.type_mouvement === 'sortie');
+    const rembs = this.getRemboursements().filter((r) => r.created_at.startsWith(dateStr));
+
+    const total_ventes = factures.reduce((acc, f) => acc + (f.montant_total || 0), 0);
+    const total_encaisse_cash = factures.filter((f) => f.mode_paiement === 'cash').reduce((acc, f) => acc + (f.montant_paye || 0), 0);
+    const total_encaisse_om = factures.filter((f) => f.mode_paiement === 'orange_money').reduce((acc, f) => acc + (f.montant_paye || 0), 0);
+    const total_encaisse_momo = factures.filter((f) => f.mode_paiement === 'mtn_momo').reduce((acc, f) => acc + (f.montant_paye || 0), 0);
+
+    const remb_cash = rembs.filter((r) => r.methode === 'cash').reduce((acc, r) => acc + r.montant_regle, 0);
+    const remb_om = rembs.filter((r) => r.methode === 'orange_money').reduce((acc, r) => acc + r.montant_regle, 0);
+    const remb_momo = rembs.filter((r) => r.methode === 'mtn_momo').reduce((acc, r) => acc + r.montant_regle, 0);
+
+    let quantite_stock_sorti = 0;
+    let valeur_stock_sorti = 0;
+    let marge_brute_cmp = 0;
+
+    factures.forEach((f) => {
+      if (f.lignes) {
+        f.lignes.forEach((l) => {
+          quantite_stock_sorti += l.quantite_bouteilles || 1;
+          valeur_stock_sorti += l.sous_total_cout || 0;
+          marge_brute_cmp += l.marge_brute || 0;
+        });
+      }
+    });
+
+    const creances_accordees_jour = factures.reduce((acc, f) => acc + (f.montant_restant || 0), 0);
+    const creances_recouvrees_jour = rembs.reduce((acc, r) => acc + r.montant_regle, 0);
+
+    const newCloture: ClotureJournaliere = {
+      id: `cloture-j-${dateStr}-${Date.now()}`,
+      etablissement_id: etab.id,
+      date_cloture: dateStr,
+      total_ventes,
+      total_encaisse_cash: total_encaisse_cash + remb_cash,
+      total_encaisse_om: total_encaisse_om + remb_om,
+      total_encaisse_momo: total_encaisse_momo + remb_momo,
+      valeur_stock_sorti,
+      quantite_stock_sorti,
+      marge_brute_cmp,
+      creances_accordees_jour,
+      creances_recouvrees_jour,
+      fige_le: new Date().toISOString(),
+      cree_par: createdByNom || user?.nom || 'Patron',
+    };
+
+    try {
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem(KEYS.CLOTURES_JOURNALIERES);
+        const all: ClotureJournaliere[] = data ? JSON.parse(data) : [];
+        const existingIndex = all.findIndex((c) => c.etablissement_id === etab.id && c.date_cloture === dateStr);
+        if (existingIndex >= 0) all[existingIndex] = newCloture;
+        else all.unshift(newCloture);
+        localStorage.setItem(KEYS.CLOTURES_JOURNALIERES, JSON.stringify(all));
+      }
+    } catch (e) { console.error(e); }
+
+    return newCloture;
+  },
+
+  // --- CLÔTURES MENSUELLES ---
+  getCloturesMensuelles(): ClotureMensuelle[] {
+    const etab = this.getEtablissement();
+    try {
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.CLOTURES_MENSUELLES);
+      const all: ClotureMensuelle[] = data ? JSON.parse(data) : [];
+      return all.filter((c) => c && c.etablissement_id === etab.id);
+    } catch { return []; }
+  },
+
+  cloturerMois(moisAnneeTarget?: string, createdByNom?: string): ClotureMensuelle {
+    const etab = this.getEtablissement();
+    const user = this.getCurrentUser();
+    const moisAnnee = moisAnneeTarget || new Date().toISOString().slice(0, 7); // YYYY-MM
+
+    const factures = this.getFactures().filter((f) => f.created_at.startsWith(moisAnnee) && f.statut !== 'annulee');
+    const charges = this.getCharges().filter((c) => c.date.startsWith(moisAnnee));
+
+    const total_ventes = factures.reduce((acc, f) => acc + (f.montant_total || 0), 0);
+    let cout_marchandises_vendues = 0;
+    let marge_brute_cmp = 0;
+
+    factures.forEach((f) => {
+      if (f.lignes) {
+        f.lignes.forEach((l) => {
+          cout_marchandises_vendues += l.sous_total_cout || 0;
+          marge_brute_cmp += l.marge_brute || 0;
+        });
+      }
+    });
+
+    const total_charges = charges.reduce((acc, c) => acc + c.montant, 0);
+    const resultat_net = marge_brute_cmp - total_charges;
+
+    const newCloture: ClotureMensuelle = {
+      id: `cloture-m-${moisAnnee}-${Date.now()}`,
+      etablissement_id: etab.id,
+      mois_annee: moisAnnee,
+      total_ventes,
+      cout_marchandises_vendues,
+      marge_brute_cmp,
+      total_charges,
+      resultat_net,
+      fige_le: new Date().toISOString(),
+      cree_par: createdByNom || user?.nom || 'Patron',
+    };
+
+    try {
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem(KEYS.CLOTURES_MENSUELLES);
+        const all: ClotureMensuelle[] = data ? JSON.parse(data) : [];
+        const existingIndex = all.findIndex((c) => c.etablissement_id === etab.id && c.mois_annee === moisAnnee);
+        if (existingIndex >= 0) all[existingIndex] = newCloture;
+        else all.unshift(newCloture);
+        localStorage.setItem(KEYS.CLOTURES_MENSUELLES, JSON.stringify(all));
+      }
+    } catch (e) { console.error(e); }
+
+    return newCloture;
+  },
+
+  // --- PALIERS TARIFAIRES ---
+  getPaliersTarifaires(): PalierTarifaire[] {
+    const defaultPaliers: PalierTarifaire[] = [
+      {
+        id: 'palier-1',
+        nom: 'Débutant (Jusqu\'à 100 articles distincts)',
+        articles_distincts_max: 100,
+        tarif_mensuel: 5000,
+        description: 'Pour petites boutiques et commerces de quartier.',
+      },
+      {
+        id: 'palier-2',
+        nom: 'Pro (Jusqu\'à 500 articles distincts)',
+        articles_distincts_max: 500,
+        tarif_mensuel: 10000,
+        description: 'Pour boutiques de prêt-à-porter et magasins d\'électronique.',
+      },
+      {
+        id: 'palier-3',
+        nom: 'Illimité (Plus de 500 articles distincts)',
+        articles_distincts_max: 999999,
+        tarif_mensuel: 15000,
+        description: 'Pour grandes boutiques, pharmacies et superettes.',
+      },
+    ];
+
+    try {
+      if (typeof window === 'undefined') return defaultPaliers;
+      const data = localStorage.getItem(KEYS.PALIERS_TARIFAIRES);
+      return data ? JSON.parse(data) : defaultPaliers;
+    } catch { return defaultPaliers; }
+  },
+
+  savePaliersTarifaires(paliers: PalierTarifaire[]) {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.PALIERS_TARIFAIRES, JSON.stringify(paliers));
+      }
+    } catch (e) { console.error(e); }
+  },
+
+  checkStockTierOverflow(etabTarget?: Etablissement): {
+    distinctCount: number;
+    currentTier: PalierTarifaire;
+    nextTier?: PalierTarifaire;
+    isOverflow: boolean;
+  } {
+    const etab = etabTarget || this.getEtablissement();
+    const prods = this.getProduits();
+    const distinctCount = prods.length;
+    const paliers = this.getPaliersTarifaires();
+
+    let currentTier = paliers[0];
+    let nextTier: PalierTarifaire | undefined = undefined;
+
+    if (distinctCount <= 100) {
+      currentTier = paliers[0];
+      nextTier = paliers[1];
+    } else if (distinctCount <= 500) {
+      currentTier = paliers[1];
+      nextTier = paliers[2];
+    } else {
+      currentTier = paliers[2] || paliers[paliers.length - 1];
+    }
+
+    const isOverflow = distinctCount > currentTier.articles_distincts_max;
+
+    return {
+      distinctCount,
+      currentTier,
+      nextTier: isOverflow ? nextTier : undefined,
+      isOverflow,
+    };
+  },
+
+  // --- STATUTS ET RETARDS D'ABONNEMENT ---
+  isRestrictedMode(etabTarget?: Etablissement): boolean {
+    const etab = etabTarget || this.getEtablissement();
+    if (etab.statut_abonnement === 'en_retard' || etab.statut_abonnement === 'expire') return true;
+    if (etab.statut_abonnement === 'essai') {
+      return this.isTrialExpired(etab);
+    }
+    return false;
+  },
+
+  isSuspendedMode(etabTarget?: Etablissement): boolean {
+    const etab = etabTarget || this.getEtablissement();
+    if (etab.statut_abonnement === 'suspendu') return true;
+    const now = new Date().getTime();
+    const dueTime = new Date(etab.date_prochain_paiement || etab.date_fin_essai).getTime();
+    const graceDays = etab.delai_grace_jours || 5;
+    const suspendTime = dueTime + (graceDays + 15) * 24 * 3600 * 1000;
+    return now > suspendTime && etab.statut_abonnement !== 'actif';
+  },
+
+  // --- MISE À JOUR STATUT LIVRAISON / COMPTABLE ---
+  updateCommandeStatus(
+    commandeId: string,
+    newStatus: StatutLivraison,
+    userNom?: string
+  ): boolean {
+    const allCmds = this.getAllCommandesGlobal();
+    const cmdIndex = allCmds.findIndex((c) => c.id === commandeId);
+    if (cmdIndex < 0) return false;
+
+    const currentCmd = allCmds[cmdIndex];
+    const user = this.getCurrentUser();
+    const updatedCmd: CommandeEnLigne = {
+      ...currentCmd,
+      statut: newStatus,
+    };
+
+    if (newStatus === 'paiement_valide') {
+      updatedCmd.valide_par_comptable_id = user?.id;
+      updatedCmd.valide_par_comptable_nom = userNom || user?.nom || 'Comptable';
+    } else if (newStatus === 'en_livraison') {
+      updatedCmd.livre_par_id = user?.id;
+      updatedCmd.livre_par_nom = userNom || user?.nom || 'Livreur';
+    }
+
+    allCmds[cmdIndex] = updatedCmd;
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(allCmds));
+    } catch (e) { console.error(e); }
+
+    return true;
+  },
 };
+

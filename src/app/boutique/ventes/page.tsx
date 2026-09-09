@@ -229,7 +229,7 @@ export default function BoutiqueVentesPage() {
         prix_unitaire: item.prix_unitaire,
       })),
       montant_total: totalCmd,
-      statut: 'en_attente',
+      statut: 'en_attente_paiement',
     });
 
     setIsNewDeliveryModalOpen(false);
@@ -426,52 +426,117 @@ export default function BoutiqueVentesPage() {
               <div className="p-8 text-center bg-white rounded-3xl border border-[#E2D5C3] text-gray-500 text-xs font-medium space-y-2">
                 <Truck className="w-10 h-10 text-gray-400 mx-auto" />
                 <p className="font-serif font-bold text-base text-[#1B4332]">Aucune commande en livraison</p>
-                <p>Enregistrez les commandes d'expéditions reçues sur votre WhatsApp.</p>
+                <p>Enregistrez les commandes d'expéditions reçues sur votre WhatsApp ou téléphone.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {commandesLigne.map((cmd) => (
-                  <div key={cmd.id} className="bg-white border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
-                    <div className="flex items-start justify-between pb-2 border-b border-[#E2D5C3]">
-                      <div>
-                        <h4 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom || 'Client'}</h4>
-                        <p className="text-xs text-gray-500 font-bold">📱 {cmd.client_telephone || 'Non indiqué'}</p>
-                      </div>
-                      <span className="text-[10px] font-black uppercase bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full">
-                        {cmd.statut}
-                      </span>
-                    </div>
+                {commandesLigne.map((cmd) => {
+                  const isComptableActive = etablissement?.comptable_actif || currentUser?.role === 'Comptable';
+                  const isComptable = currentUser?.role === 'Comptable' || currentUser?.role === 'Patron' || currentUser?.role === 'Patronne';
 
-                    <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
-                      <span className="text-[10px] font-bold text-gray-400 block uppercase">Adresse de Livraison :</span>
-                      <p className="font-bold text-[#1B4332]">{cmd.adresse_livraison || 'Au comptoir'}</p>
-                    </div>
-
-                    <div className="space-y-1 text-xs">
-                      {cmd.lignes.map((l, i) => (
-                        <div key={i} className="flex justify-between font-bold text-[#1B4332]">
-                          <span>{l.quantite}x {l.nom_produit}</span>
-                          <span>{(l.quantite * l.prix_unitaire).toLocaleString('fr-FR')} F</span>
+                  return (
+                    <div key={cmd.id} className="bg-white border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
+                      <div className="flex items-start justify-between pb-2 border-b border-[#E2D5C3]">
+                        <div>
+                          <h4 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom || 'Client'}</h4>
+                          <p className="text-xs text-gray-500 font-bold">📱 {cmd.client_telephone || 'Non indiqué'}</p>
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="pt-2 border-t border-[#E2D5C3] flex items-center justify-between">
-                      <span className="font-serif font-black text-sm text-[#1B4332]">
-                        Total : {cmd.montant_total.toLocaleString('fr-FR')} F
-                      </span>
-
-                      {cmd.statut !== 'livree_payee' && (
-                        <button
-                          onClick={() => handleUpdateDeliveryStatus(cmd.id, 'livree_payee')}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white font-bold text-xs"
+                        <span
+                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                            cmd.statut === 'livree_payee'
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : cmd.statut === 'en_livraison'
+                              ? 'bg-blue-100 text-blue-900'
+                              : cmd.statut === 'paiement_valide'
+                              ? 'bg-purple-100 text-purple-900'
+                              : 'bg-amber-100 text-amber-900'
+                          }`}
                         >
-                          Marquer Livrée & Payée
-                        </button>
-                      )}
+                          {cmd.statut === 'en_attente_paiement'
+                            ? '⏳ En Attente Paiement'
+                            : cmd.statut === 'paiement_valide'
+                            ? '✅ Paiement Validé'
+                            : cmd.statut === 'en_livraison'
+                            ? '🚚 En Livraison'
+                            : '🎉 Livrée & Payée'}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
+                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Adresse de Livraison :</span>
+                        <p className="font-bold text-[#1B4332]">{cmd.adresse_livraison || 'Au comptoir'}</p>
+                      </div>
+
+                      {/* Traçabilité des rôles */}
+                      <div className="p-2.5 bg-gray-50 rounded-xl text-[10px] space-y-1 text-gray-600 font-medium">
+                        <p>👤 Pris par : <strong className="text-[#1B4332]">{cmd.pris_par_nom || 'Vendeur'}</strong></p>
+                        {cmd.valide_par_comptable_nom && (
+                          <p>💳 Paiement validé par : <strong className="text-purple-900">{cmd.valide_par_comptable_nom}</strong></p>
+                        )}
+                        {cmd.livre_par_nom && (
+                          <p>🚚 En cours / Livré par : <strong className="text-blue-900">{cmd.livre_par_nom}</strong></p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1 text-xs">
+                        {cmd.lignes.map((l, i) => (
+                          <div key={i} className="flex justify-between font-bold text-[#1B4332]">
+                            <span>{l.quantite}x {l.nom_produit}</span>
+                            <span>{(l.quantite * l.prix_unitaire).toLocaleString('fr-FR')} F</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Actions de changement de statut selon rôle */}
+                      <div className="pt-2 border-t border-[#E2D5C3] space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-serif font-black text-sm text-[#1B4332]">
+                            Total : {cmd.montant_total.toLocaleString('fr-FR')} F
+                          </span>
+                        </div>
+
+                        {cmd.statut === 'en_attente_paiement' && (
+                          <button
+                            onClick={() => {
+                              offlineDB.updateCommandeStatus(cmd.id, 'paiement_valide', currentUser?.nom);
+                              loadData();
+                            }}
+                            className="w-full py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Valider Paiement (Comptable) ➔</span>
+                          </button>
+                        )}
+
+                        {cmd.statut === 'paiement_valide' && (
+                          <button
+                            onClick={() => {
+                              offlineDB.updateCommandeStatus(cmd.id, 'en_livraison', currentUser?.nom);
+                              loadData();
+                            }}
+                            className="w-full py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                            <span>Passer en Livraison ➔</span>
+                          </button>
+                        )}
+
+                        {cmd.statut === 'en_livraison' && (
+                          <button
+                            onClick={() => {
+                              offlineDB.updateCommandeStatus(cmd.id, 'livree_payee', currentUser?.nom);
+                              loadData();
+                            }}
+                            className="w-full py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Marquer Livrée & Solde Encaisseur ➔</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

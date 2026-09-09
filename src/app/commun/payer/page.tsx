@@ -97,11 +97,13 @@ export default function CommunPayerPage() {
               <div className="p-5 rounded-3xl bg-red-100 border-2 border-red-300 text-red-950 space-y-2">
                 <div className="flex items-center gap-2">
                   <Lock className="w-5 h-5 text-red-700" />
-                  <h3 className="font-serif font-black text-lg">Période d'essai de 7 jours expirée !</h3>
+                  <h3 className="font-serif font-black text-lg">Mode Restreint — Abonnement à Régulariser !</h3>
                 </div>
                 <p className="text-xs font-bold leading-relaxed">
-                  Votre période d'essai gratuit de 7 jours est arrivée à échéance. Veuillez effectuer le paiement mensuel de{' '}
-                  <strong className="text-red-900 font-black">{tarifMensuel.toLocaleString('fr-FR')} FCFA</strong> via Mobile Money ci-dessous pour débloquer immédiatement l'application.
+                  Votre période d'essai ou d'abonnement est arrivée à échéance. L'application est actuellement en mode restreint (enregistrement de nouvelles ventes bloqué, consultation de l'historique et du stock autorisée). Vos données sont <strong className="underline">conservées en lieu sûr et ne seront jamais supprimées</strong>.
+                </p>
+                <p className="text-xs font-black text-red-900">
+                  Réglez votre abonnement de {tarifMensuel.toLocaleString('fr-FR')} FCFA ci-dessous via Orange Money ou MTN MoMo pour réactiver l'enregistrement des ventes.
                 </p>
               </div>
             ) : daysLeft <= 2 ? (
@@ -109,8 +111,8 @@ export default function CommunPayerPage() {
                 <div className="flex items-center gap-3">
                   <Zap className="w-6 h-6 text-[#E8A33D] shrink-0" />
                   <div>
-                    <h4 className="font-bold text-sm">Rappel Expiration Imminente !</h4>
-                    <p className="text-xs">Il vous reste <strong>{daysLeft} jour(s)</strong> d'essai gratuit. Pensez à renouveler dès maintenant.</p>
+                    <h4 className="font-bold text-sm">Rappel Préventif Échéance Imminente</h4>
+                    <p className="text-xs">Il vous reste <strong>{daysLeft} jour(s)</strong> avant votre prochaine échéance. Votre commerce reste pleinement fonctionnel.</p>
                   </div>
                 </div>
               </div>

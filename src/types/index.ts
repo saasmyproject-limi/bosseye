@@ -2,27 +2,37 @@ export type TypeActivite = 'bar' | 'snack' | 'boutique';
 export type TypeEtablissement = TypeActivite | 'snack_bar' | 'lounge'; // Rétrocompatibilité
 
 export type RoleUtilisateur =
-  | 'Patron'      // Lecture seule à distance (Snack) ou accès complet
-  | 'Patronne'    // Accès complet (Boutique / Bar)
-  | 'Directeur'   // Accès complet sur site (Snack)
+  | 'Patron'      // Lecture seule à distance ou accès complet
+  | 'Patronne'    // Accès complet
+  | 'Directeur'   // Accès complet sur site
   | 'Gérant'      // Accès gérance
-  | 'Caissière'   // Encaissement sur sa propre caisse (Snack)
-  | 'Serveuse'    // Prise de commande & service (Bar / Snack)
-  | 'Employé';    // Vente & stock sans marges/rapports globaux (Boutique)
+  | 'Caissière'   // Encaissement sur sa propre caisse
+  | 'Serveuse'    // Prise de commande & service
+  | 'Employé'     // Vente & stock sans marges/rapports globaux
+  | 'Comptable';   // Validation des paiements de commandes avant livraison sans accès direct stock/prix
 
+export type ModeSuiviStock = 'quantite' | 'unite_serie' | 'lot_pharmacie';
 export type TypeMouvement = 'entree' | 'sortie' | 'casse_perte';
-export type StatutAbonnement = 'essai' | 'actif' | 'expire';
+export type StatutAbonnement = 'essai' | 'actif' | 'en_retard' | 'suspendu' | 'expire';
 export type MethodePaiement = 'Orange Money' | 'MTN MoMo';
 export type ModePaiementVente = 'cash' | 'orange_money' | 'mtn_momo' | 'credit' | 'mixte';
 export type StatutFacture = 'payee' | 'credit_encours' | 'annulee';
 export type StatutTransaction = 'ouverte' | 'en_attente_caisse' | 'payee' | 'annulee';
-export type StatutLivraison = 'en_attente' | 'en_livraison' | 'livree_payee' | 'annulee';
+export type StatutLivraison = 'en_attente_paiement' | 'paiement_valide' | 'en_livraison' | 'livree_payee' | 'annulee';
 
 export const TARIFS_ABONNEMENT: Record<TypeActivite, number> = {
   boutique: 5000,
   bar: 5000,
   snack: 10000,
 };
+
+export interface PalierTarifaire {
+  id: string;
+  nom: string;
+  articles_distincts_max: number; // Ex: 100, 500, 999999
+  tarif_mensuel: number; // Ex: 5000, 10000, 15000 FCFA
+  description: string;
+}
 
 export interface Etablissement {
   id: string;
@@ -33,11 +43,16 @@ export interface Etablissement {
   ville: string;
   adresse: string;
   telephone?: string;
+  email_patron?: string;
+  mot_de_passe_patron?: string;
   plan: 'Basique' | 'Premium';
   statut_abonnement: StatutAbonnement;
+  delai_grace_jours?: number; // Défaut 3-5 jours
   date_fin_essai: string; // ISO String (7 jours pour œko)
   date_prochain_paiement: string; // ISO String
   tarif_mensuel: number; // 5000 ou 10000 FCFA
+  palier_actuel_id?: string;
+  comptable_actif?: boolean;
   created_at?: string;
 }
 
@@ -48,6 +63,7 @@ export interface Utilisateur {
   role: RoleUtilisateur;
   pin_code: string; // PIN à 4 chiffres (ex: "1234")
   telephone?: string;
+  email?: string;
   photo_url?: string | null;
   caisse_id?: string; // Si rôle Caissière
   actif: boolean;
@@ -75,16 +91,29 @@ export interface VarianteProduit {
   prix_vente_override?: number;
 }
 
+export interface ExemplaireArticle {
+  id: string;
+  produit_id: string;
+  identifiant_unique: string; // Ex: OKO-000452, IMEI, S/N
+  numero_lot?: string;
+  date_peremption?: string;
+  prix_achat_specifique?: number;
+  statut: 'en_stock' | 'vendu' | 'reserve' | 'perdu';
+  date_vente?: string;
+}
+
 export interface Produit {
   id: string;
   etablissement_id: string;
   nom: string;
-  categorie: string; // Bière, Soft, Vêtements, Chaussures, Plats
+  categorie: string; // Vêtements, Électronique, Pharmacie, etc.
   unite: 'bouteille' | 'casier' | 'piece' | 'unite';
+  mode_suivi?: ModeSuiviStock; // 'quantite' | 'unite_serie' | 'lot_pharmacie'
+  champs_specifiques?: Record<string, any>; // Taille, couleur, matière, marque, modèle, IMEI, dosage, lot, garantie, etc.
   casiers_pleins?: number;
   bouteilles_vrac?: number;
   bouteilles_par_casier?: number;
-  quantite_totale: number; // Générique pour bouteilles ou pièces
+  quantite_totale: number; // Quantité globale ou somme des exemplaires
   seuil_alerte: number;
   prix_achat_casier?: number;
   prix_vente_bouteille?: number;
@@ -92,6 +121,7 @@ export interface Produit {
   prix_vente_unitaire?: number;
   cout_achat_unitaire_cmp: number;
   variantes?: VarianteProduit[]; // Déclinaisons taille/couleur pour boutique
+  exemplaires?: ExemplaireArticle[]; // Exemplaires physiques pour suivi à l'unité (IMEI, OKO-code, etc.)
   actif: boolean;
   created_at?: string;
 }
@@ -104,9 +134,16 @@ export interface CommandeEnLigne {
   client_telephone: string;
   adresse_livraison: string;
   statut: StatutLivraison;
+  pris_par_id?: string;
+  pris_par_nom?: string;
+  valide_par_comptable_id?: string;
+  valide_par_comptable_nom?: string;
+  livre_par_id?: string;
+  livre_par_nom?: string;
   lignes: Array<{
     produit_id: string;
     variante_id?: string;
+    exemplaire_id?: string;
     nom_produit: string;
     detail_variante?: string;
     quantite: number;
@@ -122,6 +159,7 @@ export interface MouvementStock {
   etablissement_id: string;
   produit_id: string;
   variante_id?: string;
+  exemplaire_id?: string;
   type_mouvement: TypeMouvement;
   quantite_bouteilles: number;
   utilisateur_id: string;
@@ -133,6 +171,7 @@ export interface MouvementStock {
   // Joins pour l'affichage visuel
   produit?: Produit;
   variante?: VarianteProduit;
+  exemplaire?: ExemplaireArticle;
   utilisateur?: Utilisateur;
 }
 
@@ -151,8 +190,9 @@ export interface LigneTransaction {
   transaction_id: string;
   produit_id: string;
   variante_id?: string;
+  exemplaire_id?: string;
   nom_produit: string;
-  detail_variante?: string; // Ex: "Taille M / Noir"
+  detail_variante?: string; // Ex: "Taille M / Noir" ou "IMEI: 35492810..."
   quantite: number;
   prix_unitaire: number;
   cout_unitaire_cmp: number;
@@ -166,7 +206,7 @@ export interface TransactionVente {
   type_activite: TypeActivite;
   statut: StatutTransaction;
   
-  table_numero?: string; // Utilisé pour les bars (ex: "Table 04", "VIP 1")
+  table_numero?: string;
   is_vip_table?: boolean;
   serveur_id?: string;
   caissier_id?: string;
@@ -178,7 +218,6 @@ export interface TransactionVente {
   lignes: LigneTransaction[];
   created_at: string;
 
-  // Joins UI
   client?: Client;
   serveur?: Utilisateur;
   caissier?: Utilisateur;
@@ -189,6 +228,7 @@ export interface LigneFacture {
   facture_id: string;
   produit_id: string;
   variante_id?: string;
+  exemplaire_id?: string;
   nom_produit: string;
   detail_variante?: string;
   quantite_bouteilles: number;
@@ -258,6 +298,7 @@ export interface Abonnement {
   statut: StatutAbonnement;
   tarif_mensuel: number;
   date_prochain_paiement: string;
+  palier_tarifaire_id?: string;
 }
 
 export interface Paiement {
@@ -279,6 +320,7 @@ export interface LigneReservation {
   reservation_id?: string;
   produit_id: string;
   variante_id?: string;
+  exemplaire_id?: string;
   nom_produit: string;
   detail_variante?: string;
   quantite: number;
@@ -309,4 +351,35 @@ export interface Reservation {
   client?: Client;
   utilisateur?: Utilisateur;
 }
+
+export interface ClotureJournaliere {
+  id: string;
+  etablissement_id: string;
+  date_cloture: string; // Format YYYY-MM-DD
+  total_ventes: number;
+  total_encaisse_cash: number;
+  total_encaisse_om: number;
+  total_encaisse_momo: number;
+  valeur_stock_sorti: number;
+  quantite_stock_sorti: number;
+  marge_brute_cmp: number;
+  creances_accordees_jour: number;
+  creances_recouvrees_jour: number;
+  fige_le: string; // ISO date timestamp
+  cree_par: string; // Utilisateur nom/role
+}
+
+export interface ClotureMensuelle {
+  id: string;
+  etablissement_id: string;
+  mois_annee: string; // Format YYYY-MM
+  total_ventes: number;
+  cout_marchandises_vendues: number;
+  marge_brute_cmp: number;
+  total_charges: number;
+  resultat_net: number;
+  fige_le: string;
+  cree_par: string;
+}
+
 

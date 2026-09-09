@@ -126,6 +126,11 @@ export default function Sidebar() {
             href: '/commun/comptabilite',
             icon: BarChart3,
           },
+          {
+            name: 'Clôtures & Rapports Figés',
+            href: '/commun/clotures',
+            icon: Lock,
+          },
         ]
       : []),
     {

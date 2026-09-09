@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import StockAiScannerModal from '@/components/StockAiScannerModal';
-import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles } from 'lucide-react';
+import ExcelCsvImporterModal from '@/components/ExcelCsvImporterModal';
+import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles, FileSpreadsheet, Printer, Barcode } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
-import { Produit, Etablissement, VarianteProduit } from '@/types';
+import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle } from '@/types';
 
 export default function BoutiqueProduitsPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
@@ -14,14 +15,32 @@ export default function BoutiqueProduitsPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAiScanOpen, setIsAiScanOpen] = useState(false);
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
+  const [labelModalProduit, setLabelModalProduit] = useState<Produit | null>(null);
 
-  // Formulaire d'ajout d'article
+  // Formulaire d'ajout d'article adaptatif
   const [nom, setNom] = useState('');
   const [categorie, setCategorie] = useState('Vêtements');
+  const [modeSuivi, setModeSuivi] = useState<ModeSuiviStock>('quantite');
   const [quantiteTotalePiece, setQuantiteTotalePiece] = useState<number>(10);
   const [seuilAlerte, setSeuilAlerte] = useState<number>(3);
   const [prixAchatUnitaire, setPrixAchatUnitaire] = useState<number>(12000);
   const [prixVenteUnitaire, setPrixVenteUnitaire] = useState<number>(25000);
+
+  // Champs spécifiques selon le secteur
+  const [champMatiere, setChampMatiere] = useState('');
+  const [champMarque, setChampMarque] = useState('');
+  const [champModele, setChampModele] = useState('');
+  const [champImei, setChampImei] = useState('');
+  const [champDosage, setChampDosage] = useState('');
+  const [champLot, setChampLot] = useState('');
+  const [champPeremption, setChampPeremption] = useState('');
+  const [champGarantie, setChampGarantie] = useState('');
+
+  // Champs personnalisés libres
+  const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([]);
+  const [newCustomKey, setNewCustomKey] = useState('');
+  const [newCustomVal, setNewCustomVal] = useState('');
 
   // Variantes pour Boutique (Taille / Couleur)
   const [taillesInput, setTaillesInput] = useState<string>('S, M, L, XL');
@@ -46,6 +65,16 @@ export default function BoutiqueProduitsPage() {
       setEtablissement(etab);
       const prods = offlineDB.getProduits();
       setProduits(prods);
+
+      // Auto-suggestion par défaut du mode de suivi selon le secteur
+      const sec = etab.secteur_boutique || '';
+      if (sec.includes('Téléphone') || sec.includes('Électronique') || sec.includes('Électroménager')) {
+        setModeSuivi('unite_serie');
+      } else if (sec.includes('Pharmacie') || sec.includes('Médicaments')) {
+        setModeSuivi('lot_pharmacie');
+      } else {
+        setModeSuivi('quantite');
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -90,18 +119,54 @@ export default function BoutiqueProduitsPage() {
       });
     }
 
+    let generatedExemplaires: ExemplaireArticle[] | undefined = undefined;
+    if (modeSuivi === 'unite_serie') {
+      generatedExemplaires = [];
+      const totalEx = Math.max(1, quantiteTotalePiece);
+      for (let i = 1; i <= totalEx; i++) {
+        const idCode = i === 1 && champImei.trim() ? champImei.trim() : offlineDB.generateUniqueArticleCode();
+        generatedExemplaires.push({
+          id: `ex-${prodId}-${i}`,
+          produit_id: prodId,
+          identifiant_unique: idCode,
+          prix_achat_specifique: prixAchatUnitaire,
+          statut: 'en_stock',
+        });
+      }
+    }
+
+    // Assemblage des champs spécifiques & personnalisés
+    const champsSpec: Record<string, any> = {};
+    if (champMatiere) champsSpec['matiere'] = champMatiere.trim();
+    if (champMarque) champsSpec['marque'] = champMarque.trim();
+    if (champModele) champsSpec['modele'] = champModele.trim();
+    if (champImei) champsSpec['imei_sn'] = champImei.trim();
+    if (champDosage) champsSpec['dosage'] = champDosage.trim();
+    if (champLot) champsSpec['numero_lot'] = champLot.trim();
+    if (champPeremption) champsSpec['date_peremption'] = champPeremption.trim();
+    if (champGarantie) champsSpec['garantie_mois'] = champGarantie.trim();
+
+    customFields.forEach((cf) => {
+      if (cf.key.trim() && cf.value.trim()) {
+        champsSpec[cf.key.trim()] = cf.value.trim();
+      }
+    });
+
     const newProd: Produit = {
       id: prodId,
       etablissement_id: etab.id,
       nom: nom.trim(),
       categorie: categorie.trim() || 'Article',
       unite: 'piece',
+      mode_suivi: modeSuivi,
       quantite_totale: quantiteTotalePiece,
       seuil_alerte: seuilAlerte,
       prix_achat_unitaire: prixAchatUnitaire,
       prix_vente_unitaire: prixVenteUnitaire,
       cout_achat_unitaire_cmp: prixAchatUnitaire,
       variantes: generatedVariantes,
+      exemplaires: generatedExemplaires,
+      champs_specifiques: Object.keys(champsSpec).length > 0 ? champsSpec : undefined,
       actif: true,
       created_at: new Date().toISOString(),
     };
@@ -111,6 +176,7 @@ export default function BoutiqueProduitsPage() {
 
     setIsModalOpen(false);
     setNom('');
+    setCustomFields([]);
     loadData();
   };
 
@@ -175,7 +241,15 @@ export default function BoutiqueProduitsPage() {
               className="py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 border border-[#E8A33D]"
             >
               <Sparkles className="w-4 h-4 text-[#E8A33D]" />
-              <span>📸 Saisie Rapide IA / CSV</span>
+              <span>📸 Scan IA Vision</span>
+            </button>
+
+            <button
+              onClick={() => setIsExcelImportOpen(true)}
+              className="py-3 px-4 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-[#1B4332]" />
+              <span>📊 Import Excel/CSV</span>
             </button>
 
             <button
@@ -244,20 +318,59 @@ export default function BoutiqueProduitsPage() {
                 <div>
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-[10px] font-black text-[#B8442C] uppercase tracking-wider bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
-                        {p.categorie}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-black text-[#B8442C] uppercase tracking-wider bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
+                          {p.categorie}
+                        </span>
+                        {p.mode_suivi === 'unite_serie' && (
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+                            🏷️ À l'unité / Serie
+                          </span>
+                        )}
+                        {p.mode_suivi === 'lot_pharmacie' && (
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 px-2 py-0.5 rounded-full border border-purple-300">
+                            💊 Lot Pharmacie
+                          </span>
+                        )}
+                      </div>
                       <h3 className="font-serif font-black text-lg text-[#1B4332] mt-1">{p.nom}</h3>
                     </div>
 
-                    <button
-                      onClick={() => handleOpenEditModal(p)}
-                      className="p-2 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] hover:bg-[#E2D5C3] text-[#1B4332] transition-colors"
-                      title="Modifier l'article"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {p.mode_suivi === 'unite_serie' && (
+                        <button
+                          onClick={() => setLabelModalProduit(p)}
+                          className="p-2 rounded-xl bg-amber-100 border border-amber-300 hover:bg-amber-200 text-amber-900 transition-colors"
+                          title="Imprimer étiquette OKO-Code / Barcode"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleOpenEditModal(p)}
+                        className="p-2 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] hover:bg-[#E2D5C3] text-[#1B4332] transition-colors"
+                        title="Modifier l'article"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Badges Exemplaires Uniques / IMEI */}
+                  {p.exemplaires && p.exemplaires.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {p.exemplaires.slice(0, 4).map((ex) => (
+                        <span key={ex.id} className="text-[10px] font-mono bg-amber-50 text-amber-900 px-2 py-0.5 rounded-md border border-amber-200">
+                          {ex.identifiant_unique}
+                        </span>
+                      ))}
+                      {p.exemplaires.length > 4 && (
+                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                          +{p.exemplaires.length - 4} autres
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Badges Tailles & Variantes */}
                   {p.variantes && p.variantes.length > 0 && (
@@ -322,12 +435,59 @@ export default function BoutiqueProduitsPage() {
                 </button>
               </div>
 
+              {/* Mode de Suivi du Stock */}
+              <div className="p-3 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
+                <label className="block text-xs font-black text-[#1B4332]">Mode de Suivi du Stock *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModeSuivi('quantite')}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold text-center border transition-all ${
+                      modeSuivi === 'quantite'
+                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
+                        : 'bg-white text-[#1B4332] border-[#E2D5C3]'
+                    }`}
+                  >
+                    📦 Quantité globale
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModeSuivi('unite_serie')}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold text-center border transition-all ${
+                      modeSuivi === 'unite_serie'
+                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
+                        : 'bg-white text-[#1B4332] border-[#E2D5C3]'
+                    }`}
+                  >
+                    🏷️ À l'unité / IMEI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModeSuivi('lot_pharmacie')}
+                    className={`py-2 px-2 rounded-xl text-[11px] font-bold text-center border transition-all ${
+                      modeSuivi === 'lot_pharmacie'
+                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
+                        : 'bg-white text-[#1B4332] border-[#E2D5C3]'
+                    }`}
+                  >
+                    💊 N° Lot & Péremption
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-500 font-medium">
+                  {modeSuivi === 'unite_serie'
+                    ? 'Chaque exemplaire physique est identifié individuellement (IMEI/Numéro de série ou Code OKO-XXXXXX généré).'
+                    : modeSuivi === 'lot_pharmacie'
+                    ? 'Suivi regroupé par Numéro de Lot et Date de Péremption.'
+                    : 'Suivi classique par quantité globale en stock.'}
+                </p>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-[#1B4332] mb-1">Nom de l'Article</label>
+                <label className="block text-xs font-bold text-[#1B4332] mb-1">Nom de l'Article *</label>
                 <input
                   type="text"
                   required
-                  placeholder="ex: Robe de Soirée Soie, Chemise Homme Slim, Baskets..."
+                  placeholder="ex: Robe Soie, iPhone 13, Paracétamol, TV Samsung..."
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
@@ -339,7 +499,7 @@ export default function BoutiqueProduitsPage() {
                   <label className="block text-xs font-bold text-[#1B4332] mb-1">Catégorie</label>
                   <input
                     type="text"
-                    placeholder="Vêtements, Chaussures..."
+                    placeholder="Vêtements, Électronique, etc."
                     value={categorie}
                     onChange={(e) => setCategorie(e.target.value)}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
@@ -356,6 +516,65 @@ export default function BoutiqueProduitsPage() {
                   />
                 </div>
               </div>
+
+              {/* Champs Suggérés Dynamiques selon Secteur / Mode */}
+              {modeSuivi === 'unite_serie' && (
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 space-y-2">
+                  <span className="text-[11px] font-black text-amber-900 block">Champs Spécifiques (Téléphones / Électronique / Électroménager)</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Marque (ex: Apple, Samsung)"
+                      value={champMarque}
+                      onChange={(e) => setChampMarque(e.target.value)}
+                      className="bg-white border border-amber-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Modèle (ex: iPhone 13 Pro)"
+                      value={champModele}
+                      onChange={(e) => setChampModele(e.target.value)}
+                      className="bg-white border border-amber-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="IMEI / N° de Série du 1er exemplaire (Optionnel)"
+                    value={champImei}
+                    onChange={(e) => setChampImei(e.target.value)}
+                    className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-mono text-[#1B4332]"
+                  />
+                  <p className="text-[10px] text-amber-800 font-medium">Si non fourni, un code unique OKO-XXXXXX sera généré automatiquement.</p>
+                </div>
+              )}
+
+              {modeSuivi === 'lot_pharmacie' && (
+                <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 space-y-2">
+                  <span className="text-[11px] font-black text-purple-900 block">Champs Spécifiques (Pharmacie / Médicaments)</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Dosage (ex: 500mg)"
+                      value={champDosage}
+                      onChange={(e) => setChampDosage(e.target.value)}
+                      className="bg-white border border-purple-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
+                    />
+                    <input
+                      type="text"
+                      placeholder="N° de Lot"
+                      value={champLot}
+                      onChange={(e) => setChampLot(e.target.value)}
+                      className="bg-white border border-purple-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
+                    />
+                    <input
+                      type="date"
+                      value={champPeremption}
+                      onChange={(e) => setChampPeremption(e.target.value)}
+                      className="bg-white border border-purple-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -517,6 +736,55 @@ export default function BoutiqueProduitsPage() {
           onClose={() => setIsAiScanOpen(false)}
           onSuccess={loadData}
         />
+
+        {/* Modal Import Excel/CSV */}
+        <ExcelCsvImporterModal
+          isOpen={isExcelImportOpen}
+          onClose={() => setIsExcelImportOpen(false)}
+          onSuccess={loadData}
+        />
+
+        {/* Modal Impression Étiquettes Thermal Bluetooth */}
+        {labelModalProduit && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 text-center">
+              <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+                <div className="flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-[#B8442C]" />
+                  <h3 className="font-serif font-black text-lg text-[#1B4332]">Impression Étiquette Bluetooth</h3>
+                </div>
+                <button onClick={() => setLabelModalProduit(null)} className="text-gray-500 hover:text-black">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 bg-white border-2 border-dashed border-[#1B4332]/40 rounded-2xl space-y-2 shadow-inner">
+                <p className="font-bold text-xs text-gray-500 uppercase tracking-widest">{etablissement?.nom || 'ŒKO BOUTIQUE'}</p>
+                <h4 className="font-serif font-black text-base text-[#1B4332]">{labelModalProduit.nom}</h4>
+                <p className="font-serif font-black text-lg text-[#B8442C]">{labelModalProduit.prix_vente_unitaire?.toLocaleString('fr-FR')} FCFA</p>
+
+                <div className="py-2 bg-gray-100 rounded-xl border border-gray-300 space-y-1">
+                  <Barcode className="w-16 h-8 mx-auto text-black" />
+                  <p className="font-mono font-black text-sm text-black tracking-widest">
+                    {labelModalProduit.exemplaires?.[0]?.identifiant_unique || offlineDB.generateUniqueArticleCode()}
+                  </p>
+                </div>
+                <p className="text-[10px] text-gray-400 font-medium">Imprimable sur petite étiquette thermique Bluetooth</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  window.print();
+                  setLabelModalProduit(null);
+                }}
+                className="w-full py-3.5 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md flex items-center justify-center gap-2"
+              >
+                <Printer className="w-4 h-4 text-[#E8A33D]" />
+                <span>Imprimer l'étiquette maintenant</span>
+              </button>
+            </div>
+          </div>
+        )}
     </AppLayout>
   );
 }

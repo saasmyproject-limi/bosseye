@@ -30,7 +30,7 @@ import {
   BarChart3,
   Receipt,
   Eye,
-  ShoppingBag
+  ShoppingBag,
 } from 'lucide-react';
 import OfflineBadge from '@/components/OfflineBadge';
 import BarSelectorModal from '@/components/BarSelectorModal';
@@ -132,33 +132,33 @@ export default function LandingPage() {
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1B4332]/10 border border-[#1B4332]/20 text-[#1B4332] font-bold text-xs">
                 <Sparkles className="w-4 h-4 text-[#E8A33D]" />
-                <span>Le SaaS sur-mesure pour petits commerces au Cameroun</span>
+                <span>Le SaaS de gestion pour commerces au Cameroun</span>
               </div>
 
               <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-black text-[#1B4332] tracking-tight leading-[1.1]">
-                œko : L'œil du patron sur son commerce, <span className="italic text-[#B8442C]">en temps réel.</span>
+                œko : Contrôlez votre stock, vos ventes et votre argent, <span className="italic text-[#B8442C]">même à distance.</span>
               </h1>
 
               <p className="text-sm sm:text-base text-[#1B4332]/80 font-medium max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                Que vous gériez une <strong>Boutique de vêtements</strong>, un <strong>Bar</strong> ou un <strong>Snack-bar</strong> à Douala ou Yaoundé, œko s'adapte automatiquement à votre métier. Suivez vos ventes, vos stocks, vos crédits clients et vos caisses en 1 clic.
+                Ne perdez plus la trace de vos marchandises ni de votre caisse. œko s'adapte automatiquement à ce que vous vendez (vêtements, téléphones, pharmacie, électroménager, alimentation générale...). Suivez tout en temps réel sur votre téléphone.
               </p>
 
               {/* CTAs & Badges */}
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
-                <Link
-                  href="/ventes"
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
                   className="w-full sm:w-auto py-4 px-8 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm shadow-glow-brique flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
                 >
-                  <span>Créer mon Compte (7j Offerts)</span>
+                  <span>Créer mon compte (Essayer gratuitement 7 jours)</span>
                   <ArrowRight className="w-5 h-5 text-white" />
-                </Link>
+                </button>
 
                 <button
                   onClick={() => setIsPinModalOpen(true)}
                   className="w-full sm:w-auto py-4 px-6 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-sm flex items-center justify-center gap-2 transition-all"
                 >
                   <Lock className="w-4 h-4 text-[#B8442C]" />
-                  <span>Accès Démo PIN</span>
+                  <span>Connexion PIN</span>
                 </button>
               </div>
 
@@ -169,8 +169,8 @@ export default function LandingPage() {
                   <p className="text-[11px] font-bold text-gray-500">Essai gratuit sans carte</p>
                 </div>
                 <div>
-                  <h4 className="font-serif font-black text-xl text-[#1B4332]">5 000 F</h4>
-                  <p className="text-[11px] font-bold text-gray-500">/mois (Boutique & Bar)</p>
+                  <h4 className="font-serif font-black text-xl text-[#1B4332]">5 000 FCFA</h4>
+                  <p className="text-[11px] font-bold text-gray-500">/mois après l'essai</p>
                 </div>
                 <div>
                   <h4 className="font-serif font-black text-xl text-[#1B4332]">Orange / MTN</h4>
@@ -195,8 +195,8 @@ export default function LandingPage() {
                 <div className="space-y-3">
                   <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-bold text-gray-500">Boutique Éléganza</span>
-                      <h4 className="font-serif font-black text-sm text-[#1B4332]">Ventes du Jour</h4>
+                      <span className="text-[10px] font-bold text-gray-500">Stock & Ventes</span>
+                      <h4 className="font-serif font-black text-sm text-[#1B4332]">Chiffre d'Affaires du Jour</h4>
                     </div>
                     <span className="font-serif font-black text-lg text-[#1B4332]">145 000 FCFA</span>
                   </div>
@@ -211,7 +211,7 @@ export default function LandingPage() {
                 </div>
 
                 <div className="pt-2 text-center">
-                  <p className="text-[11px] font-bold text-gray-600">Imprimante Bluetooth & Relance WhatsApp incluses</p>
+                  <p className="text-[11px] font-bold text-gray-600">Imprimante Bluetooth & Scan IA Inclus</p>
                 </div>
               </div>
             </div>
@@ -219,15 +219,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 3. LES 3 CATÉGORIES / MÉTIERS DE OEKO */}
+      {/* 3. SECTEURS & ADAPTABILITÉ */}
       <section id="categories" className="py-16 bg-[#F3ECE0]/60 border-y border-[#E2D5C3]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <div className="text-center space-y-2 max-w-2xl mx-auto">
             <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-3 py-1 rounded-full border border-[#B8442C]/30">
-              1 Application • 3 Métiers Sur-Mesure
+              Adaptabilité Automatique
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl font-black text-[#1B4332]">
-              L'application s'adapte automatiquement à votre activité
+              L'application s'adapte précisément à ce que vous vendez
             </h2>
           </div>
 
@@ -363,12 +363,24 @@ export default function LandingPage() {
           onSuccess={(u) => {
             setIsPinModalOpen(false);
             const etab = offlineDB.getEtablissement();
-            const act = etab?.type_activite || 'snack';
+            const act = etab?.type_activite || 'boutique';
             if (u?.role === 'Serveuse' || u?.role === 'Employé' || u?.role === 'Caissière') {
               router.push(`/${act}/ventes`);
             } else {
               router.push(`/${act}/dashboard`);
             }
+          }}
+        />
+      )}
+
+      {/* Creation Modal */}
+      {isCreateModalOpen && (
+        <BarSelectorModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSelectSuccess={(etab) => {
+            setIsCreateModalOpen(false);
+            router.push(`/${etab.type_activite || 'boutique'}/dashboard`);
           }}
         />
       )}
