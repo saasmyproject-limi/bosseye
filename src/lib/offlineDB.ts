@@ -75,7 +75,7 @@ export function getTerminology(type_activite?: TypeActivite) {
     unitSingular: isBoutique ? 'Pièce' : 'Bouteille',
     stockLabel: isBoutique ? 'Stock d\'articles' : 'Stock de casiers & bouteilles',
     sellerLabel: isBoutique ? 'Vendeuse / Employée' : isBar ? 'Serveuse' : 'Serveuse / Caissière',
-    salesScreenTitle: isBoutique ? 'Vente Comptoir & Livraisons' : isBar ? 'Gestion des Tables' : 'Prise de Commande & Caisses',
+    salesScreenTitle: isBoutique ? 'Vente' : isBar ? 'Gestion des Tables' : 'Prise de Commande & Caisses',
     salesScreenDesc: isBoutique
       ? 'Vente directe au comptoir, gestion des déclinaisons (tailles/couleurs) et suivi des commandes en ligne.'
       : isBar
@@ -263,6 +263,26 @@ export const offlineDB = {
   },
 
   // --- RECHARGER LES DONNÉES DÉMO D'ORIGINE ---
+  saveEtablissements(data: Etablissement[]) {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(data));
+    } catch (e) { console.error(e); }
+  },
+  saveFactures(data: Facture[]) {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.FACTURES, JSON.stringify(data));
+    } catch (e) { console.error(e); }
+  },
+  saveReservations(data: Reservation[]) {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.RESERVATIONS, JSON.stringify(data));
+    } catch (e) { console.error(e); }
+  },
+  saveClients(data: Client[]) {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.CLIENTS, JSON.stringify(data));
+    } catch (e) { console.error(e); }
+  },
   restoreDemoSeedData() {
     try {
       if (typeof window !== 'undefined') {

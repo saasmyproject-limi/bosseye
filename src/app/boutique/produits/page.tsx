@@ -548,33 +548,7 @@ export default function BoutiqueProduitsPage() {
                 </div>
               )}
 
-              {modeSuivi === 'lot_pharmacie' && (
-                <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 space-y-2">
-                  <span className="text-[11px] font-black text-purple-900 block">Champs Spécifiques (Pharmacie / Médicaments)</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Dosage (ex: 500mg)"
-                      value={champDosage}
-                      onChange={(e) => setChampDosage(e.target.value)}
-                      className="bg-white border border-purple-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
-                    />
-                    <input
-                      type="text"
-                      placeholder="N° de Lot"
-                      value={champLot}
-                      onChange={(e) => setChampLot(e.target.value)}
-                      className="bg-white border border-purple-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
-                    />
-                    <input
-                      type="date"
-                      value={champPeremption}
-                      onChange={(e) => setChampPeremption(e.target.value)}
-                      className="bg-white border border-purple-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
-                    />
-                  </div>
-                </div>
-              )}
+
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

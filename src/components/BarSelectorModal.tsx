@@ -13,10 +13,15 @@ import {
   Utensils,
   X,
   Lock,
-  Eye
+  Eye,
+  CloudDownload,
+  CloudUpload,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { TypeActivite, Etablissement, TARIFS_ABONNEMENT } from '@/types';
+import { syncShopToCloud, downloadShopFromCloud } from '@/lib/supabaseSync';
 
 interface BarSelectorModalProps {
   isOpen: boolean;
@@ -33,7 +38,7 @@ export default function BarSelectorModal({
   const etablissements = offlineDB.getEtablissements();
   const currentEtab = offlineDB.getEtablissement();
 
-  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const [mode, setMode] = useState<'list' | 'create' | 'cloud'>('list');
 
   // Form State pour création d'un nouveau commerce œko
   const [typeActivite, setTypeActivite] = useState<TypeActivite>('boutique');
@@ -44,6 +49,10 @@ export default function BarSelectorModal({
   const [patronNom, setPatronNom] = useState('');
   const [patronPin, setPatronPin] = useState('1234');
 
+  // Form State pour téléchargement cloud
+  const [cloudSearchCode, setCloudSearchCode] = useState('');
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<{ loading: boolean; message: string; success?: boolean } | null>(null);
+
   if (!isOpen) return null;
 
   const handleSelectEtab = (id: string) => {
@@ -52,6 +61,30 @@ export default function BarSelectorModal({
     if (onSelectSuccess) onSelectSuccess(etab);
     onClose();
     router.refresh();
+  };
+
+  const handleSyncToCloud = async (etabId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCloudSyncStatus({ loading: true, message: 'Sauvegarde sur le cloud en cours...' });
+    const res = await syncShopToCloud(etabId);
+    setCloudSyncStatus({ loading: false, message: res.message, success: res.success });
+  };
+
+  const handleDownloadFromCloud = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cloudSearchCode.trim()) return;
+
+    setCloudSyncStatus({ loading: true, message: 'Recherche et téléchargement de la boutique...' });
+    const res = await downloadShopFromCloud(cloudSearchCode.trim());
+    setCloudSyncStatus({ loading: false, message: res.message, success: res.success });
+
+    if (res.success && res.etab) {
+      if (onSelectSuccess) onSelectSuccess(res.etab);
+      setTimeout(() => {
+        onClose();
+        router.refresh();
+      }, 1500);
+    }
   };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -68,6 +101,9 @@ export default function BarSelectorModal({
       patronNom: patronNom.trim(),
       patronPin: patronPin.trim() || '1234',
     });
+
+    // Sauvegarder immédiatement sur le cloud
+    syncShopToCloud(newEtab.id);
 
     if (onSelectSuccess) onSelectSuccess(newEtab);
     onClose();
@@ -90,29 +126,55 @@ export default function BarSelectorModal({
           </div>
           <div>
             <h2 className="font-serif font-black text-xl text-[#1B4332]">œko — L'œil du patron</h2>
-            <p className="text-xs text-gray-600 font-bold">Sélection ou création de compte commerce</p>
+            <p className="text-xs text-gray-600 font-bold">Sélection, création ou synchronisation multi-appareils</p>
           </div>
         </div>
 
+        {/* Status Alert Banner */}
+        {cloudSyncStatus && (
+          <div
+            className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
+              cloudSyncStatus.loading
+                ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                : cloudSyncStatus.success
+                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                : 'bg-red-100 text-red-900 border border-red-300'
+            }`}
+          >
+            {cloudSyncStatus.loading && <RefreshCw className="w-4 h-4 animate-spin text-blue-700" />}
+            <span>{cloudSyncStatus.message}</span>
+          </div>
+        )}
+
         {/* Mode Tabs */}
-        <div className="flex items-center gap-2 bg-[#FBF7EF] p-1.5 rounded-2xl border border-[#E2D5C3]">
+        <div className="flex flex-wrap items-center gap-1.5 bg-[#FBF7EF] p-1.5 rounded-2xl border border-[#E2D5C3]">
           <button
             onClick={() => setMode('list')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
               mode === 'list' ? 'bg-[#1B4332] text-white shadow-md' : 'text-[#1B4332]'
             }`}
           >
-            Mes Commerces Existant ({etablissements.length})
+            Mes Commerces ({etablissements.length})
+          </button>
+
+          <button
+            onClick={() => setMode('cloud')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              mode === 'cloud' ? 'bg-[#1E3A8A] text-white shadow-md' : 'text-[#1B4332]'
+            }`}
+          >
+            <CloudDownload className="w-4 h-4 text-[#E8A33D]" />
+            <span>Rejoindre sur 2è Appareil (Cloud)</span>
           </button>
 
           <button
             onClick={() => setMode('create')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
               mode === 'create' ? 'bg-[#B8442C] text-white shadow-md' : 'text-[#1B4332]'
             }`}
           >
             <Plus className="w-4 h-4" />
-            <span>Créer un Compte (Essai 7j)</span>
+            <span>Créer un Compte</span>
           </button>
         </div>
 
@@ -128,40 +190,91 @@ export default function BarSelectorModal({
                 <div
                   key={etab.id}
                   onClick={() => handleSelectEtab(etab.id)}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between gap-2 ${
                     isSelected
                       ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
                       : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#E8A33D] text-[#0F291E] flex items-center justify-center text-xl font-bold">
+                  <div className="flex items-center gap-3 truncate">
+                    <div className="w-10 h-10 rounded-xl bg-[#E8A33D] text-[#0F291E] flex items-center justify-center text-xl font-bold shrink-0">
                       {isBoutique ? '👗' : isBar ? '🍺' : '🍟'}
                     </div>
-                    <div>
+                    <div className="truncate">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-serif font-black text-base">{etab.nom}</h4>
-                        <span className="text-[9px] font-black uppercase tracking-wider bg-[#E8A33D]/20 px-2 py-0.5 rounded-full border">
-                          {etab.type_activite || 'Snack'}
+                        <h4 className="font-serif font-black text-base truncate">{etab.nom}</h4>
+                        <span className="text-[9px] font-black uppercase tracking-wider bg-[#E8A33D]/20 px-2 py-0.5 rounded-full border border-[#E8A33D]/40">
+                          {etab.type_activite || 'Boutique'}
                         </span>
                       </div>
-                      <p className="text-xs opacity-80">{etab.ville} - {etab.adresse}</p>
+                      <p className="text-xs opacity-80 truncate">{etab.ville} - {etab.adresse}</p>
                     </div>
                   </div>
 
-                  {isSelected && <Check className="w-6 h-6 text-[#E8A33D]" />}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={(e) => handleSyncToCloud(etab.id, e)}
+                      title="Sauvegarder sur le Cloud pour y accéder depuis un autre ordinateur/téléphone"
+                      className="px-2.5 py-1.5 rounded-xl bg-[#0F291E] text-[#E8A33D] hover:bg-[#E8A33D] hover:text-[#0F291E] text-[10px] font-bold flex items-center gap-1 transition-all border border-[#E8A33D]/40"
+                    >
+                      <CloudUpload className="w-3.5 h-3.5" />
+                      <span>Sync Cloud</span>
+                    </button>
+                    {isSelected && <Check className="w-6 h-6 text-[#E8A33D]" />}
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* MODE 2: ONBOARDING & CRÉATION DE COMPTE (3 SÉLECTIONS DE CARTES) */}
+        {/* MODE 2: TELECHARGEMENT DEPUIS LE CLOUD POUR AUTRE APPAREIL */}
+        {mode === 'cloud' && (
+          <form onSubmit={handleDownloadFromCloud} className="space-y-4">
+            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 text-xs font-bold space-y-2">
+              <div className="flex items-center gap-2 text-sm font-black text-blue-900">
+                <CloudDownload className="w-5 h-5 text-blue-600" />
+                <span>Synchronisation sur plusieurs appareils</span>
+              </div>
+              <p className="text-[11px] leading-relaxed font-normal opacity-90">
+                Si vous avez créé votre boutique et son stock sur l'ordinateur de la boutique, vous pouvez récupérer <strong>l'intégralité de la boutique à la maison</strong> en saisissant le Nom ou Code de votre boutique ci-dessous.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">
+                Saisissez le Nom exact ou le Code de la Boutique *
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ex: Boutique Éléganza"
+                  value={cloudSearchCode}
+                  onChange={(e) => setCloudSearchCode(e.target.value)}
+                  className="w-full bg-white border-2 border-[#1E3A8A] rounded-2xl p-3.5 pl-10 text-xs font-bold text-[#1B4332]"
+                  required
+                />
+                <Search className="w-4 h-4 text-[#1E3A8A] absolute left-3.5 top-4" />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={cloudSyncStatus?.loading}
+              className="w-full py-4 px-4 rounded-2xl bg-[#1E3A8A] hover:bg-[#1E40AF] text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50"
+            >
+              <CloudDownload className="w-5 h-5 text-[#E8A33D]" />
+              <span>Télécharger & Synchroniser cette Boutique ➔</span>
+            </button>
+          </form>
+        )}
+
+        {/* MODE 3: ONBOARDING & CRÉATION DE COMPTE */}
         {mode === 'create' && (
           <form onSubmit={handleCreateSubmit} className="space-y-4">
             <div className="p-3.5 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-emerald-800 shrink-0" />
-              <span>Essai gratuit de 7 jours activé automatiquement, sans carte ni paiement immédiat !</span>
+              <span>Essai gratuit de 7 jours activé automatiquement, synchronisation Cloud incluse !</span>
             </div>
 
             {/* 3 Cartes Métier œko */}
@@ -229,21 +342,17 @@ export default function BarSelectorModal({
               </div>
             </div>
 
-            {/* Champ spécifique Boutique: Que vendez-vous ? */}
+            {/* Champ spécifique Boutique */}
             {typeActivite === 'boutique' && (
               <div className="p-4 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-3">
                 <label className="text-xs font-bold text-[#1B4332] block">
                   2. Que vendez-vous principalement dans votre Boutique ? *
                 </label>
-                <p className="text-[11px] text-gray-600 font-medium">
-                  Cette information permettra à l'IA d'adapter la détection automatique de votre stock.
-                </p>
 
                 <div className="flex flex-wrap gap-2">
                   {[
                     { label: '👗 Vêtements & Mode', val: 'Vêtements & Mode' },
                     { label: '📱 Téléphones & Électronique', val: 'Téléphones & Électronique' },
-                    { label: '💊 Pharmacie & Médicaments', val: 'Pharmacie & Médicaments' },
                     { label: '🔌 Électroménager', val: 'Électroménager' },
                     { label: '🛒 Alimentation générale', val: 'Alimentation générale' },
                     { label: '👞 Chaussures & Maroquinerie', val: 'Chaussures & Maroquinerie' },

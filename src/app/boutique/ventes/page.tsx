@@ -21,7 +21,10 @@ import {
   Bookmark,
   Send,
   X,
-  UserPlus
+  UserPlus,
+  Calendar,
+  AlertCircle,
+  FileText
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import {
@@ -35,6 +38,8 @@ import {
   CommandeEnLigne,
   StatutLivraison,
 } from '@/types';
+import { generateReceiptPDF } from '@/lib/pdfGenerator';
+import { syncShopToCloud } from '@/lib/supabaseSync';
 
 export interface CartItem {
   produit: Produit;
@@ -65,19 +70,33 @@ export default function BoutiqueVentesPage() {
   const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit' | 'reservation'>('cash');
   const [remiseInput, setRemiseInput] = useState<number>(0);
   const [montantVerseInput, setMontantVerseInput] = useState<number>(0);
-  const [acompteCreditInput, setAcompteCreditInput] = useState<number>(0);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [isNewClientMode, setIsNewClientMode] = useState<boolean>(false);
   const [newClientNom, setNewClientNom] = useState<string>('');
   const [newClientPhone, setNewClientPhone] = useState<string>('');
-  const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
-  const [lastCreatedReservation, setLastCreatedReservation] = useState<Reservation | null>(null);
 
-  // Modal Création Commande Livraison WhatsApp
+  // Modal Succès & Impression Reçu PDF
+  const [successReceiptData, setSuccessReceiptData] = useState<{
+    numeroTicket: string;
+    clientNom?: string;
+    clientPhone?: string;
+    lignes: Array<{ nom: string; quantite: number; prix_unitaire: number; varianteInfo?: string }>;
+    totalGeneral: number;
+    remise: number;
+    montantVerse: number;
+    resteAPayer: number;
+    typeVente: 'comptoir' | 'livraison' | 'reservation';
+    dateStr: string;
+  } | null>(null);
+
+  // Modal Création Commande Livraison
   const [isNewDeliveryModalOpen, setIsNewDeliveryModalOpen] = useState(false);
   const [newCmdClientNom, setNewCmdClientNom] = useState('');
   const [newCmdClientPhone, setNewCmdClientPhone] = useState('');
   const [newCmdAdresse, setNewCmdAdresse] = useState('');
+  const [newCmdDate, setNewCmdDate] = useState('');
+  const [newCmdHeure, setNewCmdHeure] = useState('');
+  const [newCmdNotes, setNewCmdNotes] = useState('');
   const [newCmdCart, setNewCmdCart] = useState<CartItem[]>([]);
 
   useEffect(() => {
@@ -136,11 +155,17 @@ export default function BoutiqueVentesPage() {
   const cartSousTotal = cart.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
   const cartTotalFinal = Math.max(0, cartSousTotal - remiseInput);
 
+  // Calcul automatique de la dette ou du reste
+  const verseActuel = montantVerseInput || (paymentMode === 'cash' || paymentMode === 'orange_money' || paymentMode === 'mtn_momo' ? cartTotalFinal : 0);
+  const calculDetteOuReste = Math.max(0, cartTotalFinal - verseActuel);
+
   const handleFinalizeEncaissement = (e: React.FormEvent) => {
     e.preventDefault();
-    if (cart.length === 0) return;
+    if (cart.length === 0 || !etablissement) return;
 
     let targetClientId = selectedClientId;
+    let clientName = clients.find((c) => c.id === selectedClientId)?.nom || '';
+    let clientPhone = clients.find((c) => c.id === selectedClientId)?.telephone_whatsapp || '';
 
     if (isNewClientMode && newClientNom.trim()) {
       const newCl = offlineDB.addClient({
@@ -148,10 +173,18 @@ export default function BoutiqueVentesPage() {
         telephone_whatsapp: newClientPhone.trim(),
       });
       targetClientId = newCl.id;
+      clientName = newCl.nom;
+      clientPhone = newCl.telephone_whatsapp || '';
     }
 
+    const ticketNo = `TK-${Date.now().toString().slice(-6)}`;
+    const dateNowStr = new Date().toLocaleString('fr-FR');
+    const montantVerse = verseActuel;
+    const resteDette = calculDetteOuReste;
+
     if (paymentMode === 'reservation') {
-      const res = offlineDB.createReservation({
+      // 1. Mode Réservation avec Acompte
+      offlineDB.createReservation({
         client_id: targetClientId || undefined,
         lignes: cart.map((item) => ({
           produit_id: item.produit.id,
@@ -160,15 +193,31 @@ export default function BoutiqueVentesPage() {
           prix_unitaire: item.prix_unitaire,
           detail_variante: item.variante ? `${item.variante.taille} / ${item.variante.couleur}` : undefined,
         })),
-        acompte_paye: acompteCreditInput,
+        acompte_paye: montantVerse,
       });
 
-      setLastCreatedReservation(res);
+      setSuccessReceiptData({
+        numeroTicket: ticketNo,
+        clientNom: clientName || 'Client Réservation',
+        clientPhone,
+        lignes: cart.map((i) => ({
+          nom: i.produit.nom,
+          quantite: i.quantite,
+          prix_unitaire: i.prix_unitaire,
+          varianteInfo: i.variante ? `${i.variante.taille}/${i.variante.couleur}` : undefined,
+        })),
+        totalGeneral: cartTotalFinal,
+        remise: remiseInput,
+        montantVerse,
+        resteAPayer: resteDette,
+        typeVente: 'reservation',
+        dateStr: dateNowStr,
+      });
     } else {
-      const isCredit = paymentMode === 'credit';
-      const mPaye = isCredit ? acompteCreditInput : cartTotalFinal;
+      // 2. Mode Vente Comptoir (Totalement Payée ou avec Dette enregistrée)
+      const isPartielOuDette = paymentMode === 'credit' || resteDette > 0;
 
-      const fac = offlineDB.createFacture({
+      offlineDB.createFacture({
         client_id: targetClientId || undefined,
         lignes: cart.map((item) => ({
           produit_id: item.produit.id,
@@ -178,49 +227,78 @@ export default function BoutiqueVentesPage() {
           detail_variante: item.variante ? `${item.variante.taille} / ${item.variante.couleur}` : undefined,
         })),
         remise: remiseInput,
-        mode_paiement: isCredit ? 'credit' : (paymentMode as any),
-        montant_paye: mPaye,
-        transaction_id: `BOUTIQUE-${Date.now()}`,
+        mode_paiement: isPartielOuDette ? 'credit' : (paymentMode as any),
+        montant_paye: montantVerse,
+        transaction_id: ticketNo,
       });
 
-      setLastCreatedFacture(fac);
+      setSuccessReceiptData({
+        numeroTicket: ticketNo,
+        clientNom: clientName,
+        clientPhone,
+        lignes: cart.map((i) => ({
+          nom: i.produit.nom,
+          quantite: i.quantite,
+          prix_unitaire: i.prix_unitaire,
+          varianteInfo: i.variante ? `${i.variante.taille}/${i.variante.couleur}` : undefined,
+        })),
+        totalGeneral: cartTotalFinal,
+        remise: remiseInput,
+        montantVerse,
+        resteAPayer: resteDette,
+        typeVente: 'comptoir',
+        dateStr: dateNowStr,
+      });
     }
+
+    // Synchronisation en arrière-plan
+    syncShopToCloud(etablissement.id);
 
     setIsPaymentModalOpen(false);
     setCart([]);
     setRemiseInput(0);
     setMontantVerseInput(0);
-    setAcompteCreditInput(0);
     setIsNewClientMode(false);
     setNewClientNom('');
     setNewClientPhone('');
     loadData();
   };
 
-  const handleUpdateDeliveryStatus = (cmdId: string, newStatut: StatutLivraison) => {
-    offlineDB.updateStatutCommandeEnLigne(cmdId, newStatut);
-    loadData();
+  const handlePrintPDF = async () => {
+    if (!successReceiptData || !etablissement) return;
+
+    const doc = await generateReceiptPDF({
+      etablissement,
+      numeroTicket: successReceiptData.numeroTicket,
+      client: successReceiptData.clientNom ? { nom: successReceiptData.clientNom, telephone: successReceiptData.clientPhone } : undefined,
+      lignes: successReceiptData.lignes,
+      totalGeneral: successReceiptData.totalGeneral,
+      remise: successReceiptData.remise,
+      montantVerse: successReceiptData.montantVerse,
+      resteAPayer: successReceiptData.resteAPayer,
+      typeVente: successReceiptData.typeVente,
+      dateStr: successReceiptData.dateStr,
+    });
+
+    doc.save(`Ticket-${successReceiptData.numeroTicket}.pdf`);
   };
 
   const handleCreateDeliveryCommand = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newCmdCart.length === 0 || !newCmdClientNom.trim()) return;
+    if (!newCmdClientNom.trim()) return;
 
-    let targetClient = clients.find((c) => c.nom.toLowerCase() === newCmdClientNom.trim().toLowerCase());
-    if (!targetClient) {
-      targetClient = offlineDB.addClient({
-        nom: newCmdClientNom.trim(),
-        telephone_whatsapp: newCmdClientPhone.trim(),
-      });
-    }
+    const itemsToDeliver = newCmdCart.length > 0 ? newCmdCart : cart;
+    if (itemsToDeliver.length === 0) return;
 
-    const totalCmd = newCmdCart.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
+    const totalCmd = itemsToDeliver.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
+
+    const fullAdresse = `${newCmdAdresse.trim()}${newCmdDate ? ` | Date: ${newCmdDate}` : ''}${newCmdHeure ? ` à ${newCmdHeure}` : ''}${newCmdNotes ? ` (${newCmdNotes})` : ''}`;
 
     offlineDB.addCommandeEnLigne({
       client_nom: newCmdClientNom.trim(),
       client_telephone: newCmdClientPhone.trim(),
-      adresse_livraison: newCmdAdresse.trim() || 'Adresse transmise par WhatsApp',
-      lignes: newCmdCart.map((item) => ({
+      adresse_livraison: fullAdresse,
+      lignes: itemsToDeliver.map((item) => ({
         produit_id: item.produit.id,
         variante_id: item.variante?.id,
         nom_produit: item.produit.nom,
@@ -232,24 +310,31 @@ export default function BoutiqueVentesPage() {
       statut: 'en_attente_paiement',
     });
 
+    if (etablissement) syncShopToCloud(etablissement.id);
+
     setIsNewDeliveryModalOpen(false);
     setNewCmdClientNom('');
     setNewCmdClientPhone('');
     setNewCmdAdresse('');
+    setNewCmdDate('');
+    setNewCmdHeure('');
+    setNewCmdNotes('');
     setNewCmdCart([]);
+    setCart([]);
     loadData();
   };
 
   return (
     <AppLayout>
-        {/* Top Header Onglets */}
+      <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Header Onglets */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
           <div>
             <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full border border-[#B8442C]/30">
-              Module Caisse & Ventes Boutique
+              Caisse & Ventes Boutique
             </span>
             <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
-              Ventes Comptoir & Livraisons WhatsApp
+              Vente
             </h1>
           </div>
 
@@ -272,7 +357,7 @@ export default function BoutiqueVentesPage() {
               }`}
             >
               <Truck className="w-4 h-4" />
-              <span>Livraisons ({commandesLigne.filter((c) => c.statut !== 'livree_payee').length})</span>
+              <span>Vente Livraison ({commandesLigne.filter((c) => c.statut !== 'livree_payee').length})</span>
             </button>
           </div>
         </div>
@@ -299,16 +384,18 @@ export default function BoutiqueVentesPage() {
                   <div
                     key={p.id}
                     onClick={() => handleAddToCart(p)}
-                    className="p-3.5 rounded-2xl bg-white border border-[#E2D5C3] hover:border-[#B8442C] cursor-pointer transition-all shadow-sm space-y-2 flex flex-col justify-between"
+                    className="bg-white border border-[#E2D5C3] hover:border-[#B8442C] rounded-2xl p-3.5 cursor-pointer shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-2 group"
                   >
                     <div>
                       <span className="text-[9px] font-black text-[#B8442C] uppercase bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
                         {p.categorie}
                       </span>
-                      <h4 className="font-serif font-black text-sm text-[#1B4332] mt-1 line-clamp-2">{p.nom}</h4>
+                      <h4 className="font-serif font-black text-sm text-[#1B4332] mt-1 line-clamp-2 group-hover:text-[#B8442C] transition-colors">
+                        {p.nom}
+                      </h4>
                       {p.variantes && p.variantes.length > 0 && (
                         <span className="text-[10px] text-purple-700 font-bold block mt-0.5">
-                          {p.variantes.length} variante(s)
+                          {p.variantes.length} variante(s) (Tailles/Couleurs)
                         </span>
                       )}
                     </div>
@@ -342,8 +429,9 @@ export default function BoutiqueVentesPage() {
                 </div>
 
                 {cart.length === 0 ? (
-                  <div className="p-8 text-center bg-[#FBF7EF] rounded-2xl border border-dashed border-[#E2D5C3] text-gray-500 text-xs font-medium">
-                    Sélectionnez des articles pour les ajouter au panier.
+                  <div className="p-8 text-center bg-[#FBF7EF] rounded-2xl border border-dashed border-[#E2D5C3] text-gray-500 text-xs font-medium space-y-2">
+                    <ShoppingBag className="w-8 h-8 text-gray-400 mx-auto" />
+                    <p>Cliquez sur un article pour l'ajouter au panier de vente.</p>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
@@ -391,30 +479,50 @@ export default function BoutiqueVentesPage() {
                   </span>
                 </div>
 
-                <button
-                  disabled={cart.length === 0}
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  className="w-full py-4 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-sm shadow-glow-brique flex items-center justify-center gap-2 transition-all active:scale-95"
-                >
-                  <CreditCard className="w-5 h-5" />
-                  <span>Encaisser & Valider Vente ➔</span>
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    disabled={cart.length === 0}
+                    onClick={() => {
+                      setNewCmdCart([...cart]);
+                      setNewCmdClientNom('');
+                      setNewCmdClientPhone('');
+                      setNewCmdAdresse('');
+                      setIsNewDeliveryModalOpen(true);
+                    }}
+                    className="py-3.5 px-3 rounded-2xl bg-[#1B4332] disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Truck className="w-4 h-4 text-[#E8A33D]" />
+                    <span>Créer Livraison</span>
+                  </button>
+
+                  <button
+                    disabled={cart.length === 0}
+                    onClick={() => setIsPaymentModalOpen(true)}
+                    className="py-3.5 px-3 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <CreditCard className="w-4 h-4 text-white" />
+                    <span>Encaisser Vente ➔</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: LIVRAISONS WHATSAPP BOUTIQUE */}
+        {/* TAB 2: VENTE LIVRAISON BOUTIQUE */}
         {activeTab === 'livraisons' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-serif font-black text-xl text-[#1B4332] flex items-center gap-2">
                 <Truck className="w-6 h-6 text-[#B8442C]" />
-                Commandes en Livraison WhatsApp
+                Commandes & Ventes en Livraison
               </h2>
 
               <button
-                onClick={() => setIsNewDeliveryModalOpen(true)}
+                onClick={() => {
+                  setNewCmdCart([]);
+                  setIsNewDeliveryModalOpen(true);
+                }}
                 className="py-2.5 px-4 rounded-2xl bg-[#1B4332] text-white font-bold text-xs shadow flex items-center gap-1.5"
               >
                 <Plus className="w-4 h-4" />
@@ -426,123 +534,89 @@ export default function BoutiqueVentesPage() {
               <div className="p-8 text-center bg-white rounded-3xl border border-[#E2D5C3] text-gray-500 text-xs font-medium space-y-2">
                 <Truck className="w-10 h-10 text-gray-400 mx-auto" />
                 <p className="font-serif font-bold text-base text-[#1B4332]">Aucune commande en livraison</p>
-                <p>Enregistrez les commandes d'expéditions reçues sur votre WhatsApp ou téléphone.</p>
+                <p>Enregistrez les commandes d'expéditions reçues sur votre WhatsApp ou par téléphone.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {commandesLigne.map((cmd) => {
-                  const isComptableActive = etablissement?.comptable_actif || currentUser?.role === 'Comptable';
-                  const isComptable = currentUser?.role === 'Comptable' || currentUser?.role === 'Patron' || currentUser?.role === 'Patronne';
-
-                  return (
-                    <div key={cmd.id} className="bg-white border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
-                      <div className="flex items-start justify-between pb-2 border-b border-[#E2D5C3]">
-                        <div>
-                          <h4 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom || 'Client'}</h4>
-                          <p className="text-xs text-gray-500 font-bold">📱 {cmd.client_telephone || 'Non indiqué'}</p>
-                        </div>
-                        <span
-                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
-                            cmd.statut === 'livree_payee'
-                              ? 'bg-emerald-100 text-emerald-900'
-                              : cmd.statut === 'en_livraison'
-                              ? 'bg-blue-100 text-blue-900'
-                              : cmd.statut === 'paiement_valide'
-                              ? 'bg-purple-100 text-purple-900'
-                              : 'bg-amber-100 text-amber-900'
-                          }`}
-                        >
-                          {cmd.statut === 'en_attente_paiement'
-                            ? '⏳ En Attente Paiement'
-                            : cmd.statut === 'paiement_valide'
-                            ? '✅ Paiement Validé'
+                {commandesLigne.map((cmd) => (
+                  <div key={cmd.id} className="bg-white border border-[#E2D5C3] rounded-3xl p-5 shadow-sm space-y-3">
+                    <div className="flex items-start justify-between pb-2 border-b border-[#E2D5C3]">
+                      <div>
+                        <h4 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom || 'Client'}</h4>
+                        <p className="text-xs text-gray-500 font-bold">📱 {cmd.client_telephone || 'Non indiqué'}</p>
+                      </div>
+                      <span
+                        className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                          cmd.statut === 'livree_payee'
+                            ? 'bg-emerald-100 text-emerald-900'
                             : cmd.statut === 'en_livraison'
-                            ? '🚚 En Livraison'
-                            : '🎉 Livrée & Payée'}
+                            ? 'bg-blue-100 text-blue-900'
+                            : 'bg-amber-100 text-amber-900'
+                        }`}
+                      >
+                        {cmd.statut === 'en_attente_paiement'
+                          ? '⏳ En Attente'
+                          : cmd.statut === 'en_livraison'
+                          ? '🚚 En Livraison'
+                          : '🎉 Livrée & Payée'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
+                      <span className="text-[10px] font-bold text-gray-400 block uppercase">Paramètres Livraison :</span>
+                      <p className="font-bold text-[#1B4332]">{cmd.adresse_livraison || 'Au comptoir'}</p>
+                    </div>
+
+                    <div className="space-y-1 text-xs">
+                      {cmd.lignes.map((l, i) => (
+                        <div key={i} className="flex justify-between font-bold text-[#1B4332]">
+                          <span>{l.quantite}x {l.nom_produit}</span>
+                          <span>{(l.quantite * l.prix_unitaire).toLocaleString('fr-FR')} F</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-2 border-t border-[#E2D5C3] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-serif font-black text-sm text-[#1B4332]">
+                          Total : {cmd.montant_total.toLocaleString('fr-FR')} F
                         </span>
                       </div>
 
-                      <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
-                        <span className="text-[10px] font-bold text-gray-400 block uppercase">Adresse de Livraison :</span>
-                        <p className="font-bold text-[#1B4332]">{cmd.adresse_livraison || 'Au comptoir'}</p>
-                      </div>
+                      {cmd.statut === 'en_attente_paiement' && (
+                        <button
+                          onClick={() => {
+                            offlineDB.updateStatutCommandeEnLigne(cmd.id, 'en_livraison');
+                            loadData();
+                          }}
+                          className="w-full py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                          <span>Envoyer en Livraison ➔</span>
+                        </button>
+                      )}
 
-                      {/* Traçabilité des rôles */}
-                      <div className="p-2.5 bg-gray-50 rounded-xl text-[10px] space-y-1 text-gray-600 font-medium">
-                        <p>👤 Pris par : <strong className="text-[#1B4332]">{cmd.pris_par_nom || 'Vendeur'}</strong></p>
-                        {cmd.valide_par_comptable_nom && (
-                          <p>💳 Paiement validé par : <strong className="text-purple-900">{cmd.valide_par_comptable_nom}</strong></p>
-                        )}
-                        {cmd.livre_par_nom && (
-                          <p>🚚 En cours / Livré par : <strong className="text-blue-900">{cmd.livre_par_nom}</strong></p>
-                        )}
-                      </div>
-
-                      <div className="space-y-1 text-xs">
-                        {cmd.lignes.map((l, i) => (
-                          <div key={i} className="flex justify-between font-bold text-[#1B4332]">
-                            <span>{l.quantite}x {l.nom_produit}</span>
-                            <span>{(l.quantite * l.prix_unitaire).toLocaleString('fr-FR')} F</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Actions de changement de statut selon rôle */}
-                      <div className="pt-2 border-t border-[#E2D5C3] space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-serif font-black text-sm text-[#1B4332]">
-                            Total : {cmd.montant_total.toLocaleString('fr-FR')} F
-                          </span>
-                        </div>
-
-                        {cmd.statut === 'en_attente_paiement' && (
-                          <button
-                            onClick={() => {
-                              offlineDB.updateCommandeStatus(cmd.id, 'paiement_valide', currentUser?.nom);
-                              loadData();
-                            }}
-                            className="w-full py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Valider Paiement (Comptable) ➔</span>
-                          </button>
-                        )}
-
-                        {cmd.statut === 'paiement_valide' && (
-                          <button
-                            onClick={() => {
-                              offlineDB.updateCommandeStatus(cmd.id, 'en_livraison', currentUser?.nom);
-                              loadData();
-                            }}
-                            className="w-full py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
-                          >
-                            <Truck className="w-3.5 h-3.5" />
-                            <span>Passer en Livraison ➔</span>
-                          </button>
-                        )}
-
-                        {cmd.statut === 'en_livraison' && (
-                          <button
-                            onClick={() => {
-                              offlineDB.updateCommandeStatus(cmd.id, 'livree_payee', currentUser?.nom);
-                              loadData();
-                            }}
-                            className="w-full py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Marquer Livrée & Solde Encaisseur ➔</span>
-                          </button>
-                        )}
-                      </div>
+                      {cmd.statut === 'en_livraison' && (
+                        <button
+                          onClick={() => {
+                            offlineDB.updateStatutCommandeEnLigne(cmd.id, 'livree_payee');
+                            loadData();
+                          }}
+                          className="w-full py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Marquer Livrée & Payée ➔</span>
+                        </button>
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
         )}
 
-        {/* MODAL ENCAISSEMENT BOUTIQUE */}
+        {/* MODAL ENCAISSEMENT VENTE COMPTOIR */}
         {isPaymentModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <form onSubmit={handleFinalizeEncaissement} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -556,7 +630,7 @@ export default function BoutiqueVentesPage() {
               {/* Choix Client */}
               <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#1B4332]">Client (Facultatif ou Obligatoire pour Crédit/Réservation)</span>
+                  <span className="text-xs font-bold text-[#1B4332]">Nom du Client (Recommandé pour Dette/Réservation)</span>
                   <button
                     type="button"
                     onClick={() => setIsNewClientMode(!isNewClientMode)}
@@ -589,7 +663,7 @@ export default function BoutiqueVentesPage() {
                     onChange={(e) => setSelectedClientId(e.target.value)}
                     className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                   >
-                    <option value="">Client Anonyme (Passage)</option>
+                    <option value="">Client Anonyme (Vente direct au comptoir)</option>
                     {clients.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nom} ({c.telephone_whatsapp || 'Sans tel'})
@@ -599,21 +673,26 @@ export default function BoutiqueVentesPage() {
                 )}
               </div>
 
-              {/* Mode de Paiement */}
+              {/* Mode de Paiement / Option */}
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-2">Sélectionnez le Mode de Règlement</label>
+                <label className="text-xs font-bold text-[#1B4332] block mb-2">Mode de Vente / Paiement</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[
-                    { id: 'cash', label: '💵 Espèces / Cash' },
+                    { id: 'cash', label: '💵 Espèces' },
                     { id: 'orange_money', label: '🟧 Orange Money' },
                     { id: 'mtn_momo', label: '🟡 MTN MoMo' },
-                    { id: 'credit', label: '💳 Crédit Client (Dette)' },
+                    { id: 'credit', label: '💳 Vente avec Dette' },
                     { id: 'reservation', label: '🔖 Réservation (Acompte)' },
                   ].map((m) => (
                     <button
                       type="button"
                       key={m.id}
-                      onClick={() => setPaymentMode(m.id as any)}
+                      onClick={() => {
+                        setPaymentMode(m.id as any);
+                        if (m.id === 'cash' || m.id === 'orange_money' || m.id === 'mtn_momo') {
+                          setMontantVerseInput(cartTotalFinal);
+                        }
+                      }}
                       className={`p-3 rounded-2xl border text-xs font-bold text-center transition-all ${
                         paymentMode === m.id
                           ? 'bg-[#1B4332] text-white border-[#1B4332] shadow'
@@ -626,7 +705,7 @@ export default function BoutiqueVentesPage() {
                 </div>
               </div>
 
-              {/* Remise & Acompte */}
+              {/* Remise & Saisie Montant Versé */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 block mb-1">Remise Accordée (FCFA)</label>
@@ -639,22 +718,36 @@ export default function BoutiqueVentesPage() {
                   />
                 </div>
 
-                {(paymentMode === 'credit' || paymentMode === 'reservation') && (
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-600 block mb-1">Acompte Perçu (FCFA)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={acompteCreditInput}
-                      onChange={(e) => setAcompteCreditInput(Number(e.target.value))}
-                      className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Montant Versé par le Client (FCFA) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={montantVerseInput}
+                    onChange={(e) => setMontantVerseInput(Number(e.target.value))}
+                    placeholder={`${cartTotalFinal}`}
+                    className="w-full bg-white border-2 border-[#1B4332] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
               </div>
 
+              {/* Recalcul Dette ou Reste */}
+              {calculDetteOuReste > 0 && paymentMode !== 'reservation' && (
+                <div className="p-3.5 rounded-2xl bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between">
+                  <span>Dette restante à récupérer :</span>
+                  <span className="text-sm font-black text-red-700">+{calculDetteOuReste.toLocaleString('fr-FR')} FCFA</span>
+                </div>
+              )}
+
+              {paymentMode === 'reservation' && (
+                <div className="p-3.5 rounded-2xl bg-purple-100 border border-purple-300 text-purple-900 text-xs font-bold space-y-1">
+                  <p>🔖 Réservation d'articles activée</p>
+                  <p className="text-[11px] font-normal opacity-90">Cette vente sera enregistrée dans le tableau des Réservations / Mise de côté.</p>
+                </div>
+              )}
+
               <div className="p-4 rounded-2xl bg-[#1B4332] text-white flex justify-between items-center">
-                <span className="text-xs font-bold">MONTANT FINAL À PAYER :</span>
+                <span className="text-xs font-bold">TOTAL À PAYER :</span>
                 <span className="font-serif font-black text-2xl text-[#E8A33D]">
                   {cartTotalFinal.toLocaleString('fr-FR')} FCFA
                 </span>
@@ -672,10 +765,50 @@ export default function BoutiqueVentesPage() {
                   type="submit"
                   className="flex-1 py-3 px-4 rounded-xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-md"
                 >
-                  Valider la Vente Boutique ➔
+                  Valider & Générer le Reçu ➔
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* MODAL SUCCÈS VENTE & REÇU PDF */}
+        {successReceiptData && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto text-2xl font-bold">
+                ✅
+              </div>
+              <h3 className="font-serif font-black text-xl text-[#1B4332]">
+                {successReceiptData.typeVente === 'reservation' ? 'Réservation Enregistrée !' : 'Vente Validée avec Succès !'}
+              </h3>
+              <p className="text-xs text-gray-600 font-bold">
+                Ticket N° : <span className="font-mono text-[#1B4332]">{successReceiptData.numeroTicket}</span>
+              </p>
+
+              {successReceiptData.resteAPayer > 0 && (
+                <div className="p-3 bg-red-100 border border-red-300 rounded-2xl text-xs font-bold text-red-900">
+                  Dette enregistrée : {successReceiptData.resteAPayer.toLocaleString('fr-FR')} FCFA dans l'onglet Dettes.
+                </div>
+              )}
+
+              <div className="space-y-2 pt-2">
+                <button
+                  onClick={handlePrintPDF}
+                  className="w-full py-3.5 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-4 h-4 text-[#E8A33D]" />
+                  <span>Imprimer / Télécharger le Reçu PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setSuccessReceiptData(null)}
+                  className="w-full py-2.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-700 font-bold text-xs"
+                >
+                  Fermer & Nouvelle Vente
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -713,7 +846,7 @@ export default function BoutiqueVentesPage() {
           </div>
         )}
 
-        {/* MODAL CRÉATION LIVRAISON WHATSAPP */}
+        {/* MODAL CRÉATION VENTE LIVRAISON */}
         {isNewDeliveryModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <form onSubmit={handleCreateDeliveryCommand} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -729,6 +862,7 @@ export default function BoutiqueVentesPage() {
                 <input
                   type="text"
                   required
+                  placeholder="Ex: Mme Marie"
                   value={newCmdClientNom}
                   onChange={(e) => setNewCmdClientNom(e.target.value)}
                   className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
@@ -736,9 +870,10 @@ export default function BoutiqueVentesPage() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">N° WhatsApp Client</label>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">N° WhatsApp Client *</label>
                 <input
                   type="text"
+                  required
                   placeholder="ex: 699000000"
                   value={newCmdClientPhone}
                   onChange={(e) => setNewCmdClientPhone(e.target.value)}
@@ -747,12 +882,45 @@ export default function BoutiqueVentesPage() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Adresse / Quartier de Livraison</label>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Quartier & Adresse de Livraison *</label>
                 <input
                   type="text"
+                  required
                   placeholder="ex: Akwa, Douala derrière Total"
                   value={newCmdAdresse}
                   onChange={(e) => setNewCmdAdresse(e.target.value)}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Date de livraison</label>
+                  <input
+                    type="date"
+                    value={newCmdDate}
+                    onChange={(e) => setNewCmdDate(e.target.value)}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Heure de livraison</label>
+                  <input
+                    type="time"
+                    value={newCmdHeure}
+                    onChange={(e) => setNewCmdHeure(e.target.value)}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Notes & Instructions (Optionnel)</label>
+                <input
+                  type="text"
+                  placeholder="ex: Livrer avant 14h, appeler avant d'arriver"
+                  value={newCmdNotes}
+                  onChange={(e) => setNewCmdNotes(e.target.value)}
                   className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                 />
               </div>
@@ -769,12 +937,13 @@ export default function BoutiqueVentesPage() {
                   type="submit"
                   className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] text-white font-black text-xs shadow-md"
                 >
-                  Créer la Commande
+                  Créer la Commande de Livraison
                 </button>
               </div>
             </form>
           </div>
         )}
+      </div>
     </AppLayout>
   );
 }
