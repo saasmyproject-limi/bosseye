@@ -110,6 +110,11 @@ export default function Sidebar() {
       badge: pendingCreditsCount > 0 ? `${pendingCreditsCount}` : null,
       badgeColor: 'bg-[#B8442C]',
     },
+    {
+      name: 'Clients & Répertoire',
+      href: '/commun/clients',
+      icon: Users,
+    },
     ...(etablissement?.type_activite === 'boutique'
       ? [
           {

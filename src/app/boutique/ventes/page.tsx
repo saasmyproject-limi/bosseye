@@ -479,30 +479,50 @@ export default function BoutiqueVentesPage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    disabled={cart.length === 0}
-                    onClick={() => {
-                      setNewCmdCart([...cart]);
-                      setNewCmdClientNom('');
-                      setNewCmdClientPhone('');
-                      setNewCmdAdresse('');
-                      setIsNewDeliveryModalOpen(true);
-                    }}
-                    className="py-3.5 px-3 rounded-2xl bg-[#1B4332] disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Truck className="w-4 h-4 text-[#E8A33D]" />
-                    <span>Créer Livraison</span>
-                  </button>
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-[#1B4332] block">Choisissez le type d'opération :</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      disabled={cart.length === 0}
+                      onClick={() => {
+                        setPaymentMode('cash');
+                        setMontantVerseInput(cartTotalFinal);
+                        setIsPaymentModalOpen(true);
+                      }}
+                      className="py-3 px-2 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <CreditCard className="w-4 h-4 text-white" />
+                      <span>1. Vente Directe</span>
+                    </button>
 
-                  <button
-                    disabled={cart.length === 0}
-                    onClick={() => setIsPaymentModalOpen(true)}
-                    className="py-3.5 px-3 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-1.5 transition-all active:scale-95"
-                  >
-                    <CreditCard className="w-4 h-4 text-white" />
-                    <span>Encaisser Vente ➔</span>
-                  </button>
+                    <button
+                      disabled={cart.length === 0}
+                      onClick={() => {
+                        setNewCmdCart([...cart]);
+                        setNewCmdClientNom('');
+                        setNewCmdClientPhone('');
+                        setNewCmdAdresse('');
+                        setIsNewDeliveryModalOpen(true);
+                      }}
+                      className="py-3 px-2 rounded-2xl bg-[#1B4332] disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Truck className="w-4 h-4 text-[#E8A33D]" />
+                      <span>2. Livraison</span>
+                    </button>
+
+                    <button
+                      disabled={cart.length === 0}
+                      onClick={() => {
+                        setPaymentMode('reservation');
+                        setMontantVerseInput(0);
+                        setIsPaymentModalOpen(true);
+                      }}
+                      className="py-3 px-2 rounded-2xl bg-purple-900 disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Bookmark className="w-4 h-4 text-[#E8A33D]" />
+                      <span>3. Réservation</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -712,8 +732,9 @@ export default function BoutiqueVentesPage() {
                   <input
                     type="number"
                     min="0"
-                    value={remiseInput}
-                    onChange={(e) => setRemiseInput(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
+                    value={remiseInput || ''}
+                    onChange={(e) => setRemiseInput(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
                   />
                 </div>
@@ -723,8 +744,9 @@ export default function BoutiqueVentesPage() {
                   <input
                     type="number"
                     min="0"
-                    value={montantVerseInput}
-                    onChange={(e) => setMontantVerseInput(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
+                    value={montantVerseInput || ''}
+                    onChange={(e) => setMontantVerseInput(e.target.value === '' ? 0 : Number(e.target.value))}
                     placeholder={`${cartTotalFinal}`}
                     className="w-full bg-white border-2 border-[#1B4332] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
                   />

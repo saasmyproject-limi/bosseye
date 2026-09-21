@@ -873,7 +873,7 @@ export const offlineDB = {
       ...c,
       id: `client-${Date.now()}`,
       etablissement_id: etab.id,
-      telephone_whatsapp: c.telephone_whatsapp.replace(/[^0-9]/g, ''),
+      telephone_whatsapp: (c.telephone_whatsapp || '').replace(/[^0-9]/g, ''),
       total_dette_actuelle: 0,
       created_at: new Date().toISOString(),
     };
@@ -883,6 +883,26 @@ export const offlineDB = {
       if (typeof window !== 'undefined') localStorage.setItem(KEYS.CLIENTS, JSON.stringify(updated));
     } catch (e) { console.error(e); }
     return newClient;
+  },
+
+  updateClient(id: string, updates: Partial<Client>): Client | null {
+    const all = this.getAllClientsGlobal();
+    const index = all.findIndex((c) => c && c.id === id);
+    if (index === -1) return null;
+    const updated = { ...all[index], ...updates };
+    all[index] = updated;
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.CLIENTS, JSON.stringify(all));
+    } catch (e) { console.error(e); }
+    return updated;
+  },
+
+  deleteClient(id: string) {
+    const all = this.getAllClientsGlobal();
+    const updated = all.filter((c) => c && c.id !== id);
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(KEYS.CLIENTS, JSON.stringify(updated));
+    } catch (e) { console.error(e); }
   },
 
   getAllClientsGlobal(): Client[] {

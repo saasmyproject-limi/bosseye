@@ -510,6 +510,7 @@ export default function BoutiqueProduitsPage() {
                   <input
                     type="number"
                     min="1"
+                    onFocus={(e) => e.target.select()}
                     value={quantiteTotalePiece}
                     onChange={(e) => setQuantiteTotalePiece(Number(e.target.value))}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
@@ -555,6 +556,7 @@ export default function BoutiqueProduitsPage() {
                   <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix d'Achat Unitaire (FCFA)</label>
                   <input
                     type="number"
+                    onFocus={(e) => e.target.select()}
                     value={prixAchatUnitaire}
                     onChange={(e) => setPrixAchatUnitaire(Number(e.target.value))}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
@@ -564,6 +566,7 @@ export default function BoutiqueProduitsPage() {
                   <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix de Vente Unitaire (FCFA)</label>
                   <input
                     type="number"
+                    onFocus={(e) => e.target.select()}
                     value={prixVenteUnitaire}
                     onChange={(e) => setPrixVenteUnitaire(Number(e.target.value))}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
@@ -669,6 +672,7 @@ export default function BoutiqueProduitsPage() {
                   <label className="block text-xs font-bold text-[#1B4332] mb-1">Stock Total (Pièces)</label>
                   <input
                     type="number"
+                    onFocus={(e) => e.target.select()}
                     value={editStockTotal}
                     onChange={(e) => setEditStockTotal(Number(e.target.value))}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
@@ -678,6 +682,7 @@ export default function BoutiqueProduitsPage() {
                   <label className="block text-xs font-bold text-[#1B4332] mb-1">Seuil d'Alerte Stock</label>
                   <input
                     type="number"
+                    onFocus={(e) => e.target.select()}
                     value={editSeuilAlerte}
                     onChange={(e) => setEditSeuilAlerte(Number(e.target.value))}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
