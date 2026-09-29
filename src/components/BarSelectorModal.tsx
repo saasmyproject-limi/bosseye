@@ -47,6 +47,8 @@ export default function BarSelectorModal({
   const [ville, setVille] = useState('Douala');
   const [adresse, setAdresse] = useState('');
   const [patronNom, setPatronNom] = useState('');
+  const [patronTelephone, setPatronTelephone] = useState('');
+  const [emailPatron, setEmailPatron] = useState('');
   const [patronPin, setPatronPin] = useState('1234');
 
   // Form State pour téléchargement cloud
@@ -100,6 +102,8 @@ export default function BarSelectorModal({
       ville,
       adresse: adresse.trim(),
       patronNom: patronNom.trim(),
+      telephone: patronTelephone.trim() || undefined,
+      email_patron: emailPatron.trim() || undefined,
       patronPin: patronPin.trim() || '1234',
     });
 
@@ -470,6 +474,33 @@ export default function BarSelectorModal({
                   onChange={(e) => setPatronPin(e.target.value)}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332] text-center tracking-widest"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">
+                  Téléphone / WhatsApp * <span className="text-[10px] text-gray-500 font-normal">(Restauration & Alertes)</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="Ex: 699 00 00 00"
+                  value={patronTelephone}
+                  onChange={(e) => setPatronTelephone(e.target.value)}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">
+                  Email / Gmail <span className="text-[10px] text-gray-500 font-normal">(Optionnel — Nouveautés & Bilan)</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="Ex: patron@gmail.com"
+                  value={emailPatron}
+                  onChange={(e) => setEmailPatron(e.target.value)}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
                 />
               </div>
             </div>

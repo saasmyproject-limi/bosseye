@@ -198,6 +198,8 @@ export const offlineDB = {
     ville: string;
     adresse: string;
     patronNom: string;
+    telephone?: string;
+    email_patron?: string;
     patronPin: string;
   }): Etablissement {
     const etabs = this.getEtablissements();
@@ -216,6 +218,8 @@ export const offlineDB = {
       secteur_boutique: params.secteur_boutique,
       ville: params.ville,
       adresse: params.adresse,
+      telephone: params.telephone,
+      email_patron: params.email_patron,
       plan: 'Premium',
       statut_abonnement: 'essai',
       tarif_mensuel: tarif,
@@ -232,6 +236,8 @@ export const offlineDB = {
       nom: params.patronNom || (act === 'snack' ? 'M. Directeur' : 'Mme Patronne'),
       role: patronRole,
       pin_code: params.patronPin || '1234',
+      telephone: params.telephone,
+      email: params.email_patron,
       actif: true,
       created_at: nowIso,
     };
