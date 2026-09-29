@@ -1496,8 +1496,9 @@ export const offlineDB = {
     const dateStr = dateTarget || new Date().toISOString().split('T')[0];
 
     const factures = this.getFactures().filter((f) => f.created_at.startsWith(dateStr) && f.statut !== 'annulee');
-    const mvts = this.getMouvements().filter((m) => m.created_at.startsWith(dateStr) && m.type_mouvement === 'sortie');
+    const mvtsEntrees = this.getMouvements().filter((m) => m.created_at.startsWith(dateStr) && m.type_mouvement === 'entree');
     const rembs = this.getRemboursements().filter((r) => r.created_at.startsWith(dateStr));
+    const produits = this.getProduits();
 
     const total_ventes = factures.reduce((acc, f) => acc + (f.montant_total || 0), 0);
     const total_encaisse_cash = factures.filter((f) => f.mode_paiement === 'cash').reduce((acc, f) => acc + (f.montant_paye || 0), 0);
@@ -1522,6 +1523,16 @@ export const offlineDB = {
       }
     });
 
+    const quantite_stock_entre = mvtsEntrees.reduce((acc, m) => acc + (m.quantite_bouteilles || 1), 0);
+    const valeur_stock_entre = mvtsEntrees.reduce((acc, m) => {
+      const prod = produits.find((p) => p.id === m.produit_id);
+      const cost = prod?.prix_achat_unitaire || prod?.cout_achat_unitaire_cmp || 0;
+      return acc + (m.quantite_bouteilles || 1) * cost;
+    }, 0);
+
+    const quantite_stock_restant_total = produits.reduce((acc, p) => acc + (p.quantite_totale || 0), 0);
+    const nombre_articles_differents = produits.length;
+
     const creances_accordees_jour = factures.reduce((acc, f) => acc + (f.montant_restant || 0), 0);
     const creances_recouvrees_jour = rembs.reduce((acc, r) => acc + r.montant_regle, 0);
 
@@ -1535,6 +1546,10 @@ export const offlineDB = {
       total_encaisse_momo: total_encaisse_momo + remb_momo,
       valeur_stock_sorti,
       quantite_stock_sorti,
+      quantite_stock_entre,
+      valeur_stock_entre,
+      quantite_stock_restant_total,
+      nombre_articles_differents,
       marge_brute_cmp,
       creances_accordees_jour,
       creances_recouvrees_jour,

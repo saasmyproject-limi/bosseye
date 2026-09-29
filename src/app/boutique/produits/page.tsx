@@ -461,12 +461,12 @@ export default function BoutiqueProduitsPage() {
                         : 'bg-white text-[#1B4332] border-[#E2D5C3]'
                     }`}
                   >
-                    🏷️ 2. À l'Unité / Code Unique / IMEI
+                    🏷️ 2. À l'Unité / Code Unique
                   </button>
                 </div>
                 <p className="text-[10px] text-gray-500 font-medium">
                   {modeSuivi === 'unite_serie'
-                    ? 'Chaque exemplaire physique est identifié individuellement (IMEI, N° de Série ou Code OKO-XXXXXX généré).'
+                    ? 'Chaque exemplaire physique est identifié individuellement par un code unique (OKO-XXXXXX ou N° de Série).'
                     : 'Suivi classique par quantité globale en stock.'}
                 </p>
               </div>
@@ -510,7 +510,7 @@ export default function BoutiqueProduitsPage() {
               {/* Champs Suggérés Dynamiques selon Secteur / Mode */}
               {modeSuivi === 'unite_serie' && (
                 <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 space-y-2">
-                  <span className="text-[11px] font-black text-amber-900 block">Champs Spécifiques (Téléphones / Électronique / Électroménager)</span>
+                  <span className="text-[11px] font-black text-amber-900 block">Champs Spécifiques</span>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -529,7 +529,7 @@ export default function BoutiqueProduitsPage() {
                   </div>
                   <input
                     type="text"
-                    placeholder="IMEI / N° de Série du 1er exemplaire (Optionnel)"
+                    placeholder="Code Unique / N° de Série du 1er exemplaire (Optionnel)"
                     value={champImei}
                     onChange={(e) => setChampImei(e.target.value)}
                     className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-mono text-[#1B4332]"
@@ -537,8 +537,6 @@ export default function BoutiqueProduitsPage() {
                   <p className="text-[10px] text-amber-800 font-medium">Si non fourni, un code unique OKO-XXXXXX sera généré automatiquement.</p>
                 </div>
               )}
-
-
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -569,28 +567,39 @@ export default function BoutiqueProduitsPage() {
                 <span>+{calcMargeUnit.toLocaleString('fr-FR')} FCFA ({calcTauxMarge.toFixed(1)}%)</span>
               </div>
 
-              {/* Variantes Tailles & Couleurs */}
-              <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-3">
-                <span className="text-xs font-black uppercase text-[#B8442C] block">Génération Automatique de Variantes</span>
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Tailles (séparées par virgules)</label>
-                  <input
-                    type="text"
-                    value={taillesInput}
-                    onChange={(e) => setTaillesInput(e.target.value)}
-                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                  />
+              {/* Variantes Tailles & Couleurs (Actif uniquement en mode quantité) */}
+              {modeSuivi === 'quantite' && (
+                <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase text-[#B8442C] block">Définition Libre des Variantes</span>
+                    <span className="text-[10px] text-gray-500 font-medium">Optionnel</span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#1B4332] mb-1">
+                      Attribut 1 : Tailles, Formats ou Pointures (séparées par virgules)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: S, M, L, XL ou 41, 42, 43 ou 500ml, 1L"
+                      value={taillesInput}
+                      onChange={(e) => setTaillesInput(e.target.value)}
+                      className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#1B4332] mb-1">
+                      Attribut 2 : Couleurs, Modèles ou Finitions (séparées par virgules)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: Noir, Blanc, Rouge ou Mat, Brillant"
+                      value={couleursInput}
+                      onChange={(e) => setCouleursInput(e.target.value)}
+                      className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Couleurs (séparées par virgules)</label>
-                  <input
-                    type="text"
-                    value={couleursInput}
-                    onChange={(e) => setCouleursInput(e.target.value)}
-                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                  />
-                </div>
-              </div>
+              )}
 
               <div className="flex items-center gap-2 pt-2">
                 <button

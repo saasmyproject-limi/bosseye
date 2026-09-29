@@ -366,6 +366,10 @@ export interface ClotureJournaliere {
   total_encaisse_momo: number;
   valeur_stock_sorti: number;
   quantite_stock_sorti: number;
+  quantite_stock_entre?: number;
+  valeur_stock_entre?: number;
+  quantite_stock_restant_total?: number;
+  nombre_articles_differents?: number;
   marge_brute_cmp: number;
   creances_accordees_jour: number;
   creances_recouvrees_jour: number;

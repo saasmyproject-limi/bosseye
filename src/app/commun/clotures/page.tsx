@@ -232,6 +232,22 @@ export default function CloturesPage() {
                       <span className="text-gray-600">Marge CMP Réalisée :</span>
                       <span className="text-[#B8442C]">+{c.marge_brute_cmp.toLocaleString('fr-FR')} FCFA</span>
                     </div>
+                    <div className="flex justify-between font-bold border-t border-gray-100 pt-1">
+                      <span className="text-gray-600">Articles Référencés :</span>
+                      <span className="text-gray-800">{c.nombre_articles_differents || 0}</span>
+                    </div>
+                    <div className="flex justify-between font-bold">
+                      <span className="text-gray-600">Stock Entré (Jour) :</span>
+                      <span className="text-blue-700">+{c.quantite_stock_entre || 0} pcs ({(c.valeur_stock_entre || 0).toLocaleString('fr-FR')} F)</span>
+                    </div>
+                    <div className="flex justify-between font-bold">
+                      <span className="text-gray-600">Stock Sorti (Jour) :</span>
+                      <span className="text-amber-800">-{c.quantite_stock_sorti || 0} pcs</span>
+                    </div>
+                    <div className="flex justify-between font-bold">
+                      <span className="text-gray-600">Stock Restant Total :</span>
+                      <span className="text-[#1B4332]">{c.quantite_stock_restant_total || 0} pcs</span>
+                    </div>
                   </div>
 
                   <div className="pt-2 border-t border-[#E2D5C3] grid grid-cols-2 gap-2">
@@ -331,13 +347,18 @@ export default function CloturesPage() {
               <p className="text-center text-[10px] text-gray-500">RAPPORT FIGÉ — DU {selectedClotureJ.date_cloture}</p>
               <p className="text-[10px] text-gray-500 text-center">Figé le : {new Date(selectedClotureJ.fige_le).toLocaleString('fr-FR')}</p>
               <hr className="border-dashed border-gray-300" />
-              <div className="flex justify-between"><span>TOTAL VENTES:</span><strong>{selectedClotureJ.total_ventes} F</strong></div>
-              <div className="flex justify-between"><span>ENCAISSÉ CASH:</span><strong>{selectedClotureJ.total_encaisse_cash} F</strong></div>
-              <div className="flex justify-between"><span>ENCAISSÉ ORANGE M:</span><strong>{selectedClotureJ.total_encaisse_om} F</strong></div>
-              <div className="flex justify-between"><span>ENCAISSÉ MTN MOMO:</span><strong>{selectedClotureJ.total_encaisse_momo} F</strong></div>
-              <div className="flex justify-between"><span>MARGE BRUTE CMP:</span><strong>+{selectedClotureJ.marge_brute_cmp} F</strong></div>
-              <div className="flex justify-between"><span>CRÉANCES ACCORDÉES:</span><strong>{selectedClotureJ.creances_accordees_jour} F</strong></div>
-              <div className="flex justify-between"><span>CRÉANCES RECOUVRÉES:</span><strong>{selectedClotureJ.creances_recouvrees_jour} F</strong></div>
+              <div className="flex justify-between"><span>TOTAL VENTES:</span><strong>{selectedClotureJ.total_ventes.toLocaleString('fr-FR')} F</strong></div>
+              <div className="flex justify-between"><span>ENCAISSÉ CASH:</span><strong>{selectedClotureJ.total_encaisse_cash.toLocaleString('fr-FR')} F</strong></div>
+              <div className="flex justify-between"><span>ENCAISSÉ ORANGE M:</span><strong>{selectedClotureJ.total_encaisse_om.toLocaleString('fr-FR')} F</strong></div>
+              <div className="flex justify-between"><span>ENCAISSÉ MTN MOMO:</span><strong>{selectedClotureJ.total_encaisse_momo.toLocaleString('fr-FR')} F</strong></div>
+              <div className="flex justify-between"><span>MARGE BRUTE CMP:</span><strong>+{selectedClotureJ.marge_brute_cmp.toLocaleString('fr-FR')} F</strong></div>
+              <div className="flex justify-between"><span>CRÉANCES ACCORDÉES:</span><strong>{selectedClotureJ.creances_accordees_jour.toLocaleString('fr-FR')} F</strong></div>
+              <div className="flex justify-between"><span>CRÉANCES RECOUVRÉES:</span><strong>{selectedClotureJ.creances_recouvrees_jour.toLocaleString('fr-FR')} F</strong></div>
+              <hr className="border-dashed border-gray-300" />
+              <div className="flex justify-between"><span>ARTICLES RÉFÉRENCÉS:</span><strong>{selectedClotureJ.nombre_articles_differents || 0}</strong></div>
+              <div className="flex justify-between"><span>STOCK ENTRÉ JOUR:</span><strong>+{selectedClotureJ.quantite_stock_entre || 0} pcs ({(selectedClotureJ.valeur_stock_entre || 0).toLocaleString('fr-FR')} F)</strong></div>
+              <div className="flex justify-between"><span>STOCK SORTI JOUR:</span><strong>-{selectedClotureJ.quantite_stock_sorti || 0} pcs</strong></div>
+              <div className="flex justify-between"><span>STOCK RESTANT TOTAL:</span><strong>{selectedClotureJ.quantite_stock_restant_total || 0} pcs</strong></div>
               <hr className="border-dashed border-gray-300" />
               <p className="text-[10px] text-center text-gray-500">Logiciel œko — L'œil du patron</p>
             </div>

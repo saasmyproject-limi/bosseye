@@ -250,17 +250,32 @@ export async function generateCloturePDF(etablissement: Etablissement, cloture: 
       ['Encaissements Espèces (Cash):', `${(cloture.total_encaisse_cash || 0).toLocaleString('fr-FR')} FCFA`],
       ['Encaissements Orange Money:', `${(cloture.total_encaisse_om || 0).toLocaleString('fr-FR')} FCFA`],
       ['Encaissements MTN Mobile Money:', `${(cloture.total_encaisse_momo || 0).toLocaleString('fr-FR')} FCFA`],
-      ['Marge Commerciale Brute (Coût CMP):', `+${(cloture.marge_brute_cmp || 0).toLocaleString('fr-FR')} FCFA`],
+      ['--- ENTRÉES & SORTIES STOCK DU JOUR ---', ''],
+      ['Entrées de Stock ce Jour (Quantité):', `${(cloture.quantite_stock_entre || 0)} pièce(s)`],
+      ['Valeur d\'Achat du Stock Entré:', `${(cloture.valeur_stock_entre || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Sorties / Ventes de Stock (Quantité):', `${(cloture.quantite_stock_sorti || 0)} pièce(s)`],
+      ['Coût des Marchandises Vendues:', `${(cloture.valeur_stock_sorti || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Stock Restant Disponible en Magasin:', `${(cloture.quantite_stock_restant_total || 0)} pièce(s)`],
+      ['Nombre d\'Articles en Catalogue:', `${(cloture.nombre_articles_differents || 0)} article(s)`],
+      ['--- COMPTABILITÉ & DÉBTS ---', ''],
+      ['Marge Commerciale Brute CMP:', `+${(cloture.marge_brute_cmp || 0).toLocaleString('fr-FR')} FCFA`],
       ['Créances / Dettes accordées ce jour:', `${(cloture.creances_accordees_jour || 0).toLocaleString('fr-FR')} FCFA`],
       ['Dettes recouvrées ce jour:', `${(cloture.creances_recouvrees_jour || 0).toLocaleString('fr-FR')} FCFA`],
     ];
 
     items.forEach(([label, val]) => {
-      doc.setFont('helvetica', 'normal');
-      doc.text(label, margin, y);
-      doc.setFont('helvetica', 'bold');
-      doc.text(val, 180, y, { align: 'right' });
-      y += 8;
+      if (label.startsWith('---')) {
+        y += 2;
+        doc.setFont('helvetica', 'bold');
+        doc.text(label, margin, y);
+        y += 6;
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.text(label, margin, y);
+        doc.setFont('helvetica', 'bold');
+        doc.text(val, 180, y, { align: 'right' });
+        y += 6;
+      }
     });
   } else {
     const items = [
