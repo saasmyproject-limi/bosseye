@@ -82,7 +82,7 @@ export default function ExcelCsvImporterModal({
             const prix_vente = parseFloat(cols[4]) || 0;
             let mode_suivi: ModeSuiviStock = 'quantite';
             if (cols[5] === 'unite_serie' || cols[5] === 'unite') mode_suivi = 'unite_serie';
-            else if (cols[5] === 'lot_pharmacie' || cols[5] === 'lot') mode_suivi = 'lot_pharmacie';
+            else if (cols[5] === 'lot_pharmacie' || cols[5] === 'lot') mode_suivi = 'unite_serie';
             const identifiant_unique = cols[6] || undefined;
 
             parsedItems.push({
