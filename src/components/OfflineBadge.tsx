@@ -28,13 +28,13 @@ export default function OfflineBadge() {
       }
     }, 3000);
 
-    // Auto-sync périodique toutes les 30s si en ligne
+    // Auto-sync périodique toutes les 12s si en ligne (synchro tablette + téléphone patron)
     const interval = setInterval(() => {
       setQueueCount(offlineDB.getOfflineQueueCount());
       if (navigator.onLine) {
         triggerAutoSync();
       }
-    }, 30000);
+    }, 12000);
 
     return () => {
       window.removeEventListener('online', handleOnline);

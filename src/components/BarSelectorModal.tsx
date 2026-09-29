@@ -165,7 +165,7 @@ export default function BarSelectorModal({
           <button
             onClick={() => setMode('cloud')}
             className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'cloud' ? 'bg-[#1E3A8A] text-white shadow-md' : 'text-[#1B4332]'
+              mode === 'cloud' ? 'bg-[#1B4332] text-white shadow-md' : 'text-[#1B4332]'
             }`}
           >
             <CloudDownload className="w-4 h-4 text-[#E8A33D]" />
@@ -236,31 +236,31 @@ export default function BarSelectorModal({
         {/* MODE 2: TELECHARGEMENT DEPUIS LE CLOUD POUR AUTRE APPAREIL */}
         {mode === 'cloud' && (
           <form onSubmit={handleDownloadFromCloud} className="space-y-4">
-            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-950 text-xs font-bold space-y-2">
-              <div className="flex items-center gap-2 text-sm font-black text-blue-900">
-                <CloudDownload className="w-5 h-5 text-blue-600" />
+            <div className="p-4 rounded-2xl bg-[#E2F5EE] border border-[#10B981]/50 text-[#1B4332] text-xs font-bold space-y-2">
+              <div className="flex items-center gap-2 text-sm font-black text-[#1B4332]">
+                <CloudDownload className="w-5 h-5 text-[#10B981]" />
                 <span>Synchronisation sur plusieurs appareils</span>
               </div>
               <p className="text-[11px] leading-relaxed font-normal opacity-90">
-                Si vous avez créé votre boutique et son stock sur l'ordinateur de la boutique, vous pouvez récupérer <strong>l'intégralité de la boutique à la maison</strong> en saisissant le Nom ou Code de votre boutique ci-dessous.
+                Si vous avez créé votre boutique et son stock sur l'ordinateur de la boutique, vous pouvez récupérer <strong>l'intégralité de la boutique à la maison</strong> en saisissant le Nom, Téléphone ou Code de votre boutique ci-dessous.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold text-[#1B4332] block mb-1">
-                  1. Nom ou Code de la Boutique *
+                  1. Nom ou Téléphone de la Boutique *
                 </label>
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Ex: Boutique Éléganza"
+                    placeholder="Ex: Boutique Éléganza ou 699000000"
                     value={cloudSearchCode}
                     onChange={(e) => setCloudSearchCode(e.target.value)}
-                    className="w-full bg-white border-2 border-[#1E3A8A] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332]"
+                    className="w-full bg-white border-2 border-[#1B4332] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332]"
                     required
                   />
-                  <Search className="w-4 h-4 text-[#1E3A8A] absolute left-3 top-3.5" />
+                  <Search className="w-4 h-4 text-[#1B4332] absolute left-3 top-3.5" />
                 </div>
               </div>
 
@@ -276,10 +276,10 @@ export default function BarSelectorModal({
                     value={cloudPinCode}
                     onFocus={(e) => e.target.select()}
                     onChange={(e) => setCloudPinCode(e.target.value)}
-                    className="w-full bg-white border-2 border-[#1E3A8A] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332] tracking-widest"
+                    className="w-full bg-white border-2 border-[#1B4332] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332] tracking-widest"
                     required
                   />
-                  <Lock className="w-4 h-4 text-[#1E3A8A] absolute left-3 top-3.5" />
+                  <Lock className="w-4 h-4 text-[#1B4332] absolute left-3 top-3.5" />
                 </div>
               </div>
             </div>
@@ -287,7 +287,7 @@ export default function BarSelectorModal({
             <button
               type="submit"
               disabled={cloudSyncStatus?.loading}
-              className="w-full py-4 px-4 rounded-2xl bg-[#1E3A8A] hover:bg-[#1E40AF] text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50"
+              className="w-full py-4 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#0F291E] text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50"
             >
               <CloudDownload className="w-5 h-5 text-[#E8A33D]" />
               <span>Télécharger & Synchroniser cette Boutique ➔</span>
