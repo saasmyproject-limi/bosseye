@@ -329,7 +329,7 @@ export default function BoutiqueProduitsPage() {
                             🏷️ À l'unité / Serie
                           </span>
                         )}
-                        {p.mode_suivi === 'lot_pharmacie' && (
+                        {(p.mode_suivi as any) === 'lot_pharmacie' && (
                           <span className="text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 px-2 py-0.5 rounded-full border border-purple-300">
                             💊 Lot Pharmacie
                           </span>
