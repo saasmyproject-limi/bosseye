@@ -156,7 +156,6 @@ export async function downloadShopFromCloud(
     }
 
     // Restauration locale dans l'offlineDB
-    const etab = cloudData.etablissement;
     const allEtabs = offlineDB.getEtablissements();
     const existingIndex = allEtabs.findIndex((e) => e.id === etab.id);
 

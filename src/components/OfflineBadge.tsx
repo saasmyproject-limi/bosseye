@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Wifi, WifiOff, RefreshCw, CloudSync } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { pullShopFromCloud, syncShopToCloud } from '@/lib/supabaseSync';
 
