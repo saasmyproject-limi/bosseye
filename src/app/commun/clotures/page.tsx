@@ -16,6 +16,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
+import { generateCloturePDF } from '@/lib/pdfGenerator';
 import { ClotureJournaliere, ClotureMensuelle, Etablissement, Utilisateur } from '@/types';
 
 export default function CloturesPage() {
@@ -59,6 +60,13 @@ export default function CloturesPage() {
     setSuccessMsg(`Le mois ${currentMonth} a été clôturé et figé avec succès !`);
     setTimeout(() => setSuccessMsg(''), 4000);
     loadData();
+  };
+
+  const handleDownloadPDF = async (cloture: any, type: 'journaliere' | 'mensuelle') => {
+    if (!etablissement) return;
+    const doc = await generateCloturePDF(etablissement, cloture, type);
+    const dateStr = type === 'journaliere' ? cloture.date_cloture : cloture.mois_annee;
+    doc.save(`Rapport-Cloture-${type}-${dateStr}.pdf`);
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -226,13 +234,21 @@ export default function CloturesPage() {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-[#E2D5C3]">
+                  <div className="pt-2 border-t border-[#E2D5C3] grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setSelectedClotureJ(c)}
-                      className="w-full py-2.5 rounded-xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-1.5"
+                      className="py-2.5 px-3 rounded-xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-1.5"
                     >
                       <Printer className="w-4 h-4 text-[#B8442C]" />
-                      <span>Imprimer le Rapport Quotidien Figé</span>
+                      <span>Ticket 🎟️</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDownloadPDF(c, 'journaliere')}
+                      className="py-2.5 px-3 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
+                    >
+                      <FileText className="w-4 h-4 text-[#E8A33D]" />
+                      <span>Rapport PDF 📄</span>
                     </button>
                   </div>
                 </div>
@@ -283,11 +299,11 @@ export default function CloturesPage() {
                   </div>
 
                   <button
-                    onClick={() => window.print()}
-                    className="w-full py-2.5 rounded-xl bg-[#1B4332] text-white font-bold text-xs flex items-center justify-center gap-1.5"
+                    onClick={() => handleDownloadPDF(c, 'mensuelle')}
+                    className="w-full py-2.5 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
                   >
-                    <Printer className="w-4 h-4 text-[#E8A33D]" />
-                    <span>Imprimer la Clôture Mensuelle Figée</span>
+                    <FileText className="w-4 h-4 text-purple-200" />
+                    <span>Télécharger le Rapport Mensuel PDF 📄</span>
                   </button>
                 </div>
               ))}
@@ -296,14 +312,14 @@ export default function CloturesPage() {
         </div>
       )}
 
-      {/* Modal Impression Rapport Figé Journalier */}
+      {/* Modal Impression / Consultation Rapport Figé Journalier */}
       {selectedClotureJ && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 text-left border border-gray-300">
             <div className="flex items-center justify-between pb-3 border-b border-gray-200">
               <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-[#B8442C]" />
-                <h3 className="font-serif font-black text-lg text-[#1B4332]">Rapport Quotidien Figé</h3>
+                <FileText className="w-5 h-5 text-[#B8442C]" />
+                <h3 className="font-serif font-black text-lg text-[#1B4332]">Consultation Rapport Figé</h3>
               </div>
               <button onClick={() => setSelectedClotureJ(null)} className="text-gray-500 hover:text-black">
                 ✕
@@ -326,13 +342,26 @@ export default function CloturesPage() {
               <p className="text-[10px] text-center text-gray-500">Logiciel œko — L'œil du patron</p>
             </div>
 
-            <button
-              onClick={() => { window.print(); setSelectedClotureJ(null); }}
-              className="w-full py-3.5 rounded-2xl bg-[#1B4332] text-white font-black text-xs flex items-center justify-center gap-2"
-            >
-              <Printer className="w-4 h-4 text-[#E8A33D]" />
-              <span>Imprimer sur Imprimante Thermique</span>
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => { window.print(); setSelectedClotureJ(null); }}
+                className="py-3.5 rounded-2xl bg-[#F3ECE0] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-1.5 border border-[#E2D5C3]"
+              >
+                <Printer className="w-4 h-4 text-[#B8442C]" />
+                <span>Ticket Caissière</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  handleDownloadPDF(selectedClotureJ, 'journaliere');
+                  setSelectedClotureJ(null);
+                }}
+                className="py-3.5 rounded-2xl bg-[#1B4332] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow"
+              >
+                <FileText className="w-4 h-4 text-[#E8A33D]" />
+                <span>Rapport PDF 📄</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

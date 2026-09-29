@@ -307,15 +307,15 @@ export default function ExcelCsvImporterModal({
                           onChange={(e) => handleUpdateItem(item.id, 'mode_suivi', e.target.value as ModeSuiviStock)}
                           className="w-full bg-white border border-[#E2D5C3] rounded-lg p-1.5 text-[11px] font-bold text-[#1B4332]"
                         >
-                          <option value="quantite">Quantité globale</option>
-                          <option value="unite_serie">À l'unité / Serie</option>
-                          <option value="lot_pharmacie">N° de Lot</option>
+                          <option value="quantite">📦 Quantité globale</option>
+                          <option value="unite_serie">🏷️ À l'unité / Serie</option>
                         </select>
                       </td>
                       <td className="p-2 text-center">
                         <input
                           type="number"
                           min="1"
+                          onFocus={(e) => e.target.select()}
                           value={item.quantite}
                           onChange={(e) => handleUpdateItem(item.id, 'quantite', parseInt(e.target.value, 10) || 1)}
                           className="w-16 bg-white border border-[#E2D5C3] rounded-lg p-1.5 text-xs font-bold text-center text-[#1B4332]"
@@ -324,6 +324,7 @@ export default function ExcelCsvImporterModal({
                       <td className="p-2 text-right">
                         <input
                           type="number"
+                          onFocus={(e) => e.target.select()}
                           value={item.prix_achat}
                           onChange={(e) => handleUpdateItem(item.id, 'prix_achat', parseFloat(e.target.value) || 0)}
                           className="w-24 bg-white border border-[#E2D5C3] rounded-lg p-1.5 text-xs font-bold text-right text-[#1B4332]"
@@ -332,6 +333,7 @@ export default function ExcelCsvImporterModal({
                       <td className="p-2 text-right">
                         <input
                           type="number"
+                          onFocus={(e) => e.target.select()}
                           value={item.prix_vente}
                           onChange={(e) => handleUpdateItem(item.id, 'prix_vente', parseFloat(e.target.value) || 0)}
                           className="w-24 bg-white border border-[#E2D5C3] rounded-lg p-1.5 text-xs font-bold text-right text-[#B8442C]"

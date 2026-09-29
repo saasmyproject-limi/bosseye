@@ -208,3 +208,84 @@ export function shareStockReportWhatsApp(etablissement: Etablissement, lowStockC
   const encoded = encodeURIComponent(message);
   window.open(`https://wa.me/?text=${encoded}`, '_blank');
 }
+
+export async function generateCloturePDF(etablissement: Etablissement, cloture: any, type: 'journaliere' | 'mensuelle' = 'journaliere') {
+  const { jsPDF } = await import('jspdf/dist/jspdf.umd.min.js' as any);
+  const doc = new jsPDF();
+  const margin = 15;
+  let y = 20;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text(etablissement.nom.toUpperCase(), margin, y);
+
+  y += 7;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Ville: ${etablissement.ville} - ${etablissement.adresse}`, margin, y);
+  doc.text(`Date d'émission: ${new Date().toLocaleDateString('fr-FR')}`, 140, y);
+
+  y += 12;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  const title = type === 'journaliere' 
+    ? `RAPPORT FIGÉ DE CLÔTURE JOURNALIÈRE — DU ${cloture.date_cloture}`
+    : `RAPPORT FIGÉ DE CLÔTURE MENSUELLE — MOIS ${cloture.mois_annee}`;
+  doc.text(title, margin, y);
+
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.text(`Figé officiellement le: ${new Date(cloture.fige_le || Date.now()).toLocaleString('fr-FR')} par ${cloture.cree_par || 'Système'}`, margin, y);
+
+  y += 8;
+  doc.line(margin, y, 210 - margin, y);
+
+  y += 10;
+  doc.setFontSize(11);
+
+  if (type === 'journaliere') {
+    const items = [
+      ['Chiffre d\'Affaires / Total Ventes du jour:', `${(cloture.total_ventes || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Encaissements Espèces (Cash):', `${(cloture.total_encaisse_cash || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Encaissements Orange Money:', `${(cloture.total_encaisse_om || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Encaissements MTN Mobile Money:', `${(cloture.total_encaisse_momo || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Marge Commerciale Brute (Coût CMP):', `+${(cloture.marge_brute_cmp || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Créances / Dettes accordées ce jour:', `${(cloture.creances_accordees_jour || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Dettes recouvrées ce jour:', `${(cloture.creances_recouvrees_jour || 0).toLocaleString('fr-FR')} FCFA`],
+    ];
+
+    items.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'normal');
+      doc.text(label, margin, y);
+      doc.setFont('helvetica', 'bold');
+      doc.text(val, 180, y, { align: 'right' });
+      y += 8;
+    });
+  } else {
+    const items = [
+      ['Total Ventes du Mois:', `${(cloture.total_ventes || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Marge Commerciale Brute CMP:', `+${(cloture.marge_brute_cmp || 0).toLocaleString('fr-FR')} FCFA`],
+      ['Total Charges Exploitation du Mois:', `-${(cloture.total_charges || 0).toLocaleString('fr-FR')} FCFA`],
+      ['RÉSULTAT NET COMPTABLE FIGÉ:', `${(cloture.resultat_net || 0).toLocaleString('fr-FR')} FCFA`],
+    ];
+
+    items.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'normal');
+      doc.text(label, margin, y);
+      doc.setFont('helvetica', 'bold');
+      doc.text(val, 180, y, { align: 'right' });
+      y += 8;
+    });
+  }
+
+  y += 10;
+  doc.line(margin, y, 210 - margin, y);
+
+  y += 10;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.text('Document officiel issu de l\'application œko — L\'œil du patron.', margin, y);
+
+  return doc;
+}

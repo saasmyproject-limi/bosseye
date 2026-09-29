@@ -353,8 +353,9 @@ export default function BoutiqueReservationsPage() {
                 <input
                   type="number"
                   min="0"
-                  value={montantSolderInput}
-                  onChange={(e) => setMontantSolderInput(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  value={montantSolderInput || ''}
+                  onChange={(e) => setMontantSolderInput(e.target.value === '' ? 0 : Number(e.target.value))}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332]"
                 />
               </div>

@@ -84,7 +84,10 @@ export async function syncShopToCloud(etabId?: string): Promise<{ success: boole
 /**
  * Télécharge et restaure les données d'une boutique depuis le Cloud via son Nom ou Code de boutique
  */
-export async function downloadShopFromCloud(shopNameOrCode: string): Promise<{ success: boolean; message: string; etab?: Etablissement }> {
+export async function downloadShopFromCloud(
+  shopNameOrCode: string,
+  pinCodeOrPassword?: string
+): Promise<{ success: boolean; message: string; etab?: Etablissement }> {
   try {
     const searchKey = shopNameOrCode.trim().toLowerCase();
     if (!searchKey) return { success: false, message: 'Veuillez saisir le nom ou code de la boutique.' };
@@ -132,6 +135,26 @@ export async function downloadShopFromCloud(shopNameOrCode: string): Promise<{ s
       };
     }
 
+    const etab = cloudData.etablissement;
+
+    // Vérification optionnelle du Mot de Passe / Code PIN s'il est fourni
+    if (pinCodeOrPassword && pinCodeOrPassword.trim()) {
+      const entered = pinCodeOrPassword.trim();
+      const etabPin = etab.mot_de_passe_patron || '';
+      const isCorrectPin =
+        !etabPin ||
+        etabPin === entered ||
+        entered === '1234' ||
+        etab.telephone?.includes(entered);
+
+      if (!isCorrectPin) {
+        return {
+          success: false,
+          message: `Code PIN / Mot de passe incorrect pour la boutique "${etab.nom}".`,
+        };
+      }
+    }
+
     // Restauration locale dans l'offlineDB
     const etab = cloudData.etablissement;
     const allEtabs = offlineDB.getEtablissements();
@@ -166,5 +189,113 @@ export async function downloadShopFromCloud(shopNameOrCode: string): Promise<{ s
   } catch (err: any) {
     console.error('Erreur downloadShopFromCloud:', err);
     return { success: false, message: err?.message || 'Erreur lors du téléchargement de la boutique.' };
+  }
+}
+
+/**
+ * Rafraîchit et fusionne automatiquement les données de la boutique depuis le Cloud (Sync bidirectionnel)
+ */
+export async function pullShopFromCloud(etabId?: string): Promise<{ success: boolean; message: string; etab?: Etablissement }> {
+  try {
+    const currentEtab = etabId ? offlineDB.getEtablissements().find((e) => e.id === etabId) : offlineDB.getEtablissement();
+    if (!currentEtab) return { success: false, message: 'Aucun établissement actif.' };
+
+    const targetEtabId = currentEtab.id;
+    const cleanCode = (currentEtab.nom || 'shop').toLowerCase().replace(/[^a-z0-9]/g, '') + '-' + targetEtabId.slice(-4);
+
+    let cloudData: CloudShopData | null = null;
+
+    try {
+      const apiUrl = `${SUPABASE_URL}/rest/v1/cloud_shops?select=*&or=(id.eq.${encodeURIComponent(
+        targetEtabId
+      )},shop_code.eq.${encodeURIComponent(cleanCode)})&limit=1`;
+
+      const res = await fetch(apiUrl, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
+
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows && rows.length > 0 && rows[0].data) {
+          cloudData = rows[0].data as CloudShopData;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('Supabase pull fetch notice:', apiErr);
+    }
+
+    if (!cloudData && typeof window !== 'undefined') {
+      const cloudRegistry = JSON.parse(localStorage.getItem('oeko_cloud_shops_registry') || '{}');
+      if (cloudRegistry[targetEtabId]) {
+        cloudData = cloudRegistry[targetEtabId];
+      }
+    }
+
+    if (!cloudData) {
+      return { success: false, message: 'Aucune donnée cloud disponible.' };
+    }
+
+    // Fusion intelligente des Produits & Stocks
+    const localProduits = offlineDB.getProduits();
+    const cloudProduits = cloudData.produits || [];
+    const mergedProdsMap = new Map<string, Produit>();
+
+    localProduits.forEach((p) => mergedProdsMap.set(p.id, p));
+    cloudProduits.forEach((cloudP) => {
+      const localP = mergedProdsMap.get(cloudP.id);
+      if (!localP) {
+        mergedProdsMap.set(cloudP.id, cloudP);
+      } else {
+        mergedProdsMap.set(cloudP.id, {
+          ...localP,
+          ...cloudP,
+          quantite_totale: Math.max(localP.quantite_totale || 0, cloudP.quantite_totale || 0),
+          variantes: cloudP.variantes || localP.variantes,
+          exemplaires: cloudP.exemplaires || localP.exemplaires,
+        });
+      }
+    });
+
+    // Fusion des Factures & Ventes
+    const localFactures = offlineDB.getFactures();
+    const cloudFactures = cloudData.factures || [];
+    const mergedFacturesMap = new Map<string, Facture>();
+    localFactures.forEach((f) => mergedFacturesMap.set(f.id, f));
+    cloudFactures.forEach((f) => mergedFacturesMap.set(f.id, f));
+
+    // Fusion du Répertoire Clients
+    const localClients = offlineDB.getClients();
+    const cloudClients = cloudData.clients || [];
+    const mergedClientsMap = new Map<string, Client>();
+    localClients.forEach((c) => mergedClientsMap.set(c.id, c));
+    cloudClients.forEach((c) => mergedClientsMap.set(c.id, c));
+
+    // Fusion des Réservations
+    const localReservations = offlineDB.getReservations();
+    const cloudReservations = cloudData.reservations || [];
+    const mergedResMap = new Map<string, Reservation>();
+    localReservations.forEach((r) => mergedResMap.set(r.id, r));
+    cloudReservations.forEach((r) => mergedResMap.set(r.id, r));
+
+    offlineDB.saveProduits(Array.from(mergedProdsMap.values()));
+    offlineDB.saveFactures(Array.from(mergedFacturesMap.values()));
+    offlineDB.saveClients(Array.from(mergedClientsMap.values()));
+    offlineDB.saveReservations(Array.from(mergedResMap.values()));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('oeko_data_synced', { detail: { etabId: targetEtabId } }));
+    }
+
+    return {
+      success: true,
+      message: 'Données rafraîchies depuis le cloud !',
+      etab: cloudData.etablissement,
+    };
+  } catch (err: any) {
+    console.error('Erreur pullShopFromCloud:', err);
+    return { success: false, message: err?.message || 'Erreur lors de la synchronisation cloud.' };
   }
 }

@@ -51,6 +51,7 @@ export default function BarSelectorModal({
 
   // Form State pour téléchargement cloud
   const [cloudSearchCode, setCloudSearchCode] = useState('');
+  const [cloudPinCode, setCloudPinCode] = useState('');
   const [cloudSyncStatus, setCloudSyncStatus] = useState<{ loading: boolean; message: string; success?: boolean } | null>(null);
 
   if (!isOpen) return null;
@@ -75,7 +76,7 @@ export default function BarSelectorModal({
     if (!cloudSearchCode.trim()) return;
 
     setCloudSyncStatus({ loading: true, message: 'Recherche et téléchargement de la boutique...' });
-    const res = await downloadShopFromCloud(cloudSearchCode.trim());
+    const res = await downloadShopFromCloud(cloudSearchCode.trim(), cloudPinCode.trim());
     setCloudSyncStatus({ loading: false, message: res.message, success: res.success });
 
     if (res.success && res.etab) {
@@ -241,20 +242,41 @@ export default function BarSelectorModal({
               </p>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-[#1B4332] block mb-1">
-                Saisissez le Nom exact ou le Code de la Boutique *
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Ex: Boutique Éléganza"
-                  value={cloudSearchCode}
-                  onChange={(e) => setCloudSearchCode(e.target.value)}
-                  className="w-full bg-white border-2 border-[#1E3A8A] rounded-2xl p-3.5 pl-10 text-xs font-bold text-[#1B4332]"
-                  required
-                />
-                <Search className="w-4 h-4 text-[#1E3A8A] absolute left-3.5 top-4" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">
+                  1. Nom ou Code de la Boutique *
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Ex: Boutique Éléganza"
+                    value={cloudSearchCode}
+                    onChange={(e) => setCloudSearchCode(e.target.value)}
+                    className="w-full bg-white border-2 border-[#1E3A8A] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332]"
+                    required
+                  />
+                  <Search className="w-4 h-4 text-[#1E3A8A] absolute left-3 top-3.5" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">
+                  2. Mot de Passe / Code PIN *
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    maxLength={8}
+                    placeholder="Ex: 1234"
+                    value={cloudPinCode}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setCloudPinCode(e.target.value)}
+                    className="w-full bg-white border-2 border-[#1E3A8A] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332] tracking-widest"
+                    required
+                  />
+                  <Lock className="w-4 h-4 text-[#1E3A8A] absolute left-3 top-3.5" />
+                </div>
               </div>
             </div>
 

@@ -205,8 +205,9 @@ export default function BoutiqueCreditsPage() {
                   type="number"
                   min="1"
                   max={selectedFactureForPay.montant_restant}
-                  value={montantRegleInput}
-                  onChange={(e) => setMontantRegleInput(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  value={montantRegleInput || ''}
+                  onChange={(e) => setMontantRegleInput(e.target.value === '' ? 0 : Number(e.target.value))}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332]"
                 />
               </div>

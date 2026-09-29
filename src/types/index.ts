@@ -11,7 +11,7 @@ export type RoleUtilisateur =
   | 'Employé'     // Vente & stock sans marges/rapports globaux
   | 'Comptable';   // Validation des paiements de commandes avant livraison sans accès direct stock/prix
 
-export type ModeSuiviStock = 'quantite' | 'unite_serie' | 'lot_pharmacie';
+export type ModeSuiviStock = 'quantite' | 'unite_serie';
 export type TypeMouvement = 'entree' | 'sortie' | 'casse_perte';
 export type StatutAbonnement = 'essai' | 'actif' | 'en_retard' | 'suspendu' | 'expire';
 export type MethodePaiement = 'Orange Money' | 'MTN MoMo';
@@ -133,6 +133,9 @@ export interface CommandeEnLigne {
   client_nom: string;
   client_telephone: string;
   adresse_livraison: string;
+  quartier_livraison?: string;
+  date_livraison?: string;
+  heure_livraison?: string;
   statut: StatutLivraison;
   pris_par_id?: string;
   pris_par_nom?: string;
@@ -180,6 +183,7 @@ export interface Client {
   etablissement_id: string;
   nom: string;
   telephone_whatsapp: string; // Ex: "237699001122"
+  sexe?: 'Homme' | 'Femme' | 'Autre';
   note_quartier?: string;
   total_dette_actuelle?: number;
   created_at: string;

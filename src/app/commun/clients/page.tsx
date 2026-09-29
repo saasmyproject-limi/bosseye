@@ -35,6 +35,7 @@ export default function CommunClientsPage() {
   // Form State
   const [nom, setNom] = useState('');
   const [phone, setPhone] = useState('');
+  const [sexe, setSexe] = useState<'Homme' | 'Femme' | 'Autre'>('Femme');
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function CommunClientsPage() {
     setEditingClient(null);
     setNom('');
     setPhone('');
+    setSexe('Femme');
     setNote('');
     setIsModalOpen(true);
   };
@@ -72,6 +74,7 @@ export default function CommunClientsPage() {
     setEditingClient(c);
     setNom(c.nom || '');
     setPhone(c.telephone_whatsapp || '');
+    setSexe(c.sexe || 'Femme');
     setNote('');
     setIsModalOpen(true);
   };
@@ -84,11 +87,13 @@ export default function CommunClientsPage() {
       offlineDB.updateClient(editingClient.id, {
         nom: nom.trim(),
         telephone_whatsapp: phone.trim(),
+        sexe,
       });
     } else {
       offlineDB.addClient({
         nom: nom.trim(),
         telephone_whatsapp: phone.trim(),
+        sexe,
       });
     }
 
@@ -207,8 +212,13 @@ export default function CommunClientsPage() {
                           {c.nom.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <h3 className="font-serif font-black text-base text-[#1B4332]">{c.nom}</h3>
-                          <div className="flex items-center gap-1 text-xs text-gray-500 font-bold">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-serif font-black text-base text-[#1B4332]">{c.nom}</h3>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1B4332]/10 text-[#1B4332]">
+                              {c.sexe === 'Homme' ? '👨 Homme' : c.sexe === 'Femme' ? '👩 Femme' : '👤 Client'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 font-bold mt-0.5">
                             <Phone className="w-3 h-3 text-emerald-700" />
                             <span>{c.telephone_whatsapp || 'Sans numéro'}</span>
                           </div>
@@ -310,6 +320,30 @@ export default function CommunClientsPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full bg-white border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1.5">Sexe / Genre du Client</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'Femme', label: '👩 Femme' },
+                    { id: 'Homme', label: '👨 Homme' },
+                    { id: 'Autre', label: '👤 Autre' },
+                  ].map((s) => (
+                    <button
+                      type="button"
+                      key={s.id}
+                      onClick={() => setSexe(s.id as any)}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                        sexe === s.id
+                          ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm font-black'
+                          : 'bg-white text-[#1B4332] border-[#E2D5C3]'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex items-center gap-2 pt-2">

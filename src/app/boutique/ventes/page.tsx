@@ -728,7 +728,7 @@ export default function BoutiqueVentesPage() {
               {/* Remise & Saisie Montant Versé */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Remise Accordée (FCFA)</label>
+                  <label className="text-[11px] font-bold text-gray-600 flex items-center h-6 mb-1">Remise Accordée (FCFA)</label>
                   <input
                     type="number"
                     min="0"
@@ -740,7 +740,7 @@ export default function BoutiqueVentesPage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Montant Versé par le Client (FCFA) *</label>
+                  <label className="text-[11px] font-bold text-gray-600 flex items-center h-6 mb-1">Montant Versé (FCFA) *</label>
                   <input
                     type="number"
                     min="0"
@@ -877,6 +877,78 @@ export default function BoutiqueVentesPage() {
                 <button type="button" onClick={() => setIsNewDeliveryModalOpen(false)} className="text-gray-500 hover:text-black">
                   <X className="w-5 h-5" />
                 </button>
+              </div>
+
+              {/* Sélection des Articles à Livrer */}
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Articles à Livrer (Catalogue Boutique) *</label>
+                <div className="bg-white border border-[#E2D5C3] rounded-2xl p-2.5 max-h-44 overflow-y-auto space-y-1.5">
+                  {produits.map((p) => {
+                    const existingIndex = newCmdCart.findIndex((i) => i.produit.id === p.id);
+                    const qty = existingIndex >= 0 ? newCmdCart[existingIndex].quantite : 0;
+
+                    return (
+                      <div key={p.id} className="flex items-center justify-between p-2 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs">
+                        <div className="truncate pr-2">
+                          <p className="font-bold text-[#1B4332] truncate">{p.nom}</p>
+                          <p className="text-[10px] text-gray-500 font-medium">{(p.prix_vente_unitaire || 0).toLocaleString('fr-FR')} FCFA/pc</p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {qty > 0 ? (
+                            <div className="flex items-center gap-1 bg-[#1B4332] text-white px-2 py-1 rounded-lg">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (qty === 1) {
+                                    setNewCmdCart(newCmdCart.filter((i) => i.produit.id !== p.id));
+                                  } else {
+                                    const copy = [...newCmdCart];
+                                    copy[existingIndex].quantite -= 1;
+                                    setNewCmdCart(copy);
+                                  }
+                                }}
+                                className="font-black px-1"
+                              >
+                                -
+                              </button>
+                              <span className="font-bold text-xs">{qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const copy = [...newCmdCart];
+                                  copy[existingIndex].quantite += 1;
+                                  setNewCmdCart(copy);
+                                }}
+                                className="font-black px-1"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewCmdCart([
+                                  ...newCmdCart,
+                                  { produit: p, quantite: 1, prix_unitaire: p.prix_vente_unitaire || 0 },
+                                ]);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-[10px]"
+                            >
+                              Ajouter +
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {newCmdCart.length > 0 && (
+                  <p className="text-[11px] font-black text-[#B8442C] mt-1 text-right">
+                    Total articles : {newCmdCart.reduce((acc, i) => acc + i.quantite * i.prix_unitaire, 0).toLocaleString('fr-FR')} FCFA
+                  </p>
+                )}
               </div>
 
               <div>

@@ -6,6 +6,7 @@ import StockAiScannerModal from '@/components/StockAiScannerModal';
 import ExcelCsvImporterModal from '@/components/ExcelCsvImporterModal';
 import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles, FileSpreadsheet, Printer, Barcode } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
+import { syncShopToCloud } from '@/lib/supabaseSync';
 import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle } from '@/types';
 
 export default function BoutiqueProduitsPage() {
@@ -68,10 +69,8 @@ export default function BoutiqueProduitsPage() {
 
       // Auto-suggestion par défaut du mode de suivi selon le secteur
       const sec = etab.secteur_boutique || '';
-      if (sec.includes('Téléphone') || sec.includes('Électronique') || sec.includes('Électroménager')) {
+      if (sec.includes('Téléphone') || sec.includes('Électronique') || sec.includes('Électroménager') || sec.includes('Pharmacie')) {
         setModeSuivi('unite_serie');
-      } else if (sec.includes('Pharmacie') || sec.includes('Médicaments')) {
-        setModeSuivi('lot_pharmacie');
       } else {
         setModeSuivi('quantite');
       }
@@ -173,6 +172,7 @@ export default function BoutiqueProduitsPage() {
 
     const currentProds = offlineDB.getProduits();
     offlineDB.saveProduits([newProd, ...currentProds]);
+    if (etab) syncShopToCloud(etab.id);
 
     setIsModalOpen(false);
     setNom('');
@@ -209,6 +209,8 @@ export default function BoutiqueProduitsPage() {
     });
 
     offlineDB.saveProduits(updated);
+    const etab = offlineDB.getEtablissement();
+    if (etab) syncShopToCloud(etab.id);
     setEditingProduit(null);
     loadData();
   };
@@ -257,7 +259,7 @@ export default function BoutiqueProduitsPage() {
               className="py-3 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>Nouvel Article</span>
+              <span>Ajouter un article</span>
             </button>
           </div>
         </div>
@@ -429,7 +431,7 @@ export default function BoutiqueProduitsPage() {
               className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
-                <h3 className="font-serif font-black text-xl text-[#1B4332]">Ajouter un Article Boutique</h3>
+                <h3 className="font-serif font-black text-xl text-[#1B4332]">Ajouter un article</h3>
                 <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-black">
                   <X className="w-5 h-5" />
                 </button>
@@ -438,46 +440,33 @@ export default function BoutiqueProduitsPage() {
               {/* Mode de Suivi du Stock */}
               <div className="p-3 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
                 <label className="block text-xs font-black text-[#1B4332]">Mode de Suivi du Stock *</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setModeSuivi('quantite')}
-                    className={`py-2 px-2 rounded-xl text-[11px] font-bold text-center border transition-all ${
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold text-center border transition-all ${
                       modeSuivi === 'quantite'
                         ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
                         : 'bg-white text-[#1B4332] border-[#E2D5C3]'
                     }`}
                   >
-                    📦 Quantité globale
+                    📦 1. Quantité Globale
                   </button>
                   <button
                     type="button"
                     onClick={() => setModeSuivi('unite_serie')}
-                    className={`py-2 px-2 rounded-xl text-[11px] font-bold text-center border transition-all ${
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold text-center border transition-all ${
                       modeSuivi === 'unite_serie'
                         ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
                         : 'bg-white text-[#1B4332] border-[#E2D5C3]'
                     }`}
                   >
-                    🏷️ À l'unité / IMEI
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModeSuivi('lot_pharmacie')}
-                    className={`py-2 px-2 rounded-xl text-[11px] font-bold text-center border transition-all ${
-                      modeSuivi === 'lot_pharmacie'
-                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
-                        : 'bg-white text-[#1B4332] border-[#E2D5C3]'
-                    }`}
-                  >
-                    💊 N° Lot & Péremption
+                    🏷️ 2. À l'Unité / Code Unique / IMEI
                   </button>
                 </div>
                 <p className="text-[10px] text-gray-500 font-medium">
                   {modeSuivi === 'unite_serie'
-                    ? 'Chaque exemplaire physique est identifié individuellement (IMEI/Numéro de série ou Code OKO-XXXXXX généré).'
-                    : modeSuivi === 'lot_pharmacie'
-                    ? 'Suivi regroupé par Numéro de Lot et Date de Péremption.'
+                    ? 'Chaque exemplaire physique est identifié individuellement (IMEI, N° de Série ou Code OKO-XXXXXX généré).'
                     : 'Suivi classique par quantité globale en stock.'}
                 </p>
               </div>
