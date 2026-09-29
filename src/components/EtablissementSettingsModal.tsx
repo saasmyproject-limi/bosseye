@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Building2, X, Check, Sparkles, Store, MapPin, Tag } from 'lucide-react';
-import { offlineDB } from '@/lib/offlineDB';
+import { offlineDB, cleanCodeSegment } from '@/lib/offlineDB';
 import { Etablissement } from '@/types';
 
 interface EtablissementSettingsModalProps {
@@ -18,6 +18,7 @@ export default function EtablissementSettingsModal({
 }: EtablissementSettingsModalProps) {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [nom, setNom] = useState('');
+  const [abrevBoutique, setAbrevBoutique] = useState('');
   const [ville, setVille] = useState('Douala');
   const [adresse, setAdresse] = useState('');
   const [secteurBoutique, setSecteurBoutique] = useState('');
@@ -28,6 +29,7 @@ export default function EtablissementSettingsModal({
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
       setNom(etab.nom || '');
+      setAbrevBoutique(etab.abrev_boutique || cleanCodeSegment(etab.nom || 'OEKO', 3));
       setVille(etab.ville || 'Douala');
       setAdresse(etab.adresse || '');
       setSecteurBoutique(etab.secteur_boutique || 'Vêtements & Mode');
@@ -43,6 +45,7 @@ export default function EtablissementSettingsModal({
 
     offlineDB.updateEtablissement(etablissement.id, {
       nom: nom.trim(),
+      abrev_boutique: abrevBoutique.trim().toUpperCase() || cleanCodeSegment(nom.trim(), 3),
       ville,
       adresse: adresse.trim(),
       secteur_boutique: etablissement.type_activite === 'boutique' ? secteurBoutique.trim() : undefined,
@@ -74,7 +77,7 @@ export default function EtablissementSettingsModal({
           <div>
             <h2 className="font-serif font-black text-xl text-[#1B4332]">Paramètres du Commerce</h2>
             <p className="text-xs text-gray-600 font-bold">
-              Profil du commerce et secteur d'activité IA
+              Profil du commerce, abréviation codes-barres & secteur IA
             </p>
           </div>
         </div>
@@ -87,16 +90,38 @@ export default function EtablissementSettingsModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Commerce *</label>
-            <input
-              type="text"
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
-              className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
-              required
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Commerce *</label>
+              <input
+                type="text"
+                value={nom}
+                onChange={(e) => {
+                  setNom(e.target.value);
+                  if (!etablissement?.abrev_boutique) {
+                    setAbrevBoutique(cleanCodeSegment(e.target.value, 3));
+                  }
+                }}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Abréviation (Code)</label>
+              <input
+                type="text"
+                maxLength={5}
+                placeholder="ex: PEP"
+                value={abrevBoutique}
+                onChange={(e) => setAbrevBoutique(e.target.value.toUpperCase())}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-mono font-black text-[#B8442C] uppercase"
+              />
+            </div>
           </div>
+          <p className="text-[10px] text-gray-500 font-medium">
+            Format des codes générés : <strong className="font-mono text-[#1B4332]">{abrevBoutique || 'PEP'}-ROB-ROU-001</strong>
+          </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

@@ -40,6 +40,7 @@ export interface Etablissement {
   type: TypeEtablissement;
   type_activite: TypeActivite;
   secteur_boutique?: string; // Ex: 'Vêtements', 'Téléphones/Électronique', 'Pharmacie/Médicaments', 'Électroménager', 'Alimentation générale', etc.
+  abrev_boutique?: string; // Abréviation personnalisée du commerce (ex: 'PEP', 'OEK', 'BOU')
   ville: string;
   adresse: string;
   telephone?: string;

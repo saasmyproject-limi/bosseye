@@ -61,6 +61,17 @@ const KEYS = {
   RESET_ZERO: 'oeko_db_reset_zero',
 };
 
+// Helper pour nettoyer et formater les segments de code (ex: "Pépite d'Or" -> "PEP", "Vêtements" -> "VET")
+export function cleanCodeSegment(str?: string, length = 3): string {
+  if (!str) return '';
+  const cleaned = str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase();
+  return cleaned.slice(0, length);
+}
+
 // Helper pour déterminer le vocabulaire selon le type d'activité (œko)
 export function getTerminology(type_activite?: TypeActivite) {
   const isBoutique = type_activite === 'boutique';
@@ -574,11 +585,16 @@ export const offlineDB = {
       const parsed: Produit[] = JSON.parse(data);
       let list = (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
 
-      // Auto-attribution de oko_code sur tout article qui n'en possède pas encore
+      // Auto-attribution de oko_code structuré (ex: PEP-ROB-ROU-001) sur tout article sans code
       list = list.map((p, idx) => {
         if (!p.oko_code) {
-          const fallbackCode = `OKO-${(idx + 101).toString().padStart(6, '0')}`;
-          return { ...p, oko_code: fallbackCode };
+          const mainCouleur = p.variantes?.[0]?.couleur || p.champs_specifiques?.couleur;
+          const generatedCode = this.generateStructuredOkoCode({
+            etabId: p.etablissement_id || etab.id,
+            categorie: p.categorie,
+            couleur: mainCouleur,
+          });
+          return { ...p, oko_code: generatedCode };
         }
         return p;
       });
@@ -592,9 +608,17 @@ export const offlineDB = {
   saveProduits(produits: Produit[]) {
     try {
       const etab = this.getEtablissement();
-      const verifiedProds = produits.map((p, idx) => {
+      const verifiedProds = produits.map((p) => {
         if (!p.oko_code) {
-          return { ...p, oko_code: this.generateNextOkoCode(p.etablissement_id || etab.id) };
+          const mainCouleur = p.variantes?.[0]?.couleur || p.champs_specifiques?.couleur;
+          return {
+            ...p,
+            oko_code: this.generateStructuredOkoCode({
+              etabId: p.etablissement_id || etab.id,
+              categorie: p.categorie,
+              couleur: mainCouleur,
+            }),
+          };
         }
         return p;
       });
@@ -1497,29 +1521,52 @@ export const offlineDB = {
     return syncedCount;
   },
 
-  // --- GÉNÉRATEUR AUTOMATIQUE DE CODE UNIQUE INCRÉMENTAL (OKO-000452) ---
-  generateNextOkoCode(etabId?: string): string {
-    const targetEtabId = etabId || this.getEtablissement().id;
-    const key = `oeko_oko_code_counter_${targetEtabId}`;
-    let currentCounter = 100;
+  // --- GÉNÉRATEUR AUTOMATIQUE DE CODE UNIQUE STRUCTURÉ (PEP-ROB-ROU-001) ---
+  generateStructuredOkoCode(params: {
+    etabId?: string;
+    categorie?: string;
+    couleur?: string;
+  }): string {
+    const etab = this.getEtablissement();
+    const shopAbrev = (etab.abrev_boutique || cleanCodeSegment(etab.nom || 'OEKO', 3)).toUpperCase();
+    const catAbrev = cleanCodeSegment(params.categorie || 'ART', 3) || 'ART';
+    const colorAbrev = cleanCodeSegment(params.couleur, 3);
+
+    const comboKeyParts = [shopAbrev, catAbrev];
+    if (colorAbrev) comboKeyParts.push(colorAbrev);
+    const comboPrefix = comboKeyParts.join('-');
+
+    const targetEtabId = params.etabId || etab.id;
+    const counterKey = `oeko_seq_counter_${targetEtabId}_${comboPrefix}`;
+    let currentCounter = 1;
+
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(key);
+      const stored = localStorage.getItem(counterKey);
       if (stored) {
         currentCounter = parseInt(stored, 10) + 1;
       } else {
-        const existing = (this.getAllProduitsGlobal() || []).filter((p) => p && p.etablissement_id === targetEtabId).length;
-        currentCounter = Math.max(100, existing + 101);
+        const existingProds = this.getProduits();
+        const matchingCount = existingProds.filter((p) => {
+          const pCode = (p.oko_code || '').toUpperCase();
+          return pCode.startsWith(comboPrefix);
+        }).length;
+        currentCounter = matchingCount + 1;
       }
-      localStorage.setItem(key, currentCounter.toString());
+      localStorage.setItem(counterKey, currentCounter.toString());
     } else {
-      currentCounter = Math.floor(100 + Math.random() * 900);
+      currentCounter = Math.floor(1 + Math.random() * 9);
     }
-    const formattedNum = currentCounter.toString().padStart(6, '0');
-    return `OKO-${formattedNum}`;
+
+    const seqStr = currentCounter.toString().padStart(3, '0');
+    return `${comboPrefix}-${seqStr}`;
   },
 
-  generateUniqueArticleCode(): string {
-    return this.generateNextOkoCode();
+  generateNextOkoCode(etabId?: string, categorie?: string, couleur?: string): string {
+    return this.generateStructuredOkoCode({ etabId, categorie, couleur });
+  },
+
+  generateUniqueArticleCode(categorie?: string, couleur?: string): string {
+    return this.generateNextOkoCode(undefined, categorie, couleur);
   },
 
   // --- CLÔTURES JOURNALIÈRES FIGÉES ---

@@ -25,6 +25,7 @@ export default function BoutiqueProduitsPage() {
   // Formulaire d'ajout d'article adaptatif
   const [nom, setNom] = useState('');
   const [categorie, setCategorie] = useState('Vêtements');
+  const [customOkoCode, setCustomOkoCode] = useState('');
   const [modeSuivi, setModeSuivi] = useState<ModeSuiviStock>('quantite');
   const [quantiteTotalePiece, setQuantiteTotalePiece] = useState<number>(10);
   const [seuilAlerte, setSeuilAlerte] = useState<number>(3);
@@ -87,7 +88,8 @@ export default function BoutiqueProduitsPage() {
     const matchCat = filterCategory === 'tous' || p.categorie === filterCategory;
     const matchSearch =
       p.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.categorie.toLowerCase().includes(searchQuery.toLowerCase());
+      p.categorie.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.oko_code || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchCat && matchSearch;
   });
 
@@ -97,6 +99,13 @@ export default function BoutiqueProduitsPage() {
 
     const etab = offlineDB.getEtablissement();
     const prodId = `prod-${Date.now()}`;
+    const firstCouleur = couleursInput.split(',')[0]?.trim();
+
+    const finalOkoCode = customOkoCode.trim().toUpperCase() || offlineDB.generateStructuredOkoCode({
+      etabId: etab.id,
+      categorie: categorie.trim() || 'Article',
+      couleur: firstCouleur,
+    });
 
     let generatedVariantes: VarianteProduit[] | undefined = undefined;
 
@@ -109,10 +118,16 @@ export default function BoutiqueProduitsPage() {
       tList.forEach((t) => {
         const cArray = cList.length > 0 ? cList : ['Standard'];
         cArray.forEach((c) => {
+          const varCode = offlineDB.generateStructuredOkoCode({
+            etabId: etab.id,
+            categorie: categorie.trim() || 'Article',
+            couleur: c,
+          });
           generatedVariantes!.push({
             id: `var-${prodId}-${vIndex++}`,
             produit_id: prodId,
             sku_code: `${nom.slice(0, 3).toUpperCase()}-${t}-${c.slice(0, 3).toUpperCase()}`,
+            oko_code: varCode,
             taille: t,
             couleur: c,
             quantite_stock: Math.max(1, Math.floor(quantiteTotalePiece / (tList.length * cArray.length))),
@@ -126,7 +141,7 @@ export default function BoutiqueProduitsPage() {
       generatedExemplaires = [];
       const totalEx = Math.max(1, quantiteTotalePiece);
       for (let i = 1; i <= totalEx; i++) {
-        const idCode = i === 1 && champImei.trim() ? champImei.trim() : offlineDB.generateUniqueArticleCode();
+        const idCode = i === 1 && champImei.trim() ? champImei.trim() : offlineDB.generateStructuredOkoCode({ etabId: etab.id, categorie });
         generatedExemplaires.push({
           id: `ex-${prodId}-${i}`,
           produit_id: prodId,
@@ -159,6 +174,7 @@ export default function BoutiqueProduitsPage() {
       etablissement_id: etab.id,
       nom: nom.trim(),
       categorie: categorie.trim() || 'Article',
+      oko_code: finalOkoCode,
       unite: 'piece',
       mode_suivi: modeSuivi,
       quantite_totale: quantiteTotalePiece,
@@ -485,6 +501,32 @@ export default function BoutiqueProduitsPage() {
                   onChange={(e) => setNom(e.target.value)}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-[#1B4332]">Code Article Structuré (Etiquette & Code-barres)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstCouleur = couleursInput.split(',')[0]?.trim();
+                      setCustomOkoCode(offlineDB.generateStructuredOkoCode({ categorie, couleur: firstCouleur }));
+                    }}
+                    className="text-[10px] font-bold text-[#B8442C] hover:underline"
+                  >
+                    🔄 Auto-générer
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="ex: PEP-ROB-ROU-001 (auto-généré si vide)"
+                  value={customOkoCode}
+                  onChange={(e) => setCustomOkoCode(e.target.value.toUpperCase())}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-mono font-black text-[#1B4332] uppercase"
+                />
+                <p className="text-[10px] text-gray-500 mt-1 font-medium">
+                  Format : [BOUTIQUE]-[CATÉGORIE]-[COULEUR]-[NUMÉRO]. Personnalisable à tout moment par le patron.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
