@@ -85,6 +85,7 @@ export interface VarianteProduit {
   id: string;
   produit_id: string;
   sku_code?: string;
+  oko_code?: string; // Code unique automatique (ex: OKO-000452)
   taille?: string; // Ex: 'S', 'M', 'L', 'XL', '42'
   couleur?: string; // Ex: 'Noir', 'Rouge', 'Bleu Marine'
   quantite_stock: number;
@@ -107,6 +108,7 @@ export interface Produit {
   etablissement_id: string;
   nom: string;
   categorie: string; // Vêtements, Électronique, Pharmacie, etc.
+  oko_code?: string; // Code unique automatique attribué par Œko (ex: OKO-000452)
   unite: 'bouteille' | 'casier' | 'piece' | 'unite';
   mode_suivi?: ModeSuiviStock; // 'quantite' | 'unite_serie' | 'lot_pharmacie'
   champs_specifiques?: Record<string, any>; // Taille, couleur, matière, marque, modèle, IMEI, dosage, lot, garantie, etc.

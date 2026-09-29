@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
+import ArticleLabelPrinterModal from '@/components/ArticleLabelPrinterModal';
 import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles, FileSpreadsheet, Printer, Barcode } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { syncShopToCloud } from '@/lib/supabaseSync';
@@ -326,9 +327,12 @@ export default function BoutiqueProduitsPage() {
                         <span className="text-[10px] font-black text-[#B8442C] uppercase tracking-wider bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
                           {p.categorie}
                         </span>
+                        <span className="text-[10px] font-mono font-bold bg-[#1B4332]/10 text-[#1B4332] px-2 py-0.5 rounded-full border border-[#1B4332]/20">
+                          🏷️ {p.oko_code || `OKO-000${p.id.slice(-4)}`}
+                        </span>
                         {p.mode_suivi === 'unite_serie' && (
                           <span className="text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
-                            🏷️ À l'unité / Serie
+                            🏷️ À l'unité
                           </span>
                         )}
                         {(p.mode_suivi as any) === 'lot_pharmacie' && (
@@ -341,15 +345,13 @@ export default function BoutiqueProduitsPage() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      {p.mode_suivi === 'unite_serie' && (
-                        <button
-                          onClick={() => setLabelModalProduit(p)}
-                          className="p-2 rounded-xl bg-amber-100 border border-amber-300 hover:bg-amber-200 text-amber-900 transition-colors"
-                          title="Imprimer étiquette OKO-Code / Barcode"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setLabelModalProduit(p)}
+                        className="p-2 rounded-xl bg-amber-100 border border-amber-300 hover:bg-amber-200 text-amber-900 transition-colors"
+                        title="Imprimer étiquette autocollante OKO-Code / Barcode"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => handleOpenEditModal(p)}
                         className="p-2 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] hover:bg-[#E2D5C3] text-[#1B4332] transition-colors"
@@ -723,46 +725,13 @@ export default function BoutiqueProduitsPage() {
           onSuccess={loadData}
         />
 
-        {/* Modal Impression Étiquettes Thermal Bluetooth */}
+        {/* Modal Impression Étiquettes Thermiques Autocollantes Bluetooth */}
         {labelModalProduit && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 text-center">
-              <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
-                <div className="flex items-center gap-2">
-                  <Printer className="w-5 h-5 text-[#B8442C]" />
-                  <h3 className="font-serif font-black text-lg text-[#1B4332]">Impression Étiquette Bluetooth</h3>
-                </div>
-                <button onClick={() => setLabelModalProduit(null)} className="text-gray-500 hover:text-black">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-5 bg-white border-2 border-dashed border-[#1B4332]/40 rounded-2xl space-y-2 shadow-inner">
-                <p className="font-bold text-xs text-gray-500 uppercase tracking-widest">{etablissement?.nom || 'ŒKO BOUTIQUE'}</p>
-                <h4 className="font-serif font-black text-base text-[#1B4332]">{labelModalProduit.nom}</h4>
-                <p className="font-serif font-black text-lg text-[#B8442C]">{labelModalProduit.prix_vente_unitaire?.toLocaleString('fr-FR')} FCFA</p>
-
-                <div className="py-2 bg-gray-100 rounded-xl border border-gray-300 space-y-1">
-                  <Barcode className="w-16 h-8 mx-auto text-black" />
-                  <p className="font-mono font-black text-sm text-black tracking-widest">
-                    {labelModalProduit.exemplaires?.[0]?.identifiant_unique || offlineDB.generateUniqueArticleCode()}
-                  </p>
-                </div>
-                <p className="text-[10px] text-gray-400 font-medium">Imprimable sur petite étiquette thermique Bluetooth</p>
-              </div>
-
-              <button
-                onClick={() => {
-                  window.print();
-                  setLabelModalProduit(null);
-                }}
-                className="w-full py-3.5 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md flex items-center justify-center gap-2"
-              >
-                <Printer className="w-4 h-4 text-[#E8A33D]" />
-                <span>Imprimer l'étiquette maintenant</span>
-              </button>
-            </div>
-          </div>
+          <ArticleLabelPrinterModal
+            isOpen={!!labelModalProduit}
+            onClose={() => setLabelModalProduit(null)}
+            produit={labelModalProduit}
+          />
         )}
     </AppLayout>
   );

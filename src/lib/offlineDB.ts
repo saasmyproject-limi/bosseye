@@ -572,7 +572,18 @@ export const offlineDB = {
         return SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
       }
       const parsed: Produit[] = JSON.parse(data);
-      return (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
+      let list = (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
+
+      // Auto-attribution de oko_code sur tout article qui n'en possède pas encore
+      list = list.map((p, idx) => {
+        if (!p.oko_code) {
+          const fallbackCode = `OKO-${(idx + 101).toString().padStart(6, '0')}`;
+          return { ...p, oko_code: fallbackCode };
+        }
+        return p;
+      });
+
+      return list;
     } catch {
       return SEED_PRODUITS;
     }
@@ -581,8 +592,14 @@ export const offlineDB = {
   saveProduits(produits: Produit[]) {
     try {
       const etab = this.getEtablissement();
+      const verifiedProds = produits.map((p, idx) => {
+        if (!p.oko_code) {
+          return { ...p, oko_code: this.generateNextOkoCode(p.etablissement_id || etab.id) };
+        }
+        return p;
+      });
       const allOther = this.getAllProduitsGlobal().filter((p) => p && p.etablissement_id !== etab.id);
-      const newAll = [...produits, ...allOther];
+      const newAll = [...verifiedProds, ...allOther];
       if (typeof window !== 'undefined') localStorage.setItem(KEYS.PRODUITS, JSON.stringify(newAll));
     } catch (e) { console.error(e); }
   },
@@ -1480,10 +1497,29 @@ export const offlineDB = {
     return syncedCount;
   },
 
-  // --- GÉNÉRATEUR D'IDENTIFIANT UNIQUE ARTICLE (MODE À L'UNITÉ) ---
+  // --- GÉNÉRATEUR AUTOMATIQUE DE CODE UNIQUE INCRÉMENTAL (OKO-000452) ---
+  generateNextOkoCode(etabId?: string): string {
+    const targetEtabId = etabId || this.getEtablissement().id;
+    const key = `oeko_oko_code_counter_${targetEtabId}`;
+    let currentCounter = 100;
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        currentCounter = parseInt(stored, 10) + 1;
+      } else {
+        const existing = (this.getAllProduitsGlobal() || []).filter((p) => p && p.etablissement_id === targetEtabId).length;
+        currentCounter = Math.max(100, existing + 101);
+      }
+      localStorage.setItem(key, currentCounter.toString());
+    } else {
+      currentCounter = Math.floor(100 + Math.random() * 900);
+    }
+    const formattedNum = currentCounter.toString().padStart(6, '0');
+    return `OKO-${formattedNum}`;
+  },
+
   generateUniqueArticleCode(): string {
-    const randomNum = Math.floor(100000 + Math.random() * 900000);
-    return `OKO-${randomNum}`;
+    return this.generateNextOkoCode();
   },
 
   // --- CLÔTURES JOURNALIÈRES FIGÉES ---

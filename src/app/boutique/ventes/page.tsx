@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
+import OkoBarcodeScannerModal from '@/components/OkoBarcodeScannerModal';
 import {
   ShoppingBag,
   Plus,
@@ -24,7 +25,8 @@ import {
   UserPlus,
   Calendar,
   AlertCircle,
-  FileText
+  FileText,
+  Camera
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import {
@@ -55,6 +57,7 @@ export default function BoutiqueVentesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [commandesLigne, setCommandesLigne] = useState<CommandeEnLigne[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
 
   // Mode Onglet pour Boutique (Comptoir / Livraisons)
   const [activeTab, setActiveTab] = useState<'comptoir' | 'livraisons'>('comptoir');
@@ -116,10 +119,33 @@ export default function BoutiqueVentesPage() {
 
   const filteredProduits = produits.filter((p) => {
     if (!p) return false;
-    const matchCat = p.categorie.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchNom = p.nom.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat || matchNom;
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    const matchCat = p.categorie.toLowerCase().includes(q);
+    const matchNom = p.nom.toLowerCase().includes(q);
+    const matchOkoCode = (p.oko_code || '').toLowerCase().includes(q);
+    const matchExemplaire = (p.exemplaires || []).some((ex) => (ex.identifiant_unique || '').toLowerCase().includes(q));
+    const matchVariante = (p.variantes || []).some((v) => (v.oko_code || v.sku_code || '').toLowerCase().includes(q));
+    return matchCat || matchNom || matchOkoCode || matchExemplaire || matchVariante;
   });
+
+  const handleScanCodeResult = (code: string) => {
+    const q = code.trim().toLowerCase();
+    const found = produits.find((p) => {
+      if ((p.oko_code || '').toLowerCase() === q) return true;
+      if ((p.exemplaires || []).some((ex) => (ex.identifiant_unique || '').toLowerCase() === q)) return true;
+      if ((p.variantes || []).some((v) => (v.oko_code || v.sku_code || '').toLowerCase() === q)) return true;
+      if (p.nom.toLowerCase() === q) return true;
+      return false;
+    });
+
+    if (found) {
+      handleAddToCart(found);
+      setSearchQuery('');
+    } else {
+      setSearchQuery(code);
+    }
+  };
 
   const handleAddToCart = (p: Produit, variante?: VarianteProduit) => {
     if (p.variantes && p.variantes.length > 0 && !variante) {
@@ -367,15 +393,27 @@ export default function BoutiqueVentesPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Colonne Gauche: Catalogue Articles (8 cols) */}
             <div className="lg:col-span-7 xl:col-span-8 space-y-4">
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
-                <input
-                  type="text"
-                  placeholder="Rechercher un article..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-9 pr-4 py-3 text-xs font-bold text-[#1B4332]"
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher par Nom, Catégorie ou Code OKO-XXXXXX..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-9 pr-4 py-3 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsBarcodeScannerOpen(true)}
+                  className="py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow flex items-center justify-center gap-2 transition-transform active:scale-95 border border-[#E8A33D] whitespace-nowrap"
+                  title="Scanner le code-barres de l'étiquette"
+                >
+                  <Camera className="w-4 h-4 text-[#E8A33D]" />
+                  <span className="hidden sm:inline">Scan Code OKO</span>
+                </button>
               </div>
 
               {/* Grid Cards Articles */}
@@ -387,9 +425,14 @@ export default function BoutiqueVentesPage() {
                     className="bg-white border border-[#E2D5C3] hover:border-[#B8442C] rounded-2xl p-3.5 cursor-pointer shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-2 group"
                   >
                     <div>
-                      <span className="text-[9px] font-black text-[#B8442C] uppercase bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
-                        {p.categorie}
-                      </span>
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <span className="text-[9px] font-black text-[#B8442C] uppercase bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
+                          {p.categorie}
+                        </span>
+                        <span className="text-[9px] font-mono font-bold bg-[#1B4332]/10 text-[#1B4332] px-1.5 py-0.5 rounded-full">
+                          🏷️ {p.oko_code || `OKO-000${p.id.slice(-4)}`}
+                        </span>
+                      </div>
                       <h4 className="font-serif font-black text-sm text-[#1B4332] mt-1 line-clamp-2 group-hover:text-[#B8442C] transition-colors">
                         {p.nom}
                       </h4>
@@ -1036,6 +1079,15 @@ export default function BoutiqueVentesPage() {
               </div>
             </form>
           </div>
+        )}
+
+        {/* Modal Scanner Caméra Code-barres OKO */}
+        {isBarcodeScannerOpen && (
+          <OkoBarcodeScannerModal
+            isOpen={isBarcodeScannerOpen}
+            onClose={() => setIsBarcodeScannerOpen(false)}
+            onScanSuccess={handleScanCodeResult}
+          />
         )}
       </div>
     </AppLayout>
