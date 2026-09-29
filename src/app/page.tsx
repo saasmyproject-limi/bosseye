@@ -1,359 +1,131 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Smartphone,
-  WifiOff,
-  Package,
-  Zap,
-  Lock,
-  Building2,
-  TrendingDown,
-  AlertTriangle,
-  Play,
-  CheckCircle2,
-  PhoneCall,
-  Wine,
-  Flame,
-  CreditCard,
-  Users,
-  Check,
-  ChevronRight,
-  Menu,
-  X,
-  RefreshCw,
-  BarChart3,
-  Receipt,
-  Eye,
-  ShoppingBag,
-} from 'lucide-react';
-import OfflineBadge from '@/components/OfflineBadge';
 import BarSelectorModal from '@/components/BarSelectorModal';
 import PinLoginModal from '@/components/PinLoginModal';
+import OfflineBadge from '@/components/OfflineBadge';
 import { offlineDB } from '@/lib/offlineDB';
 
 export default function LandingPage() {
   const router = useRouter();
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#FBF7EF] text-[#1B4332] font-sans selection:bg-[#E8A33D] selection:text-[#0F291E]">
-      {/* 1. NAVIGATION HEADER */}
-      <header className="sticky top-0 z-50 bg-[#FBF7EF]/90 backdrop-blur-md border-b border-[#E2D5C3]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          {/* Logo & Brand */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-11 h-11 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center font-black text-xl shadow-md group-hover:scale-105 transition-transform">
-              👁️
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-serif font-black text-2xl text-[#1B4332] tracking-tight">œko</h1>
-                <span className="text-[10px] font-black uppercase tracking-widest bg-[#E8A33D]/20 text-[#1B4332] px-2 py-0.5 rounded-full border border-[#E8A33D]/40">
-                  L'œil du patron
-                </span>
-              </div>
-              <p className="text-[11px] font-bold text-gray-500 hidden sm:block">SaaS de gestion pour petits commerces au Cameroun</p>
-            </div>
-          </Link>
-
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 text-xs font-bold text-[#1B4332]/80">
-            <a href="#categories" className="hover:text-[#B8442C] transition-colors">Nos 3 Métiers</a>
-            <a href="#fonctionnalites" className="hover:text-[#B8442C] transition-colors">Fonctionnalités</a>
-            <a href="#tarifs" className="hover:text-[#B8442C] transition-colors">Tarifs & 7j Essai</a>
-            <a href="#faq" className="hover:text-[#B8442C] transition-colors">FAQ</a>
-          </nav>
-
-          {/* Action CTA Buttons */}
-          <div className="hidden md:flex items-center gap-3">
-            <button
-              onClick={() => setIsPinModalOpen(true)}
-              className="py-2.5 px-4 rounded-xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center gap-2 transition-all active:scale-95"
-            >
-              <Lock className="w-4 h-4 text-[#B8442C]" />
-              <span>Connexion PIN</span>
-            </button>
-
-            <Link
-              href="/ventes"
-              className="py-2.5 px-5 rounded-xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-bold text-xs shadow-glow-brique flex items-center gap-1.5 transition-all active:scale-95"
-            >
-              <span>Essai Gratuit 7j</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-          {/* Mobile Menu Toggle */}
-          <button
-            onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-            className="md:hidden p-2 rounded-xl bg-[#F3ECE0] border border-[#E2D5C3] text-[#1B4332]"
-          >
-            {isMobileNavOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-        </div>
-
-        {/* Mobile Navigation Drawer */}
-        {isMobileNavOpen && (
-          <div className="md:hidden bg-[#FBF7EF] border-b border-[#E2D5C3] px-4 py-4 space-y-3">
-            <a href="#categories" onClick={() => setIsMobileNavOpen(false)} className="block py-2 text-xs font-bold">Nos 3 Métiers</a>
-            <a href="#tarifs" onClick={() => setIsMobileNavOpen(false)} className="block py-2 text-xs font-bold">Tarifs (5k / 10k FCFA)</a>
-            <div className="pt-2 border-t border-[#E2D5C3] space-y-2">
-              <button
-                onClick={() => { setIsMobileNavOpen(false); setIsPinModalOpen(true); }}
-                className="w-full py-3 rounded-xl bg-[#F3ECE0] text-[#1B4332] font-bold text-xs text-center block"
-              >
-                Connexion PIN Employé
-              </button>
-              <Link
-                href="/ventes"
-                onClick={() => setIsMobileNavOpen(false)}
-                className="w-full py-3 rounded-xl bg-[#B8442C] text-white font-bold text-xs text-center block shadow-md"
-              >
-                Essai Gratuit 7j sans paiement
-              </Link>
-            </div>
-          </div>
-        )}
+    <main className="min-h-screen bg-[#FAF9F5] text-[#1B4332] font-sans selection:bg-[#E8A33D] selection:text-[#0F291E] flex flex-col items-center justify-between p-6 sm:p-10 relative overflow-hidden">
+      {/* Discreet Header with Offline Badge */}
+      <header className="w-full max-w-md flex justify-end items-center z-10 min-h-[32px]">
+        <OfflineBadge />
       </header>
 
-      {/* 2. HERO SECTION */}
-      <section className="relative pt-12 pb-20 lg:pt-20 lg:pb-28 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Left Content */}
-            <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1B4332]/10 border border-[#1B4332]/20 text-[#1B4332] font-bold text-xs">
-                <Sparkles className="w-4 h-4 text-[#E8A33D]" />
-                <span>Le SaaS de gestion pour commerces au Cameroun</span>
-              </div>
+      {/* Main Centered Content */}
+      <section className="my-auto flex flex-col items-center text-center max-w-lg w-full py-6 z-10">
+        {/* Abstract Eye Illustration */}
+        <div className="relative mb-8 sm:mb-10 flex items-center justify-center cursor-pointer group">
+          <div className="absolute inset-0 rounded-full bg-[#10B981]/15 blur-3xl transform scale-125 group-hover:scale-150 transition-transform duration-700" />
 
-              <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-black text-[#1B4332] tracking-tight leading-[1.1]">
-                œko : Contrôlez votre stock, vos ventes et votre argent, <span className="italic text-[#B8442C]">même à distance.</span>
-              </h1>
+          <svg
+            viewBox="0 0 240 240"
+            className="w-56 h-56 sm:w-64 sm:h-64 drop-shadow-sm transition-transform duration-500 group-hover:scale-[1.03]"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Outer Soft Teal/Mint Circle with Fine Green Stroke */}
+            <circle
+              cx="120"
+              cy="120"
+              r="108"
+              fill="#E2F5EE"
+              stroke="#10B981"
+              strokeWidth="1.5"
+              strokeOpacity="0.7"
+            />
 
-              <p className="text-sm sm:text-base text-[#1B4332]/80 font-medium max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                Ne perdez plus la trace de vos marchandises ni de votre caisse. œko s'adapte automatiquement à ce que vous vendez (vêtements, téléphones, pharmacie, électroménager, alimentation générale...). Suivez tout en temps réel sur votre téléphone.
-              </p>
+            {/* White Eye Contour */}
+            <path
+              d="M48 120C48 120 78 82 120 82C162 82 192 120 192 120C192 120 162 158 120 158C78 158 48 120 48 120Z"
+              fill="#FFFFFF"
+            />
 
-              {/* CTAs & Badges */}
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
-                <button
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="w-full sm:w-auto py-4 px-8 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm shadow-glow-brique flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
-                >
-                  <span>Créer mon compte (Essayer gratuitement 7 jours)</span>
-                  <ArrowRight className="w-5 h-5 text-white" />
-                </button>
+            {/* Amber Pupil Outer Ring */}
+            <circle
+              cx="120"
+              cy="120"
+              r="22"
+              fill="#FFFBEB"
+              stroke="#E8A33D"
+              strokeWidth="3.2"
+            />
 
-                <button
-                  onClick={() => setIsPinModalOpen(true)}
-                  className="w-full sm:w-auto py-4 px-6 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-sm flex items-center justify-center gap-2 transition-all"
-                >
-                  <Lock className="w-4 h-4 text-[#B8442C]" />
-                  <span>Connexion PIN</span>
-                </button>
-              </div>
+            {/* Amber Pupil Center */}
+            <circle
+              cx="120"
+              cy="120"
+              r="11"
+              fill="#D97706"
+            />
 
-              {/* Highlights List */}
-              <div className="grid grid-cols-3 gap-4 pt-6 border-t border-[#E2D5C3]/80 text-left">
-                <div>
-                  <h4 className="font-serif font-black text-xl text-[#1B4332]">7 Jours</h4>
-                  <p className="text-[11px] font-bold text-gray-500">Essai gratuit sans carte</p>
-                </div>
-                <div>
-                  <h4 className="font-serif font-black text-xl text-[#1B4332]">5 000 FCFA</h4>
-                  <p className="text-[11px] font-bold text-gray-500">/mois après l'essai</p>
-                </div>
-                <div>
-                  <h4 className="font-serif font-black text-xl text-[#1B4332]">Orange / MTN</h4>
-                  <p className="text-[11px] font-bold text-gray-500">MoMo direct Cameroun</p>
-                </div>
-              </div>
-            </div>
+            {/* Reflection Highlight */}
+            <circle
+              cx="116"
+              cy="116"
+              r="3.5"
+              fill="#FFFFFF"
+              fillOpacity="0.85"
+            />
+          </svg>
+        </div>
 
-            {/* Right Card / Visual */}
-            <div className="lg:col-span-5 relative">
-              <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-2xl space-y-4 relative z-10">
-                <div className="flex items-center justify-between pb-3 border-b border-[#E2D5C3]">
-                  <div className="flex items-center gap-2">
-                    <Eye className="w-5 h-5 text-[#B8442C]" />
-                    <span className="font-serif font-black text-base text-[#1B4332]">Aperçu œko Dashboard</span>
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                    Actif • Hors-ligne OK
-                  </span>
-                </div>
+        {/* Name */}
+        <h1 className="font-serif font-black text-3xl sm:text-4xl text-[#1B4332] tracking-tight">
+          Œko
+        </h1>
 
-                <div className="space-y-3">
-                  <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-gray-500">Stock & Ventes</span>
-                      <h4 className="font-serif font-black text-sm text-[#1B4332]">Chiffre d'Affaires du Jour</h4>
-                    </div>
-                    <span className="font-serif font-black text-lg text-[#1B4332]">145 000 FCFA</span>
-                  </div>
+        {/* Catchphrase */}
+        <p className="text-sm sm:text-base font-semibold text-gray-500 mt-1 tracking-wide">
+          L'œil du patron
+        </p>
 
-                  <div className="p-3.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-gray-500">Crédits Clients</span>
-                      <h4 className="font-serif font-black text-sm text-[#B8442C]">Argent à Récupérer</h4>
-                    </div>
-                    <span className="font-serif font-black text-lg text-[#B8442C]">35 000 FCFA</span>
-                  </div>
-                </div>
+        {/* Single Description Line */}
+        <p className="text-sm sm:text-base font-medium text-[#1B4332]/90 mt-6 sm:mt-8 max-w-xs sm:max-w-md leading-snug">
+          Stock, ventes, crédits clients — depuis votre téléphone
+        </p>
 
-                <div className="pt-2 text-center">
-                  <p className="text-[11px] font-bold text-gray-600">Imprimante Bluetooth & Scan IA Inclus</p>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Two Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full max-w-sm mt-8 sm:mt-10">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-[#E2F5EE] hover:bg-[#D3EEE4] border-2 border-[#10B981]/60 text-[#1B4332] font-black text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center"
+          >
+            Crée ton compte
+          </button>
+
+          <button
+            onClick={() => setIsPinModalOpen(true)}
+            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-white hover:bg-gray-50 border-2 border-[#E2D5C3] text-[#1B4332] font-bold text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center"
+          >
+            Connecte-toi
+          </button>
         </div>
       </section>
 
-      {/* 3. SECTEURS & ADAPTABILITÉ */}
-      <section id="categories" className="py-16 bg-[#F3ECE0]/60 border-y border-[#E2D5C3]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          <div className="text-center space-y-2 max-w-2xl mx-auto">
-            <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-3 py-1 rounded-full border border-[#B8442C]/30">
-              Adaptabilité Automatique
-            </span>
-            <h2 className="font-serif text-3xl sm:text-4xl font-black text-[#1B4332]">
-              L'application s'adapte précisément à ce que vous vendez
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* 1. Boutique */}
-            <div className="bg-[#FBF7EF] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-sm hover:border-[#1B4332] transition-all flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#1B4332] text-white flex items-center justify-center text-2xl font-bold">
-                  👗
-                </div>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-serif font-black text-xl text-[#1B4332]">Boutique</h3>
-                  <span className="text-xs font-black text-[#B8442C]">5 000 FCFA/mois</span>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                  Vente de vêtements, sacs et chaussures. Stock avec déclinaisons (Taille S/M/L, Couleur, Pointure). Stock unifié en temps réel entre boutique physique et ventes en ligne avec suivi de livraison.
-                </p>
-                <ul className="space-y-1.5 text-xs text-[#1B4332] font-bold">
-                  <li>✓ Rôles : Patronne & Employé (sans accès aux marges)</li>
-                  <li>✓ Commandes en Ligne & Livraisons</li>
-                  <li>✓ Crédits clients & Relances WhatsApp</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* 2. Bar */}
-            <div className="bg-[#FBF7EF] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-sm hover:border-[#1B4332] transition-all flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#1B4332] text-white flex items-center justify-center text-2xl font-bold">
-                  🍺
-                </div>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-serif font-black text-xl text-[#1B4332]">Bar / Lounge</h3>
-                  <span className="text-xs font-black text-[#B8442C]">5 000 FCFA/mois</span>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                  Gestion de consommations par table ouverte. Addition divisible par personne ou note unique. Déstockage immédiat au service et distinction stricte stock sorti vs argent encaissé.
-                </p>
-                <ul className="space-y-1.5 text-xs text-[#1B4332] font-bold">
-                  <li>✓ Rôles : Patronne & Serveuse</li>
-                  <li>✓ Factures divisibles (Split note)</li>
-                  <li>✓ Alertes ruptures de casiers & vrac</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* 3. Snack */}
-            <div className="bg-[#FBF7EF] border-2 border-[#E2D5C3] rounded-3xl p-6 shadow-sm hover:border-[#1B4332] transition-all flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#1B4332] text-white flex items-center justify-center text-2xl font-bold">
-                  🍟
-                </div>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-serif font-black text-xl text-[#1B4332]">Snack-Bar</h3>
-                  <span className="text-xs font-black text-[#B8442C]">10 000 FCFA/mois</span>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                  Flux sécurisé 2 étapes (Serveuse prend commande/cash → Caissière encaisse et valide le déstockage). Multi-caisses actives simultanément avec traçabilité complète.
-                </p>
-                <ul className="space-y-1.5 text-xs text-[#1B4332] font-bold">
-                  <li>✓ Rôles : Patron (à distance), Directeur, Caissière, Serveuse</li>
-                  <li>✓ Tables normales & Carrés VIP</li>
-                  <li>✓ Traçabilité totale par caisse & serveuse</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. TARIFS ET PAIEMENT MOBILE MONEY */}
-      <section id="tarifs" className="py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 text-center">
-          <div className="space-y-2 max-w-xl mx-auto">
-            <h2 className="font-serif text-3xl font-black text-[#1B4332]">
-              Tarifs Transparents & Paiement MoMo
-            </h2>
-            <p className="text-xs text-gray-600 font-medium">
-              Commencez gratuitement pendant 7 jours sans carte. Réglez ensuite simplement via Orange Money ou MTN MoMo.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 space-y-4 text-left">
-              <h3 className="font-serif font-black text-xl text-[#1B4332]">Boutique / Bar</h3>
-              <div className="flex items-baseline gap-1">
-                <span className="font-serif font-black text-3xl text-[#B8442C]">5 000 FCFA</span>
-                <span className="text-xs font-bold text-gray-500">/ mois</span>
-              </div>
-              <p className="text-xs text-gray-600 font-medium">Idéal pour les boutiques de mode et les bars/maquis à gestion simplifiée.</p>
-              <Link href="/ventes" className="w-full py-3 rounded-xl bg-[#1B4332] text-white font-bold text-xs text-center block">
-                Démarrer l'essai 7j
-              </Link>
-            </div>
-
-            <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 space-y-4 text-left">
-              <h3 className="font-serif font-black text-xl text-[#1B4332]">Snack-Bar (Multi-Caisses)</h3>
-              <div className="flex items-baseline gap-1">
-                <span className="font-serif font-black text-3xl text-[#B8442C]">10 000 FCFA</span>
-                <span className="text-xs font-bold text-gray-500">/ mois</span>
-              </div>
-              <p className="text-xs text-gray-600 font-medium">Gestion multi-caisses, carrés VIP, traçabilité serveuses & caissières et contrôle patron à distance.</p>
-              <Link href="/ventes" className="w-full py-3 rounded-xl bg-[#B8442C] text-white font-bold text-xs text-center block shadow-md">
-                Démarrer l'essai 7j
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="bg-[#0F291E] text-white py-10 border-t border-[#2D6A4F]">
-        <div className="max-w-7xl mx-auto px-4 text-center space-y-4">
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-2xl">👁️</span>
-            <span className="font-serif font-black text-xl">œko</span>
-            <span className="text-xs text-[#E8A33D] font-bold">— L'œil du patron</span>
-          </div>
-          <p className="text-xs text-gray-400 max-w-md mx-auto font-medium">
-            Le logiciel SaaS de gestion ultime pour boutiques, bars et snack-bars au Cameroun.
-          </p>
-          <div className="text-[11px] text-gray-500 pt-4">
-            © 2026 œko SaaS • Tous droits réservés • Douala / Yaoundé
-          </div>
-        </div>
+      {/* Footer */}
+      <footer className="w-full text-center py-2 text-[11px] font-semibold text-gray-400 z-10">
+        © 2026 Œko
       </footer>
+
+      {/* Account Creation Modal */}
+      {isCreateModalOpen && (
+        <BarSelectorModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSelectSuccess={(etab) => {
+            setIsCreateModalOpen(false);
+            router.push(`/${etab.type_activite || 'boutique'}/dashboard`);
+          }}
+        />
+      )}
 
       {/* PIN Login Modal */}
       {isPinModalOpen && (
@@ -372,18 +144,6 @@ export default function LandingPage() {
           }}
         />
       )}
-
-      {/* Creation Modal */}
-      {isCreateModalOpen && (
-        <BarSelectorModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onSelectSuccess={(etab) => {
-            setIsCreateModalOpen(false);
-            router.push(`/${etab.type_activite || 'boutique'}/dashboard`);
-          }}
-        />
-      )}
-    </div>
+    </main>
   );
 }
