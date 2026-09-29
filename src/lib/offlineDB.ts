@@ -914,31 +914,38 @@ export const offlineDB = {
   },
 
   // --- FACTURES ---
-  getFactures(): Facture[] {
+  getFactures(limit?: number): Facture[] {
     try {
       const etab = this.getEtablissement();
       const users = this.getAllUtilisateursGlobal();
       const clients = this.getAllClientsGlobal();
       const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_FACTURES.filter((f) => f && f.etablissement_id === etab.id);
+      if (typeof window === 'undefined') {
+        let raw = SEED_FACTURES.filter((f) => f && f.etablissement_id === etab.id);
+        if (limit && limit > 0) raw = raw.slice(-limit);
+        return raw;
+      }
       const data = localStorage.getItem(KEYS.FACTURES);
       if (!data && isResetZero) return [];
       const allFacs: Facture[] = data ? JSON.parse(data) : SEED_FACTURES;
 
-      return allFacs
-        .filter((f) => f && f.etablissement_id === etab.id)
-        .map((f) => ({
-          ...f,
-          client: clients.find((c) => c && c.id === f.client_id),
-          utilisateur: users.find((u) => u && u.id === f.utilisateur_id),
-          lignes: (f.lignes || []).map((l) => ({
-            ...l,
-            sous_total_cout: l ? (l.sous_total_cout ?? 0) : 0,
-            marge_brute: l ? (l.marge_brute ?? ((l.sous_total_vente || 0) - (l.sous_total_cout || 0))) : 0,
-          })),
-        }));
+      let filtered = allFacs.filter((f) => f && f.etablissement_id === etab.id);
+      if (limit && limit > 0) {
+        filtered = filtered.slice(-limit);
+      }
+
+      return filtered.map((f) => ({
+        ...f,
+        client: clients.find((c) => c && c.id === f.client_id),
+        utilisateur: users.find((u) => u && u.id === f.utilisateur_id),
+        lignes: (f.lignes || []).map((l) => ({
+          ...l,
+          sous_total_cout: l ? (l.sous_total_cout ?? 0) : 0,
+          marge_brute: l ? (l.marge_brute ?? ((l.sous_total_vente || 0) - (l.sous_total_cout || 0))) : 0,
+        })),
+      }));
     } catch {
-      return SEED_FACTURES;
+      return [];
     }
   },
 

@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
-import StockAiScannerModal from '@/components/StockAiScannerModal';
-import ExcelCsvImporterModal from '@/components/ExcelCsvImporterModal';
 import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles, FileSpreadsheet, Printer, Barcode } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { syncShopToCloud } from '@/lib/supabaseSync';
 import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle } from '@/types';
+
+const StockAiScannerModal = dynamic(() => import('@/components/StockAiScannerModal'), { ssr: false });
+const ExcelCsvImporterModal = dynamic(() => import('@/components/ExcelCsvImporterModal'), { ssr: false });
 
 export default function BoutiqueProduitsPage() {
   const [produits, setProduits] = useState<Produit[]>([]);

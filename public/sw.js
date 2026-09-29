@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oeko-pwa-v3';
+const CACHE_NAME = 'oeko-pwa-v4';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
@@ -30,7 +30,6 @@ self.addEventListener('install', (event) => {
   console.log('[ServiceWorker] Installation de la nouvelle version PWA...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Intégration robuste avec Promise.allSettled pour ne pas bloquer si 1 asset échoue
       return Promise.allSettled(
         PRECACHE_ASSETS.map((url) =>
           cache.add(url).catch((err) => {
@@ -40,7 +39,6 @@ self.addEventListener('install', (event) => {
       );
     })
   );
-  // Passer l'attente pour activer immédiatement la nouvelle version
   self.skipWaiting();
 });
 
@@ -62,7 +60,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch : Stratégies adaptées pour mises à jour automatiques et mode hors-ligne
+// Fetch : Stratégies ultra-rapides (Stale-While-Revalidate) pour chargement instantané 0ms
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -71,11 +69,11 @@ self.addEventListener('fetch', (event) => {
   // Ignorer les requêtes hors origine (ex: Supabase, APIs externes)
   if (url.origin !== self.location.origin) return;
 
-  // Stratégie 1: Navigation HTML -> Network-First (avec Fallback Cache Hors-Ligne)
-  // Garantit d'obtenir la toute dernière version de la page si en ligne, ou le cache si hors-ligne
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
+  // Stratégie Stale-While-Revalidate pour la navigation HTML et ressources statiques
+  // Renvoie immédiatement la version en cache (0ms) et met à jour silencieusement en arrière-plan
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      const fetchPromise = fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseToCache = networkResponse.clone();
@@ -85,30 +83,10 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          // Si le réseau échoue (hors-ligne), servir le cache de la page ou la racine '/'
-          return caches.match(event.request).then((cachedResponse) => {
-            return cachedResponse || caches.match('/');
-          });
-        })
-    );
-    return;
-  }
-
-  // Stratégie 2: Ressources statiques (JS, CSS, images, icônes) -> Stale-While-Revalidate
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => cachedResponse);
+        .catch((err) => {
+          console.warn('[ServiceWorker] Erreur réseau fetch, fallback cache.', err);
+          return cachedResponse || caches.match('/');
+        });
 
       return cachedResponse || fetchPromise;
     })

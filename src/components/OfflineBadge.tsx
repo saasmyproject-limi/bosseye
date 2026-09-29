@@ -20,17 +20,26 @@ export default function OfflineBadge() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Auto-sync périodique toutes les 15s si en ligne
+    // Démarrage différé non-bloquant de la synchro initiale
+    const initialTimer = setTimeout(() => {
+      setQueueCount(offlineDB.getOfflineQueueCount());
+      if (navigator.onLine) {
+        triggerAutoSync();
+      }
+    }, 3000);
+
+    // Auto-sync périodique toutes les 30s si en ligne
     const interval = setInterval(() => {
       setQueueCount(offlineDB.getOfflineQueueCount());
       if (navigator.onLine) {
         triggerAutoSync();
       }
-    }, 15000);
+    }, 30000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearTimeout(initialTimer);
       clearInterval(interval);
     };
   }, []);
@@ -51,8 +60,8 @@ export default function OfflineBadge() {
     try {
       const etab = offlineDB.getEtablissement();
       if (etab && etab.id) {
-        await syncShopToCloud(etab.id);
-        await pullShopFromCloud(etab.id);
+        // Exécution en parallèle (Push & Pull simultanés)
+        await Promise.all([syncShopToCloud(etab.id), pullShopFromCloud(etab.id)]);
       }
     } catch (e) {
       console.error(e);
