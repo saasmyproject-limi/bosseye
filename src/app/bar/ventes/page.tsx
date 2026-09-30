@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
+import BarReceiptModal from '@/components/BarReceiptModal';
 import {
   Beer,
   Plus,
@@ -12,14 +13,14 @@ import {
   CreditCard,
   UserCheck,
   Receipt,
-  Tag,
+  Gift,
   Split,
   Printer,
   X,
-  User,
   UserPlus,
-  Edit2,
-  RotateCcw
+  Clock,
+  Utensils,
+  ChevronRight
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import {
@@ -28,64 +29,36 @@ import {
   Utilisateur,
   Client,
   Facture,
+  SessionBar,
+  LigneSessionBar
 } from '@/types';
-
-export interface ClientOrderItem {
-  produit: Produit;
-  quantite: number;
-  prix_unitaire: number;
-}
-
-export interface TableClientOrder {
-  id: string;
-  nom: string;
-  items: ClientOrderItem[];
-}
 
 export default function BarVentesPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
   const [produits, setProduits] = useState<Produit[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [sessions, setSessions] = useState<SessionBar[]>([]);
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<'tous' | 'boissons' | 'nourriture'>('tous');
 
-  // Tables Bar State (Multi-factures clients par table)
-  const [tablesState, setTablesState] = useState<Record<string, TableClientOrder[]>>({
-    'Table 01': [
-      {
-        id: 'c-t1-pierre',
-        nom: 'Pierre (Facture A)',
-        items: [
-          {
-            produit: { id: 'prod-beaufort', nom: 'Beaufort Lager 65cl', categorie: 'Bière', unite: 'bouteille', quantite_totale: 100, seuil_alerte: 10, prix_vente_bouteille: 650, cout_achat_unitaire_cmp: 271, etablissement_id: '', actif: true },
-            quantite: 4,
-            prix_unitaire: 650,
-          },
-        ],
-      },
-      {
-        id: 'c-t1-raoul',
-        nom: 'Raoul (Facture B)',
-        items: [
-          {
-            produit: { id: 'prod-33export', nom: '33 Export 65cl', categorie: 'Bière', unite: 'bouteille', quantite_totale: 120, seuil_alerte: 10, prix_vente_bouteille: 500, cout_achat_unitaire_cmp: 250, etablissement_id: '', actif: true },
-            quantite: 3,
-            prix_unitaire: 500,
-          },
-        ],
-      },
-    ],
-    'Table 02': [{ id: 'c-t2-1', nom: 'Client 1 (Facture A)', items: [] }],
-    'Table 03': [{ id: 'c-t3-1', nom: 'Client 1 (Facture A)', items: [] }],
-  });
-
+  // Table sélectionnée (repère physique)
   const [activeTableNumber, setActiveTableNumber] = useState<string>('Table 01');
-  const [activeClientId, setActiveClientId] = useState<string>('c-t1-pierre');
-  const [checkoutTarget, setCheckoutTarget] = useState<'client_actuel' | 'toute_la_table'>('toute_la_table');
-  const [editingClientNameId, setEditingClientNameId] = useState<string | null>(null);
-  const [editingClientNameValue, setEditingClientNameValue] = useState<string>('');
+  // Session sélectionnée parmi celles de la table active
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
 
+  // Modals & Options
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [checkoutMode, setCheckoutMode] = useState<'globale' | 'division_egale' | 'sur_mesure'>('globale');
+  const [splitCount, setSplitCount] = useState<number>(2);
+  const [selectedLigneIds, setSelectedLigneIds] = useState<string[]>([]);
+
+  // Cadeau / Table de service option
+  const [giftTableTarget, setGiftTableTarget] = useState<string>('');
+  const [isGiftMode, setIsGiftMode] = useState<boolean>(false);
+
+  // Paiement details
   const [paymentMode, setPaymentMode] = useState<'cash' | 'orange_money' | 'mtn_momo' | 'credit'>('cash');
   const [remiseInput, setRemiseInput] = useState<number>(0);
   const [acompteCreditInput, setAcompteCreditInput] = useState<number>(0);
@@ -93,8 +66,11 @@ export default function BarVentesPage() {
   const [isNewClientMode, setIsNewClientMode] = useState<boolean>(false);
   const [newClientNom, setNewClientNom] = useState<string>('');
   const [newClientPhone, setNewClientPhone] = useState<string>('');
-  const [lastCreatedFacture, setLastCreatedFacture] = useState<Facture | null>(null);
-  const [splitCount, setSplitCount] = useState<number>(1);
+
+  // Impression Ticket Thermique
+  const [createdFactureForReceipt, setCreatedFactureForReceipt] = useState<Facture | null>(null);
+  const [receiptSplitInfo, setReceiptSplitInfo] = useState<{ partNumber: number; totalParts: number } | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -103,127 +79,222 @@ export default function BarVentesPage() {
   const loadData = () => {
     try {
       const etab = offlineDB.getEtablissement();
-      setEtablissement(etab);
-      setCurrentUser(offlineDB.getCurrentUser());
-      setProduits(offlineDB.getProduits());
-      setClients(offlineDB.getClients());
-    } catch (e) { console.error(e); }
-  };
+      const user = offlineDB.getCurrentUser();
+      const prods = offlineDB.getProduits();
+      const cls = offlineDB.getClients();
+      let sessList = offlineDB.getSessionsBar().filter((s) => s.statut === 'active');
 
-  const handleAddTable = () => {
-    setTablesState((prev) => {
-      const existingNumbers = Object.keys(prev).map((name) => {
-        const match = name.match(/Table (\d+)/i);
-        return match ? parseInt(match[1], 10) : 0;
-      });
-      const maxNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-      const nextNum = String(maxNum + 1).padStart(2, '0');
-      const newTableName = `Table ${nextNum}`;
-      return {
-        ...prev,
-        [newTableName]: [{ id: `c-${newTableName}-${Date.now()}`, nom: 'Client 1 (Facture A)', items: [] }],
-      };
-    });
-  };
+      // Si aucune session active n'existe, créer des sessions initiales démo
+      if (sessList.length === 0) {
+        const demoSession1: SessionBar = {
+          id: `ses-demo-1`,
+          etablissement_id: etab.id,
+          numero_session: 'SES-0001',
+          table_numero: 'Table 01',
+          nom_client_session: 'Session Paul (Facture A)',
+          serveuse_id: user?.id || 'user-1',
+          serveuse_nom: user?.nom || 'Serveuse Bar',
+          statut: 'active',
+          created_at: new Date().toISOString(),
+          lignes: [
+            {
+              id: `lig-demo-1`,
+              produit_id: prods[0]?.id || 'p-1',
+              nom_produit: prods[0]?.nom || 'Beaufort Lager 65cl',
+              categorie_type: 'boisson',
+              quantite: 3,
+              prix_unitaire: prods[0]?.prix_vente_bouteille || 650,
+              sous_total: (prods[0]?.prix_vente_bouteille || 650) * 3,
+              serveuse_id: user?.id,
+              serveuse_nom: user?.nom,
+              created_at: new Date().toISOString(),
+            },
+          ],
+        };
 
-  const handleDeleteTable = (tNum: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (Object.keys(tablesState).length <= 1) return;
-    setTablesState((prev) => {
-      const copy = { ...prev };
-      delete copy[tNum];
-      return copy;
-    });
-    if (activeTableNumber === tNum) {
-      const remaining = Object.keys(tablesState).filter((t) => t !== tNum);
-      if (remaining.length > 0) {
-        handleSelectTable(remaining[0]);
+        const demoSession2: SessionBar = {
+          id: `ses-demo-2`,
+          etablissement_id: etab.id,
+          numero_session: 'SES-0002',
+          table_numero: 'Table 01',
+          nom_client_session: 'Session Marc (Facture B)',
+          serveuse_id: user?.id || 'user-1',
+          serveuse_nom: user?.nom || 'Serveuse Bar',
+          statut: 'active',
+          created_at: new Date().toISOString(),
+          lignes: [],
+        };
+
+        offlineDB.saveSessionBar(demoSession1);
+        offlineDB.saveSessionBar(demoSession2);
+        sessList = [demoSession1, demoSession2];
       }
+
+      setEtablissement(etab);
+      setCurrentUser(user);
+      setProduits(prods);
+      setClients(cls);
+      setSessions(sessList);
+
+      // Auto-sélectionner la première session si nécessaire
+      if (sessList.length > 0) {
+        const activeSess = sessList.find((s) => s.table_numero === activeTableNumber) || sessList[0];
+        setActiveSessionId(activeSess.id);
+        setActiveTableNumber(activeSess.table_numero);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const handleSelectTable = (tNum: string) => {
-    setActiveTableNumber(tNum);
-    const clientsInTable = tablesState[tNum] || [];
-    if (clientsInTable.length > 0) {
-      setActiveClientId(clientsInTable[0].id);
-    }
+  // Liste des numéros de tables uniques existants
+  const tableNumbersList = Array.from(
+    new Set([...sessions.map((s) => s.table_numero), 'Table 01', 'Table 02', 'Table 03', 'Table 04'])
+  ).sort();
+
+  // Sessions rattachées à la table physique active
+  const currentTableSessions = sessions.filter((s) => s.table_numero === activeTableNumber && s.statut === 'active');
+  const activeSessionObj = sessions.find((s) => s.id === activeSessionId) || currentTableSessions[0];
+
+  // Gestion des tables physiques
+  const handleAddTable = () => {
+    const existingNums = tableNumbersList.map((t) => {
+      const match = t.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
+    });
+    const maxNum = existingNums.length > 0 ? Math.max(...existingNums) : 0;
+    const nextNumStr = `Table ${String(maxNum + 1).padStart(2, '0')}`;
+    
+    // Créer une première session pour cette nouvelle table
+    handleAddSessionToTable(nextNumStr);
+    setActiveTableNumber(nextNumStr);
   };
 
-  const currentTableClients = tablesState[activeTableNumber] || [];
-  const activeClientObj = currentTableClients.find((c) => c.id === activeClientId) || currentTableClients[0];
+  // Créer une nouvelle session indépendante sur la même table
+  const handleAddSessionToTable = (tNum: string = activeTableNumber) => {
+    const etab = offlineDB.getEtablissement();
+    const countOnTable = sessions.filter((s) => s.table_numero === tNum).length;
+    const letter = String.fromCharCode(65 + countOnTable);
+    const newSessionId = `ses-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
-  const handleAddClientToTable = () => {
-    const letter = String.fromCharCode(65 + currentTableClients.length);
-    const newId = `c-${activeTableNumber}-${Date.now()}`;
-    const newObj: TableClientOrder = {
-      id: newId,
-      nom: `Client ${currentTableClients.length + 1} (Facture ${letter})`,
-      items: [],
+    const newSession: SessionBar = {
+      id: newSessionId,
+      etablissement_id: etab.id,
+      numero_session: `SES-${Math.floor(1000 + Math.random() * 9000)}`,
+      table_numero: tNum,
+      nom_client_session: `Client ${countOnTable + 1} (Session ${letter})`,
+      serveuse_id: currentUser?.id || 'user-1',
+      serveuse_nom: currentUser?.nom || 'Serveuse',
+      statut: 'active',
+      lignes: [],
+      created_at: new Date().toISOString(),
     };
-    setTablesState((prev) => ({
-      ...prev,
-      [activeTableNumber]: [...(prev[activeTableNumber] || []), newObj],
-    }));
-    setActiveClientId(newId);
+
+    offlineDB.saveSessionBar(newSession);
+    loadData();
+    setActiveSessionId(newSessionId);
+    setActiveTableNumber(tNum);
   };
 
-  const handleAddItemToActiveClient = (p: Produit) => {
-    if (!activeClientObj) return;
+  // Ajouter un article à la session active
+  const handleAddItemToSession = (p: Produit) => {
+    if (!activeSessionObj) return;
+
     const price = p.prix_vente_bouteille || p.prix_vente_unitaire || 0;
+    const catLower = (p.categorie || '').toLowerCase();
+    const isFood = ['plat', 'nourriture', 'grillade', 'repas', 'cuisine', 'snack'].some((k) => catLower.includes(k));
 
-    setTablesState((prev) => {
-      const tClients = prev[activeTableNumber] || [];
-      const updatedClients = tClients.map((c) => {
-        if (c.id !== activeClientObj.id) return c;
-        const existingIdx = c.items.findIndex((it) => it.produit.id === p.id);
-        let newItems = [...c.items];
-        if (existingIdx >= 0) {
-          newItems[existingIdx] = {
-            ...newItems[existingIdx],
-            quantite: newItems[existingIdx].quantite + 1,
-          };
-        } else {
-          newItems.push({ produit: p, quantite: 1, prix_unitaire: price });
-        }
-        return { ...c, items: newItems };
-      });
-      return { ...prev, [activeTableNumber]: updatedClients };
-    });
+    const newLigne: LigneSessionBar = {
+      id: `lig-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      produit_id: p.id,
+      nom_produit: p.nom,
+      categorie_type: isFood ? 'plat' : 'boisson',
+      quantite: 1,
+      prix_unitaire: price,
+      sous_total: price,
+      table_service: isGiftMode && giftTableTarget ? giftTableTarget : undefined,
+      serveuse_id: currentUser?.id,
+      serveuse_nom: currentUser?.nom,
+      created_at: new Date().toISOString(),
+    };
+
+    // Chercher si la même ligne (même produit et même table de service) existe déjà dans la session
+    const existingIdx = activeSessionObj.lignes.findIndex(
+      (l) => l.produit_id === p.id && (l.table_service || '') === (newLigne.table_service || '')
+    );
+
+    let updatedLignes = [...activeSessionObj.lignes];
+    if (existingIdx >= 0) {
+      const existing = updatedLignes[existingIdx];
+      const newQty = existing.quantite + 1;
+      updatedLignes[existingIdx] = {
+        ...existing,
+        quantite: newQty,
+        sous_total: newQty * existing.prix_unitaire,
+      };
+    } else {
+      updatedLignes.push(newLigne);
+    }
+
+    const updatedSession: SessionBar = {
+      ...activeSessionObj,
+      lignes: updatedLignes,
+    };
+
+    offlineDB.saveSessionBar(updatedSession);
+    loadData();
+
+    if (isGiftMode) {
+      setIsGiftMode(false);
+      setGiftTableTarget('');
+    }
   };
 
-  const handleUpdateItemQty = (cId: string, pId: string, delta: number) => {
-    setTablesState((prev) => {
-      const tClients = prev[activeTableNumber] || [];
-      const updatedClients = tClients.map((c) => {
-        if (c.id !== cId) return c;
-        const newItems = c.items
-          .map((it) => {
-            if (it.produit.id !== pId) return it;
-            const newQty = it.quantite + delta;
-            return newQty <= 0 ? null : { ...it, quantite: newQty };
-          })
-          .filter(Boolean) as ClientOrderItem[];
-        return { ...c, items: newItems };
-      });
-      return { ...prev, [activeTableNumber]: updatedClients };
-    });
+  // Modifier la quantité d'une ligne de session
+  const handleUpdateLigneQty = (ligneId: string, delta: number) => {
+    if (!activeSessionObj) return;
+
+    const updatedLignes = activeSessionObj.lignes
+      .map((l) => {
+        if (l.id !== ligneId) return l;
+        const newQty = l.quantite + delta;
+        if (newQty <= 0) return null;
+        return {
+          ...l,
+          quantite: newQty,
+          sous_total: newQty * l.prix_unitaire,
+        };
+      })
+      .filter(Boolean) as LigneSessionBar[];
+
+    const updatedSession: SessionBar = {
+      ...activeSessionObj,
+      lignes: updatedLignes,
+    };
+
+    offlineDB.saveSessionBar(updatedSession);
+    loadData();
   };
 
-  const totalTableAmount = currentTableClients.reduce(
-    (acc, c) => acc + c.items.reduce((sum, it) => sum + it.quantite * it.prix_unitaire, 0),
+  // Supprimer une session si elle est vide
+  const handleDeleteSession = (sessionId: string) => {
+    offlineDB.deleteSessionBar(sessionId);
+    loadData();
+  };
+
+  // Calculs totaux
+  const activeSessionTotal = (activeSessionObj?.lignes || []).reduce((acc, l) => acc + l.sous_total, 0);
+  const tableGlobalTotal = currentTableSessions.reduce(
+    (acc, s) => acc + s.lignes.reduce((sum, l) => sum + l.sous_total, 0),
     0
   );
 
-  const activeClientAmount = (activeClientObj?.items || []).reduce(
-    (acc, it) => acc + it.quantite * it.prix_unitaire,
-    0
-  );
-
-  const handleFinalizeEncaissementTable = (e: React.FormEvent) => {
+  // Validation Encaissement / Clôture Session Bar
+  const handleFinalizePayment = (e: React.FormEvent) => {
     e.preventDefault();
-    let targetClientId = selectedClientId;
+    if (!activeSessionObj) return;
 
+    let targetClientId = selectedClientId;
     if (isNewClientMode && newClientNom.trim()) {
       const newCl = offlineDB.addClient({
         nom: newClientNom.trim(),
@@ -232,47 +303,57 @@ export default function BarVentesPage() {
       targetClientId = newCl.id;
     }
 
-    const itemsToPay: ClientOrderItem[] = [];
-    if (checkoutTarget === 'client_actuel' && activeClientObj) {
-      itemsToPay.push(...activeClientObj.items);
-    } else {
-      currentTableClients.forEach((c) => itemsToPay.push(...c.items));
-    }
+    if (checkoutMode === 'globale') {
+      const finalFac = offlineDB.closeAndPaySessionBar({
+        sessionId: activeSessionObj.id,
+        mode_paiement: paymentMode,
+        remise: remiseInput,
+        montant_paye: paymentMode === 'credit' ? acompteCreditInput : Math.max(0, activeSessionTotal - remiseInput),
+        client_id: targetClientId || undefined,
+      });
 
-    if (itemsToPay.length === 0) return;
-
-    const totalBeforeRemise = itemsToPay.reduce((acc, it) => acc + it.quantite * it.prix_unitaire, 0);
-    const finalAmount = Math.max(0, totalBeforeRemise - remiseInput);
-    const isCredit = paymentMode === 'credit';
-    const mPaye = isCredit ? acompteCreditInput : finalAmount;
-
-    const fac = offlineDB.createFacture({
-      client_id: targetClientId || undefined,
-      lignes: itemsToPay.map((it) => ({
-        produit_id: it.produit.id,
-        nom_produit: it.produit.nom,
-        quantite_bouteilles: it.quantite,
-        prix_unitaire: it.prix_unitaire,
-      })),
-      remise: remiseInput,
-      mode_paiement: isCredit ? 'credit' : (paymentMode as any),
-      montant_paye: mPaye,
-      transaction_id: `BAR-${activeTableNumber}-${Date.now()}`,
-    });
-
-    setLastCreatedFacture(fac);
-
-    // Vider les items payés de la table
-    setTablesState((prev) => {
-      const tClients = prev[activeTableNumber] || [];
-      if (checkoutTarget === 'client_actuel' && activeClientObj) {
-        const updated = tClients.map((c) => (c.id === activeClientObj.id ? { ...c, items: [] } : c));
-        return { ...prev, [activeTableNumber]: updated };
-      } else {
-        const updated = tClients.map((c) => ({ ...c, items: [] }));
-        return { ...prev, [activeTableNumber]: updated };
+      if (finalFac) {
+        setCreatedFactureForReceipt(finalFac);
+        setReceiptSplitInfo(null);
+        setIsReceiptModalOpen(true);
       }
-    });
+    } else if (checkoutMode === 'division_egale') {
+      const parts = Math.max(1, splitCount);
+      const partAmount = Math.round(activeSessionTotal / parts);
+
+      // Générer une facture pour la première part et ouvrir le reçu
+      const fac = offlineDB.closeAndPaySessionBar({
+        sessionId: activeSessionObj.id,
+        mode_paiement: paymentMode,
+        remise: remiseInput,
+        montant_paye: partAmount,
+        client_id: targetClientId || undefined,
+      });
+
+      if (fac) {
+        setCreatedFactureForReceipt(fac);
+        setReceiptSplitInfo({ partNumber: 1, totalParts: parts });
+        setIsReceiptModalOpen(true);
+      }
+    } else if (checkoutMode === 'sur_mesure') {
+      const selectedLignes = activeSessionObj.lignes.filter((l) => selectedLigneIds.includes(l.id));
+      if (selectedLignes.length === 0) return;
+
+      const fac = offlineDB.closeAndPaySessionBar({
+        sessionId: activeSessionObj.id,
+        mode_paiement: paymentMode,
+        remise: remiseInput,
+        montant_paye: paymentMode === 'credit' ? acompteCreditInput : Math.max(0, selectedLignes.reduce((a, b) => a + b.sous_total, 0) - remiseInput),
+        client_id: targetClientId || undefined,
+        lignesPayees: selectedLignes,
+      });
+
+      if (fac) {
+        setCreatedFactureForReceipt(fac);
+        setReceiptSplitInfo(null);
+        setIsReceiptModalOpen(true);
+      }
+    }
 
     setIsPaymentModalOpen(false);
     setRemiseInput(0);
@@ -280,192 +361,319 @@ export default function BarVentesPage() {
     setIsNewClientMode(false);
     setNewClientNom('');
     setNewClientPhone('');
+    setSelectedLigneIds([]);
     loadData();
   };
 
+  // Produits filtrés par recherche et type (Boissons vs Nourriture)
   const filteredProduits = produits.filter((p) => {
     if (!p) return false;
-    return (
+    const matchQuery =
       p.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.categorie.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+      p.categorie.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const catLower = (p.categorie || '').toLowerCase();
+    const isFood = ['plat', 'nourriture', 'grillade', 'repas', 'cuisine', 'snack'].some((k) => catLower.includes(k));
+
+    if (categoryFilter === 'boissons') return matchQuery && !isFood;
+    if (categoryFilter === 'nourriture') return matchQuery && isFood;
+    return matchQuery;
   });
 
   return (
     <AppLayout>
-        {/* Header Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
-          <div>
+      {/* Top Header Ventes Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
+        <div>
+          <div className="flex items-center gap-2">
             <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full border border-[#B8442C]/30">
-              Module Bar & Plan de Tables
+              🍺 Plan de Tables & Factures Bar
             </span>
-            <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
-              Gestion des Tables & Additions Clients Bar
-            </h1>
+            <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+              Serveuse : {currentUser?.nom || 'Serveuse'}
+            </span>
           </div>
+          <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
+            Gestion des Sessions par Table (Unité de Facturation)
+          </h1>
+          <p className="text-xs text-gray-600 font-medium">
+            Ouvrez et gérez plusieurs sessions indépendantes sur une même table.
+          </p>
+        </div>
 
+        <div className="flex items-center gap-2">
           <button
             onClick={handleAddTable}
-            className="py-3 px-5 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow flex items-center justify-center gap-2"
+            className="py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow flex items-center justify-center gap-2 transition-transform active:scale-95"
           >
             <Plus className="w-4 h-4 text-[#E8A33D]" />
-            <span>+ Ajouter une Table</span>
+            <span>+ Ajouter une Table Physique</span>
           </button>
         </div>
+      </div>
 
-        {/* Sélection des Tables du Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-[#E2D5C3]">
-          {Object.keys(tablesState).map((tNum) => {
-            const isActive = activeTableNumber === tNum;
-            const tClients = tablesState[tNum] || [];
-            const tTotal = tClients.reduce((acc, c) => acc + c.items.reduce((sum, it) => sum + it.quantite * it.prix_unitaire, 0), 0);
-            const isOccupied = tTotal > 0;
+      {/* Barre de Sélection des Tables Physiques */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-[#E2D5C3]">
+        {tableNumbersList.map((tNum) => {
+          const isActiveTable = activeTableNumber === tNum;
+          const tSessions = sessions.filter((s) => s.table_numero === tNum && s.statut === 'active');
+          const tTotal = tSessions.reduce((acc, s) => acc + s.lignes.reduce((sum, l) => sum + l.sous_total, 0), 0);
+          const isOccupied = tTotal > 0;
 
-            return (
-              <div
-                key={tNum}
-                onClick={() => handleSelectTable(tNum)}
-                className={`p-3 rounded-2xl border cursor-pointer transition-all min-w-[130px] flex items-center justify-between relative group ${
-                  isActive
-                    ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md font-black'
-                    : isOccupied
-                    ? 'bg-amber-100/80 text-amber-950 border-amber-300 font-bold'
-                    : 'bg-white text-gray-700 border-[#E2D5C3] font-medium'
-                }`}
-              >
-                <div>
-                  <p className="text-xs font-black truncate">{tNum}</p>
-                  <p className="text-[10px] opacity-80 mt-0.5">
-                    {isOccupied ? `${tTotal.toLocaleString('fr-FR')} F` : 'Libre'}
-                  </p>
-                </div>
-
-                {Object.keys(tablesState).length > 1 && (
-                  <button
-                    onClick={(e) => handleDeleteTable(tNum, e)}
-                    className="p-1 opacity-60 hover:opacity-100 hover:bg-red-200 rounded text-red-700"
-                    title="Supprimer la table"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
+          return (
+            <div
+              key={tNum}
+              onClick={() => {
+                setActiveTableNumber(tNum);
+                if (tSessions.length > 0) setActiveSessionId(tSessions[0].id);
+              }}
+              className={`p-3 rounded-2xl border cursor-pointer transition-all min-w-[130px] flex items-center justify-between relative ${
+                isActiveTable
+                  ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md font-black'
+                  : isOccupied
+                  ? 'bg-amber-100/90 text-amber-950 border-amber-300 font-bold'
+                  : 'bg-white text-gray-700 border-[#E2D5C3] font-medium'
+              }`}
+            >
+              <div>
+                <p className="text-xs font-black truncate">{tNum}</p>
+                <p className="text-[10px] opacity-80 mt-0.5">
+                  {isOccupied ? `${tTotal.toLocaleString('fr-FR')} F (${tSessions.length} sess.)` : 'Libre'}
+                </p>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
+      </div>
 
-        {/* Grille Principale Bar : Catalogue Boissons (Gauches) vs Factures Table (Droite) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Catalogue Boissons (7 cols) */}
-          <div className="lg:col-span-7 space-y-4">
-            <div className="relative">
+      {/* Layout Principal : Catalogue Menu (Gauche 7 cols) vs Sessions Actives Table (Droite 5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* CATALOGUE MENU : BOISSONS & PLATS (7 cols) */}
+        <div className="lg:col-span-7 space-y-4">
+          {/* Recherche & Filtres Catégories */}
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="relative flex-1 w-full">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
               <input
                 type="text"
-                placeholder="Rechercher une bière, boisson..."
+                placeholder="Rechercher une bière, plat, grillade, soft..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-9 pr-4 py-3 text-xs font-bold text-[#1B4332]"
               />
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[550px] overflow-y-auto pr-1">
-              {filteredProduits.map((p) => (
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <button
+                onClick={() => setCategoryFilter('tous')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  categoryFilter === 'tous'
+                    ? 'bg-[#1B4332] text-white font-black'
+                    : 'bg-white text-[#1B4332] border border-[#E2D5C3]'
+                }`}
+              >
+                Tout
+              </button>
+              <button
+                onClick={() => setCategoryFilter('boissons')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                  categoryFilter === 'boissons'
+                    ? 'bg-[#1B4332] text-white font-black'
+                    : 'bg-white text-[#1B4332] border border-[#E2D5C3]'
+                }`}
+              >
+                <Beer className="w-3.5 h-3.5" />
+                <span>Boissons</span>
+              </button>
+              <button
+                onClick={() => setCategoryFilter('nourriture')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                  categoryFilter === 'nourriture'
+                    ? 'bg-[#1B4332] text-white font-black'
+                    : 'bg-white text-[#1B4332] border border-[#E2D5C3]'
+                }`}
+              >
+                <Utensils className="w-3.5 h-3.5" />
+                <span>Plats & Grillades</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Option "Cadeau entre tables / Offrir un verre" */}
+          <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-purple-950 font-bold">
+              <Gift className="w-4 h-4 text-purple-700" />
+              <span>Option "Offrir un verre / Plat" :</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] font-bold text-purple-900 cursor-pointer flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={isGiftMode}
+                  onChange={(e) => setIsGiftMode(e.target.checked)}
+                  className="rounded text-purple-700 focus:ring-purple-600"
+                />
+                <span>Activer Cadeau</span>
+              </label>
+
+              {isGiftMode && (
+                <select
+                  value={giftTableTarget}
+                  onChange={(e) => setGiftTableTarget(e.target.value)}
+                  className="bg-white border border-purple-300 rounded-xl px-2 py-1 text-xs font-bold text-purple-950"
+                >
+                  <option value="">Servir à quelle table ?</option>
+                  {tableNumbersList.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          {/* Grille des Articles du Menu */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-1">
+            {filteredProduits.map((p) => {
+              const catLower = (p.categorie || '').toLowerCase();
+              const isFood = ['plat', 'nourriture', 'grillade', 'repas', 'cuisine', 'snack'].some((k) => catLower.includes(k));
+
+              return (
                 <div
                   key={p.id}
-                  onClick={() => handleAddItemToActiveClient(p)}
-                  className="p-3.5 rounded-2xl bg-white border border-[#E2D5C3] hover:border-[#B8442C] cursor-pointer transition-all shadow-sm space-y-2 flex flex-col justify-between"
+                  onClick={() => handleAddItemToSession(p)}
+                  className={`p-3.5 rounded-2xl bg-white border hover:border-[#B8442C] cursor-pointer transition-all shadow-sm space-y-2 flex flex-col justify-between ${
+                    isFood ? 'border-amber-300 bg-amber-50/30' : 'border-[#E2D5C3]'
+                  }`}
                 >
                   <div>
-                    <span className="text-[9px] font-black text-[#B8442C] uppercase bg-[#B8442C]/10 px-2 py-0.5 rounded-full">
-                      {p.categorie}
-                    </span>
-                    <h4 className="font-serif font-black text-sm text-[#1B4332] mt-1">{p.nom}</h4>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        isFood ? 'bg-amber-200 text-amber-900' : 'bg-[#B8442C]/10 text-[#B8442C]'
+                      }`}>
+                        {p.categorie}
+                      </span>
+                      {isFood ? (
+                        <Utensils className="w-3.5 h-3.5 text-amber-700" />
+                      ) : (
+                        <Beer className="w-3.5 h-3.5 text-[#B8442C]" />
+                      )}
+                    </div>
+                    <h4 className="font-serif font-black text-sm text-[#1B4332] mt-1 truncate">{p.nom}</h4>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-[#F3ECE0]">
                     <span className="font-black text-xs text-[#1B4332]">
                       {(p.prix_vente_bouteille || p.prix_vente_unitaire || 0).toLocaleString('fr-FR')} F
                     </span>
-                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-                      {p.casiers_pleins || 0} casiers
+                    <span className="text-[10px] font-bold text-gray-500">
+                      {isFood ? 'Compteur' : `${p.casiers_pleins || 0} casiers`}
                     </span>
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
+        </div>
 
-          {/* Fiches Factures Clients de la Table Active (5 cols) */}
-          <div className="lg:col-span-5 bg-white border border-[#E2D5C3] rounded-3xl p-5 shadow-lg space-y-4 flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
-                <h3 className="font-serif font-black text-lg text-[#1B4332] flex items-center gap-2">
-                  <Beer className="w-5 h-5 text-[#B8442C]" />
-                  {activeTableNumber} (Addition Bar)
+        {/* FICHES SESSIONS & FACTURES DE LA TABLE ACTIVE (5 cols) */}
+        <div className="lg:col-span-5 bg-white border border-[#E2D5C3] rounded-3xl p-5 shadow-lg space-y-4 flex flex-col justify-between">
+          <div className="space-y-3">
+            {/* Header Table & Sessions */}
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+              <div>
+                <h3 className="font-serif font-black text-lg text-[#1B4332]">
+                  {activeTableNumber} (Sessions Clients)
                 </h3>
-
-                <button
-                  onClick={handleAddClientToTable}
-                  className="text-xs font-bold text-[#B8442C] bg-[#B8442C]/10 px-3 py-1.5 rounded-xl border border-[#B8442C]/30 hover:bg-[#B8442C] hover:text-white transition-all"
-                >
-                  + Séparer Client / Facture
-                </button>
+                <p className="text-[11px] text-gray-500 font-bold">
+                  Total Table : {tableGlobalTotal.toLocaleString('fr-FR')} FCFA
+                </p>
               </div>
 
-              {/* Onglets Clients de la Table */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                {currentTableClients.map((c) => {
-                  const isSelected = c.id === activeClientId;
-                  const cTotal = c.items.reduce((sum, it) => sum + it.quantite * it.prix_unitaire, 0);
+              <button
+                onClick={() => handleAddSessionToTable(activeTableNumber)}
+                className="text-xs font-bold text-[#B8442C] bg-[#B8442C]/10 px-3 py-1.5 rounded-xl border border-[#B8442C]/30 hover:bg-[#B8442C] hover:text-white transition-all flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Nouvelle Session</span>
+              </button>
+            </div>
 
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => setActiveClientId(c.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'bg-[#1B4332] text-white shadow-sm'
-                          : 'bg-[#FBF7EF] text-gray-700 border border-[#E2D5C3]'
-                      }`}
-                    >
-                      <span>{c.nom}</span>
-                      <span className="text-[10px] font-black opacity-80">({cTotal.toLocaleString('fr-FR')} F)</span>
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Onglets des Sessions Actives sur cette Table */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {currentTableSessions.map((s) => {
+                const isSelected = s.id === activeSessionId;
+                const sTotal = s.lignes.reduce((acc, l) => acc + l.sous_total, 0);
 
-              {/* Liste des Consommations du Client Sélectionné */}
-              {activeClientObj && (
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                  <span className="text-[10px] font-bold text-gray-400 block uppercase">
-                    Consommations pour : {activeClientObj.nom}
-                  </span>
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveSessionId(s.id)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-[#1B4332] text-white shadow-md font-black'
+                        : 'bg-[#FBF7EF] text-gray-700 border border-[#E2D5C3]'
+                    }`}
+                  >
+                    <span>{s.nom_client_session}</span>
+                    <span className="text-[10px] font-black opacity-90">({sTotal.toLocaleString('fr-FR')} F)</span>
+                  </button>
+                );
+              })}
+            </div>
 
-                  {activeClientObj.items.length === 0 ? (
+            {/* Détail de la Session Sélectionnée */}
+            {activeSessionObj && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-gray-500">
+                  <span>Ouvert par : {activeSessionObj.serveuse_nom}</span>
+                  <button
+                    onClick={() => handleDeleteSession(activeSessionObj.id)}
+                    className="text-red-600 hover:underline text-[10px]"
+                  >
+                    Supprimer session
+                  </button>
+                </div>
+
+                {/* Liste des Consommations de cette Session */}
+                <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                  {activeSessionObj.lignes.length === 0 ? (
                     <div className="p-6 text-center bg-[#FBF7EF] rounded-2xl border border-dashed border-[#E2D5C3] text-gray-500 text-xs font-medium">
-                      Cliquez sur une boisson à gauche pour l'ajouter à cette facture.
+                      Cliquez sur une boisson ou un plat à gauche pour l'ajouter à cette session.
                     </div>
                   ) : (
-                    activeClientObj.items.map((it) => (
-                      <div key={it.produit.id} className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] flex items-center justify-between text-xs">
+                    activeSessionObj.lignes.map((l) => (
+                      <div
+                        key={l.id}
+                        className={`p-3 rounded-2xl border flex items-center justify-between text-xs transition-all ${
+                          l.table_service ? 'bg-purple-50 border-purple-200' : 'bg-[#FBF7EF] border-[#E2D5C3]'
+                        }`}
+                      >
                         <div className="truncate pr-2">
-                          <p className="font-bold text-[#1B4332] truncate">{it.produit.nom}</p>
-                          <p className="text-[10px] text-gray-500">{it.prix_unitaire.toLocaleString('fr-FR')} F/btl</p>
+                          <p className="font-bold text-[#1B4332] truncate">{l.nom_produit}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                            <span>{l.prix_unitaire.toLocaleString('fr-FR')} F/unité</span>
+                            {l.table_service && (
+                              <span className="font-black text-purple-700 bg-purple-100 px-1.5 rounded">
+                                🎁 Servir à {l.table_service}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1 bg-white border border-[#E2D5C3] rounded-xl p-1">
                             <button
-                              onClick={() => handleUpdateItemQty(activeClientObj.id, it.produit.id, -1)}
+                              onClick={() => handleUpdateLigneQty(l.id, -1)}
                               className="p-1 hover:bg-[#F3ECE0] rounded text-gray-700"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
-                            <span className="font-black px-1.5">{it.quantite}</span>
+                            <span className="font-black px-1.5">{l.quantite}</span>
                             <button
-                              onClick={() => handleUpdateItemQty(activeClientObj.id, it.produit.id, 1)}
+                              onClick={() => handleUpdateLigneQty(l.id, 1)}
                               className="p-1 hover:bg-[#F3ECE0] rounded text-gray-700"
                             >
                               <Plus className="w-3 h-3" />
@@ -473,201 +681,264 @@ export default function BarVentesPage() {
                           </div>
 
                           <span className="font-black text-[#1B4332] w-16 text-right">
-                            {(it.quantite * it.prix_unitaire).toLocaleString('fr-FR')} F
+                            {l.sous_total.toLocaleString('fr-FR')} F
                           </span>
                         </div>
                       </div>
                     ))
                   )}
                 </div>
-              )}
+              </div>
+            )}
+          </div>
+
+          {/* Actions Encaissement Session Bar */}
+          <div className="pt-3 border-t border-[#E2D5C3] space-y-3">
+            <div className="flex justify-between items-center text-xs font-bold">
+              <span>Facture {activeSessionObj?.nom_client_session} :</span>
+              <span className="font-serif font-black text-xl text-[#1B4332]">
+                {activeSessionTotal.toLocaleString('fr-FR')} FCFA
+              </span>
             </div>
 
-            {/* Total Table & Encaissement Bar */}
-            <div className="pt-3 border-t border-[#E2D5C3] space-y-3">
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-xs font-bold">
-                  <span>Facture {activeClientObj?.nom} :</span>
-                  <span className="font-serif font-black text-base text-[#1B4332]">
-                    {activeClientAmount.toLocaleString('fr-FR')} FCFA
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm font-black text-[#B8442C]">
-                  <span>Total Toute la Table :</span>
-                  <span className="font-serif font-black text-xl">
-                    {totalTableAmount.toLocaleString('fr-FR')} FCFA
-                  </span>
-                </div>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled={activeSessionTotal === 0}
+                onClick={() => {
+                  setCheckoutMode('globale');
+                  setIsPaymentModalOpen(true);
+                }}
+                className="py-3 px-3 rounded-2xl bg-[#1B4332] disabled:bg-gray-300 text-white font-black text-xs shadow flex items-center justify-center gap-1"
+              >
+                <span>Encaisser Session Globale</span>
+              </button>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  disabled={activeClientAmount === 0}
-                  onClick={() => {
-                    setCheckoutTarget('client_actuel');
-                    setIsPaymentModalOpen(true);
-                  }}
-                  className="py-3 px-3 rounded-2xl bg-[#1B4332] disabled:bg-gray-300 text-white font-black text-xs shadow flex items-center justify-center gap-1"
-                >
-                  <span>Encaisser {activeClientObj?.nom}</span>
-                </button>
-
-                <button
-                  disabled={totalTableAmount === 0}
-                  onClick={() => {
-                    setCheckoutTarget('toute_la_table');
-                    setIsPaymentModalOpen(true);
-                  }}
-                  className="py-3 px-3 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-1"
-                >
-                  <span>Encaisser Toute la Table ➔</span>
-                </button>
-              </div>
+              <button
+                disabled={activeSessionTotal === 0}
+                onClick={() => {
+                  setCheckoutMode('division_egale');
+                  setIsPaymentModalOpen(true);
+                }}
+                className="py-3 px-3 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-1"
+              >
+                <Split className="w-3.5 h-3.5" />
+                <span>Diviser Addition ➔</span>
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* MODAL ENCAISSEMENT BAR */}
-        {isPaymentModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <form onSubmit={handleFinalizeEncaissementTable} className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
-                <h3 className="font-serif font-black text-xl text-[#1B4332]">
-                  Encaissement Facture Bar ({checkoutTarget === 'client_actuel' ? activeClientObj?.nom : 'Toute la Table'})
-                </h3>
-                <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="text-gray-500 hover:text-black">
-                  <X className="w-5 h-5" />
+      {/* MODAL ENCAISSEMENT & DIVISION FACTURE BAR */}
+      {isPaymentModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <form
+            onSubmit={handleFinalizePayment}
+            className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+              <h3 className="font-serif font-black text-xl text-[#1B4332]">
+                Encaissement : {activeSessionObj?.nom_client_session} ({activeTableNumber})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="text-gray-500 hover:text-black"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mode d'addition : Globale vs Division N parts vs Sur-mesure */}
+            <div className="p-3 rounded-2xl bg-white border border-[#E2D5C3] space-y-2">
+              <label className="text-xs font-bold text-[#1B4332] block">Format de Division de la Facture</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { id: 'globale', label: '1 Ticket Total' },
+                  { id: 'division_egale', label: '÷ N Parts Égales' },
+                  { id: 'sur_mesure', label: 'Sélection Articles' },
+                ].map((m) => (
+                  <button
+                    type="button"
+                    key={m.id}
+                    onClick={() => setCheckoutMode(m.id as any)}
+                    className={`py-2 px-1 rounded-xl text-[11px] font-bold text-center transition-all ${
+                      checkoutMode === m.id
+                        ? 'bg-[#1B4332] text-white font-black shadow'
+                        : 'bg-[#FBF7EF] text-gray-700 border border-[#E2D5C3]'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {checkoutMode === 'division_egale' && (
+                <div className="pt-2 flex items-center justify-between text-xs font-bold text-amber-950 bg-amber-50 p-2 rounded-xl border border-amber-200">
+                  <span>Nombre de personnes à diviser :</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSplitCount(Math.max(2, splitCount - 1))}
+                      className="px-2 py-0.5 bg-white border rounded font-black"
+                    >
+                      -
+                    </button>
+                    <span className="font-black text-sm">{splitCount} pers</span>
+                    <button
+                      type="button"
+                      onClick={() => setSplitCount(splitCount + 1)}
+                      className="px-2 py-0.5 bg-white border rounded font-black"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Client / Habitué */}
+            <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#1B4332]">Client Habitué (Requis si Ardoise)</span>
+                <button
+                  type="button"
+                  onClick={() => setIsNewClientMode(!isNewClientMode)}
+                  className="text-[11px] font-bold text-[#B8442C] underline"
+                >
+                  {isNewClientMode ? 'Client Existant' : '+ Nouveau Client Bar'}
                 </button>
               </div>
 
-              {/* Choix Client / Habitué */}
-              <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#1B4332]">Client Habitué (Obligatoire pour Ardoise / Crédit)</span>
+              {isNewClientMode ? (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <input
+                    type="text"
+                    placeholder="Nom Client *"
+                    value={newClientNom}
+                    onChange={(e) => setNewClientNom(e.target.value)}
+                    className="bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                  <input
+                    type="text"
+                    placeholder="N° WhatsApp"
+                    value={newClientPhone}
+                    onChange={(e) => setNewClientPhone(e.target.value)}
+                    className="bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              ) : (
+                <select
+                  value={selectedClientId}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                >
+                  <option value="">Client Anonyme (Comptoir / Table)</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nom} ({c.telephone_whatsapp || 'Sans numéro'})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Mode de Règlement */}
+            <div>
+              <label className="text-xs font-bold text-[#1B4332] block mb-2">Mode de Règlement</label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { id: 'cash', label: '💵 Cash' },
+                  { id: 'orange_money', label: '🟧 OM' },
+                  { id: 'mtn_momo', label: '🟡 MoMo' },
+                  { id: 'credit', label: '💳 Ardoise' },
+                ].map((m) => (
                   <button
                     type="button"
-                    onClick={() => setIsNewClientMode(!isNewClientMode)}
-                    className="text-[11px] font-bold text-[#B8442C] underline"
+                    key={m.id}
+                    onClick={() => setPaymentMode(m.id as any)}
+                    className={`p-3 rounded-2xl border text-xs font-bold text-center transition-all ${
+                      paymentMode === m.id
+                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow'
+                        : 'bg-white text-[#1B4332] border-[#E2D5C3]'
+                    }`}
                   >
-                    {isNewClientMode ? 'Client Existant' : '+ Nouveau Client Bar'}
+                    {m.label}
                   </button>
-                </div>
-
-                {isNewClientMode ? (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <input
-                      type="text"
-                      placeholder="Nom Client *"
-                      value={newClientNom}
-                      onChange={(e) => setNewClientNom(e.target.value)}
-                      className="bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
-                    <input
-                      type="text"
-                      placeholder="N° WhatsApp"
-                      value={newClientPhone}
-                      onChange={(e) => setNewClientPhone(e.target.value)}
-                      className="bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
-                  </div>
-                ) : (
-                  <select
-                    value={selectedClientId}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
-                  >
-                    <option value="">Client Anonyme (Table)</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nom} ({c.telephone_whatsapp || 'Sans tel'})
-                      </option>
-                    ))}
-                  </select>
-                )}
+                ))}
               </div>
+            </div>
 
-              {/* Mode de Paiement */}
+            {/* Remise & Acompte */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-2">Sélectionnez le Mode de Règlement</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    { id: 'cash', label: '💵 Cash' },
-                    { id: 'orange_money', label: '🟧 Orange' },
-                    { id: 'mtn_momo', label: '🟡 MoMo' },
-                    { id: 'credit', label: '💳 Ardoise' },
-                  ].map((m) => (
-                    <button
-                      type="button"
-                      key={m.id}
-                      onClick={() => setPaymentMode(m.id as any)}
-                      className={`p-3 rounded-2xl border text-xs font-bold text-center transition-all ${
-                        paymentMode === m.id
-                          ? 'bg-[#1B4332] text-white border-[#1B4332] shadow'
-                          : 'bg-white text-[#1B4332] border-[#E2D5C3]'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
+                <label className="text-[11px] font-bold text-gray-600 block mb-1">Remise Accordée (FCFA)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={remiseInput}
+                  onChange={(e) => setRemiseInput(Number(e.target.value))}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                />
               </div>
 
-              {/* Remise */}
-              <div className="grid grid-cols-2 gap-3">
+              {paymentMode === 'credit' && (
                 <div>
-                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Remise Accordée (FCFA)</label>
+                  <label className="text-[11px] font-bold text-gray-600 block mb-1">Acompte Perçu (FCFA)</label>
                   <input
                     type="number"
                     min="0"
-                    value={remiseInput}
-                    onChange={(e) => setRemiseInput(Number(e.target.value))}
+                    value={acompteCreditInput}
+                    onChange={(e) => setAcompteCreditInput(Number(e.target.value))}
                     className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
                   />
                 </div>
+              )}
+            </div>
 
-                {paymentMode === 'credit' && (
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-600 block mb-1">Acompte Perçu (FCFA)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={acompteCreditInput}
-                      onChange={(e) => setAcompteCreditInput(Number(e.target.value))}
-                      className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
-                  </div>
-                )}
-              </div>
+            {/* Récapitulatif Final */}
+            <div className="p-4 rounded-2xl bg-[#1B4332] text-white flex justify-between items-center">
+              <span className="text-xs font-bold">MONTANT À ENCAISSER :</span>
+              <span className="font-serif font-black text-2xl text-[#E8A33D]">
+                {Math.max(
+                  0,
+                  (checkoutMode === 'division_egale'
+                    ? Math.round(activeSessionTotal / splitCount)
+                    : activeSessionTotal) - remiseInput
+                ).toLocaleString('fr-FR')}{' '}
+                FCFA
+              </span>
+            </div>
 
-              <div className="p-4 rounded-2xl bg-[#1B4332] text-white flex justify-between items-center">
-                <span className="text-xs font-bold">MONTANT A ENCAISSER :</span>
-                <span className="font-serif font-black text-2xl text-[#E8A33D]">
-                  {Math.max(
-                    0,
-                    (checkoutTarget === 'client_actuel' ? activeClientAmount : totalTableAmount) - remiseInput
-                  ).toLocaleString('fr-FR')}{' '}
-                  FCFA
-                </span>
-              </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="py-3 px-4 rounded-xl bg-white border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-3 px-4 rounded-xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-md"
+              >
+                Valider & Générer Ticket Thermique ➔
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPaymentModalOpen(false)}
-                  className="py-3 px-4 rounded-xl bg-white border border-[#E2D5C3] text-gray-600 font-bold text-xs"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3 px-4 rounded-xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-md"
-                >
-                  Valider & Générer Ticket Bar ➔
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+      {/* MODAL TICKET THERMIQUE BLUETOOTH RECEIPT */}
+      <BarReceiptModal
+        isOpen={isReceiptModalOpen}
+        onClose={() => setIsReceiptModalOpen(false)}
+        facture={createdFactureForReceipt}
+        etablissement={etablissement}
+        tableNumero={activeTableNumber}
+        serveuseNom={currentUser?.nom || 'Serveuse Bar'}
+        splitInfo={receiptSplitInfo}
+      />
     </AppLayout>
   );
 }

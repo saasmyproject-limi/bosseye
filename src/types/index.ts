@@ -20,6 +20,35 @@ export type StatutFacture = 'payee' | 'credit_encours' | 'annulee';
 export type StatutTransaction = 'ouverte' | 'en_attente_caisse' | 'payee' | 'annulee';
 export type StatutLivraison = 'en_attente_paiement' | 'paiement_valide' | 'en_livraison' | 'livree_payee' | 'annulee';
 
+export interface LigneSessionBar {
+  id: string;
+  produit_id: string;
+  nom_produit: string;
+  categorie_type: 'boisson' | 'plat'; // boisson (déstocke casiers/vrac) ou plat (menu simple/compteur plats)
+  quantite: number;
+  prix_unitaire: number;
+  sous_total: number;
+  table_service?: string; // Table de livraison physique si différente de la table payante
+  serveuse_id?: string;
+  serveuse_nom?: string;
+  created_at: string;
+}
+
+export interface SessionBar {
+  id: string;
+  etablissement_id: string;
+  numero_session: string; // Ex: "SES-2026-0012"
+  table_numero: string; // Table principale de la session payante (ex: "Table 03")
+  nom_client_session: string; // Ex: "Session Client 1" ou "Groupe Paul"
+  serveuse_id: string;
+  serveuse_nom: string;
+  statut: 'active' | 'cloturee_payee' | 'cloturee_credit';
+  lignes: LigneSessionBar[];
+  created_at: string;
+  closed_at?: string;
+}
+
+
 export const TARIFS_ABONNEMENT: Record<TypeActivite, number> = {
   boutique: 5000,
   bar: 5000,

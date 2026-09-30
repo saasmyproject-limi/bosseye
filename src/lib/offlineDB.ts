@@ -24,6 +24,8 @@ import {
   ClotureMensuelle,
   PalierTarifaire,
   ExemplaireArticle,
+  SessionBar,
+  LigneSessionBar,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
@@ -57,6 +59,7 @@ const KEYS = {
   CLOTURES_JOURNALIERES: 'oeko_clotures_journalieres',
   CLOTURES_MENSUELLES: 'oeko_clotures_mensuelles',
   PALIERS_TARIFAIRES: 'oeko_paliers_tarifaires',
+  SESSIONS_BAR: 'oeko_sessions_bar',
   OFFLINE_QUEUE: 'oeko_offline_queue',
   RESET_ZERO: 'oeko_db_reset_zero',
 };
@@ -1856,5 +1859,140 @@ export const offlineDB = {
 
     return true;
   },
+
+  // --- SESSIONS BAR & FACTURATION ---
+  getSessionsBar(): SessionBar[] {
+    try {
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.SESSIONS_BAR);
+      const parsed: SessionBar[] = data ? JSON.parse(data) : [];
+      return (parsed || []).filter((s) => s && s.etablissement_id === etab.id);
+    } catch {
+      return [];
+    }
+  },
+
+  getAllSessionsBarGlobal(): SessionBar[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.SESSIONS_BAR);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveSessionBar(session: SessionBar): SessionBar {
+    const all = this.getAllSessionsBarGlobal();
+    const idx = all.findIndex((s) => s.id === session.id);
+    let updated: SessionBar[];
+    if (idx >= 0) {
+      all[idx] = session;
+      updated = [...all];
+    } else {
+      updated = [session, ...all];
+    }
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.SESSIONS_BAR, JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return session;
+  },
+
+  deleteSessionBar(sessionId: string) {
+    const all = this.getAllSessionsBarGlobal();
+    const updated = all.filter((s) => s.id !== sessionId);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.SESSIONS_BAR, JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  closeAndPaySessionBar(params: {
+    sessionId: string;
+    mode_paiement: 'cash' | 'orange_money' | 'mtn_momo' | 'credit';
+    montant_paye?: number;
+    remise?: number;
+    montant_verse?: number;
+    montant_rendu?: number;
+    client_id?: string;
+    lignesPayees?: LigneSessionBar[];
+  }): Facture | null {
+    const sessions = this.getSessionsBar();
+    const session = sessions.find((s) => s.id === params.sessionId);
+    if (!session) return null;
+
+    const targetLignes = params.lignesPayees || session.lignes;
+    if (targetLignes.length === 0) return null;
+
+    const fac = this.createFacture({
+      client_id: params.client_id,
+      lignes: targetLignes.map((l) => ({
+        produit_id: l.produit_id,
+        nom_produit: l.nom_produit,
+        quantite_bouteilles: l.quantite,
+        prix_unitaire: l.prix_unitaire,
+      })),
+      remise: params.remise || 0,
+      mode_paiement: params.mode_paiement,
+      montant_paye: params.montant_paye,
+      montant_verse: params.montant_verse,
+      montant_rendu: params.montant_rendu,
+      transaction_id: `BAR-${session.table_numero}-${Date.now()}`,
+      serveuse_id: session.serveuse_id,
+    });
+
+    if (!params.lignesPayees || params.lignesPayees.length === session.lignes.length) {
+      const updatedSession: SessionBar = {
+        ...session,
+        statut: params.mode_paiement === 'credit' ? 'cloturee_credit' : 'cloturee_payee',
+        closed_at: new Date().toISOString(),
+      };
+      this.saveSessionBar(updatedSession);
+    } else {
+      const remainingLignes = session.lignes.filter(
+        (l) => !targetLignes.some((paid) => paid.id === l.id)
+      );
+      const updatedSession: SessionBar = {
+        ...session,
+        lignes: remainingLignes,
+      };
+      this.saveSessionBar(updatedSession);
+    }
+
+    return fac;
+  },
+
+  getCompteurPlatsServisJour(dateStr?: string): number {
+    const today = dateStr || new Date().toISOString().split('T')[0];
+    const factures = this.getFactures();
+    const prods = this.getProduits();
+    
+    const foodKeywords = ['plat', 'nourriture', 'grillade', 'repas', 'cuisine', 'snack', 'manger', 'poulet', 'poisson', 'porc', 'brochette'];
+
+    let totalPlats = 0;
+    factures.forEach((f) => {
+      if (!f.created_at || !f.created_at.startsWith(today)) return;
+      (f.lignes || []).forEach((l) => {
+        const prod = prods.find((p) => p.id === l.produit_id);
+        const cat = (prod?.categorie || '').toLowerCase();
+        const name = (l.nom_produit || '').toLowerCase();
+        const isFood = foodKeywords.some((k) => cat.includes(k) || name.includes(k));
+        if (isFood) {
+          totalPlats += l.quantite_bouteilles || 1;
+        }
+      });
+    });
+
+    return totalPlats;
+  },
+
 };
 
