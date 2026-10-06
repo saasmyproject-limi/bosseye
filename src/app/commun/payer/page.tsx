@@ -5,12 +5,12 @@ import AppLayout from '@/components/AppLayout';
 import { CreditCard, CheckCircle2, Zap, Lock, Calendar, Check, AlertCircle, ArrowUpRight, Users, Package, Utensils, Star } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import Link from 'next/link';
-import { Utilisateur, Etablissement, MethodePaiement, Paiement, PalierTarifaire } from '@/types';
+import { Utilisateur, Etablissement, MethodePaiement, Paiement, PalierTarifaire, DEFAULT_PALIERS_LIST } from '@/types';
 
 export default function CommunPayerPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
-  const [paliers, setPaliers] = useState<PalierTarifaire[]>([]);
+  const [paliers, setPaliers] = useState<PalierTarifaire[]>(DEFAULT_PALIERS_LIST);
   const [selectedPalierCode, setSelectedPalierCode] = useState<'essentiel' | 'standard' | 'pro'>('standard');
 
   const [methode, setMethode] = useState<MethodePaiement>('Orange Money');
@@ -63,8 +63,8 @@ export default function CommunPayerPage() {
   const daysLeft = etablissement ? offlineDB.getTrialDaysRemaining(etablissement) : 7;
   const isExpired = etablissement ? offlineDB.isTrialExpired(etablissement) : false;
 
-  const activePalier = paliers.find((p) => p.code_palier === selectedPalierCode) || paliers[1] || paliers[0];
-  const tarifAbonnement = activePalier.tarif_mensuel;
+  const activePalier = paliers.find((p) => p?.code_palier === selectedPalierCode) || paliers[1] || paliers[0] || DEFAULT_PALIERS_LIST[1];
+  const tarifAbonnement = activePalier ? activePalier.tarif_mensuel : 5000;
 
   const handlePayer = (e: React.FormEvent) => {
     e.preventDefault();

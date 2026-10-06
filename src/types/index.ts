@@ -68,6 +68,43 @@ export interface PalierTarifaire {
   badge_recommande?: boolean;
 }
 
+export const DEFAULT_PALIERS_LIST: PalierTarifaire[] = [
+  {
+    id: 'palier-1',
+    code_palier: 'essentiel',
+    nom: 'Essentiel',
+    tarif_mensuel: 3000,
+    utilisateurs_max: 1,
+    articles_max: 100,
+    tables_max: 5,
+    description: 'Boutique solo (1 personne, 100 articles max) ou petit bar (5 tables max).',
+    modules_inclus: ['Gestion Stock & Ventes', 'Mode Hors-Ligne', '1 Utilisateur / PIN'],
+  },
+  {
+    id: 'palier-2',
+    code_palier: 'standard',
+    nom: 'Standard',
+    tarif_mensuel: 5000,
+    utilisateurs_max: 3,
+    articles_max: 400,
+    tables_max: 15,
+    description: 'Commerce moyen avec 2-3 employés, jusqu\'à 400 articles ou 15 tables bar.',
+    modules_inclus: ['Tout Essentiel', 'Jusqu\'à 3 Employés', 'Historique & Clôtures PDF', 'Calcul Dégressif'],
+    badge_recommande: true,
+  },
+  {
+    id: 'palier-3',
+    code_palier: 'pro',
+    nom: 'Pro',
+    tarif_mensuel: 10000,
+    utilisateurs_max: 99,
+    articles_max: 999999,
+    tables_max: 999999,
+    description: 'Multi-employés illimité, grands stocks, WhatsApp, Crédit client, Multi-caisses.',
+    modules_inclus: ['Tout Standard', 'Employés & Caissières illimités', 'Gestion du Crédit & WhatsApp', 'Multi-caisses & Commandes En Ligne'],
+  },
+];
+
 
 export interface CompteUtilisateur {
   id: string;
