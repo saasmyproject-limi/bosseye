@@ -17,15 +17,16 @@ const NOW = Date.now();
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const SEED_ETABLISSEMENT: Etablissement = {
-  id: 'etab-capitole-douala',
-  nom: 'LE CAPITOLE SNACK-BAR',
-  type: 'snack_bar',
-  type_activite: 'snack',
+  id: 'etab-elegance-akwa',
+  nom: 'BOUTIQUE ÉLÉGANCE AKWA',
+  type: 'boutique',
+  type_activite: 'boutique',
+  secteur_boutique: 'Vêtements & Mode',
   ville: 'Douala',
-  adresse: 'Akwa - Boulevard de la Liberté',
+  adresse: 'Rue Joffre - Akwa',
   plan: 'Premium',
   statut_abonnement: 'essai',
-  tarif_mensuel: TARIFS_ABONNEMENT.snack, // 10,000 FCFA
+  tarif_mensuel: TARIFS_ABONNEMENT.boutique, // 5,000 FCFA
   date_fin_essai: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
   date_prochain_paiement: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
   created_at: new Date().toISOString(),
@@ -34,30 +35,16 @@ export const SEED_ETABLISSEMENT: Etablissement = {
 export const SEED_ETABLISSEMENTS_LIST: Etablissement[] = [
   SEED_ETABLISSEMENT,
   {
-    id: 'etab-citadelle-douala',
-    nom: 'BAR LA CITADELLE',
-    type: 'bar',
-    type_activite: 'bar',
-    ville: 'Douala',
-    adresse: 'Akwa Nord',
-    plan: 'Basique',
-    statut_abonnement: 'essai',
-    tarif_mensuel: TARIFS_ABONNEMENT.bar, // 5,000 FCFA
-    date_fin_essai: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
-    date_prochain_paiement: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'etab-elegance-akwa',
-    nom: 'BOUTIQUE ÉLÉGANCE AKWA',
+    id: 'etab-eleganza-yaounde',
+    nom: 'BOUTIQUE ÉLÉGANZA YAOUNDÉ',
     type: 'boutique',
     type_activite: 'boutique',
-    secteur_boutique: 'Vêtements & Mode',
-    ville: 'Douala',
-    adresse: 'Rue Joffre - Akwa',
+    secteur_boutique: 'Téléphones & Électronique',
+    ville: 'Yaoundé',
+    adresse: 'Avenue Kennedy',
     plan: 'Premium',
     statut_abonnement: 'essai',
-    tarif_mensuel: TARIFS_ABONNEMENT.boutique, // 5,000 FCFA
+    tarif_mensuel: 5000,
     date_fin_essai: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
     date_prochain_paiement: new Date(NOW + SEVEN_DAYS_MS).toISOString(),
     created_at: new Date().toISOString(),

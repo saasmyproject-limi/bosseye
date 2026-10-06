@@ -383,7 +383,7 @@ export default function BoutiqueVentesPage() {
               }`}
             >
               <Truck className="w-4 h-4" />
-              <span>Vente Livraison ({commandesLigne.filter((c) => c.statut !== 'livree_payee').length})</span>
+              <span>À LIVRER ({commandesLigne.filter((c) => c.statut !== 'livree_payee').length})</span>
             </button>
           </div>
         </div>

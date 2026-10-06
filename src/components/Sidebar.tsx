@@ -100,7 +100,7 @@ export default function Sidebar() {
     ...(etablissement?.type_activite === 'boutique' || !etablissement?.type_activite
       ? [
           {
-            name: 'Commandes à Livrer (En Ligne)',
+            name: 'Commandes À LIVRER',
             href: '/boutique/ventes?tab=livraisons',
             icon: Truck,
           },
