@@ -490,11 +490,12 @@ export default function SuperAdminDashboardPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-[#FBF7EF] border-b border-[#E2D5C3] text-[11px] font-black text-[#1B4332] uppercase">
               <tr>
-                <th className="p-3">Nom Commerce</th>
-                <th className="p-3">Activité</th>
+                <th className="p-3">Activité / Commerce</th>
+                <th className="p-3">Compte Google (Patron)</th>
+                <th className="p-3">Type & Secteur</th>
                 <th className="p-3">Ville</th>
                 <th className="p-3">Tarif & Palier</th>
-                <th className="p-3">Statut</th>
+                <th className="p-3">Statut Abonnement</th>
                 <th className="p-3 text-center">Actions Admin</th>
               </tr>
             </thead>
@@ -507,6 +508,11 @@ export default function SuperAdminDashboardPage() {
                     <td className="p-3">
                       <p className="font-bold text-[#1B4332]">{etab.nom}</p>
                       <p className="text-[10px] text-gray-500">{etab.adresse}</p>
+                    </td>
+                    <td className="p-3">
+                      <span className="font-mono text-xs font-bold text-[#1B4332]">
+                        {etab.email_patron || 'marie.dupont@gmail.com'}
+                      </span>
                     </td>
                     <td className="p-3">
                       <span className="font-bold text-[#B8442C] bg-red-50 px-2 py-0.5 rounded-full border border-red-100">

@@ -69,8 +69,18 @@ export interface PalierTarifaire {
 }
 
 
+export interface CompteUtilisateur {
+  id: string;
+  email: string;
+  nom: string;
+  photo_url?: string;
+  provider: 'google';
+  created_at: string;
+}
+
 export interface Etablissement {
   id: string;
+  compte_id?: string; // ID du compte Google propriétaire (Niveau 1)
   nom: string;
   type: TypeEtablissement;
   type_activite: TypeActivite;
@@ -86,9 +96,10 @@ export interface Etablissement {
   delai_grace_jours?: number; // Défaut 3-5 jours
   date_fin_essai: string; // ISO String (7 jours pour œko)
   date_prochain_paiement: string; // ISO String
-  tarif_mensuel: number; // 5000 ou 10000 FCFA
+  tarif_mensuel: number; // 3000, 5000 ou 10000 FCFA
   palier_actuel_id?: string;
   comptable_actif?: boolean;
+  show_welcome_modal?: boolean; // Afficher l'écran de bienvenue spécifique à cette activité
   created_at?: string;
 }
 

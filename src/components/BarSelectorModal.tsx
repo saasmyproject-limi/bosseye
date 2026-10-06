@@ -112,7 +112,8 @@ export default function BarSelectorModal({
 
     if (onSelectSuccess) onSelectSuccess(newEtab);
     onClose();
-    router.push('/dashboard');
+    const act = newEtab.type_activite || 'snack';
+    router.push(`/${act}/dashboard`);
   };
 
   return (

@@ -151,6 +151,13 @@ export default function Sidebar() {
     ...(!isServeuseOrNonPatron
       ? [
           {
+            name: 'Mes Activités (Commerces)',
+            href: '/activites',
+            icon: Building2,
+            badge: 'Netflix',
+            badgeColor: 'bg-[#B8442C]',
+          },
+          {
             name: 'Statut & Abonnement',
             href: '/commun/payer',
             icon: Zap,

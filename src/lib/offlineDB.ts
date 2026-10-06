@@ -26,6 +26,7 @@ import {
   ExemplaireArticle,
   SessionBar,
   LigneSessionBar,
+  CompteUtilisateur,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
@@ -43,6 +44,8 @@ import {
 
 const KEYS = {
   ACTIVE_ETAB_ID: 'oeko_active_etab_id',
+  CURRENT_COMPTE: 'oeko_current_compte',
+  COMPTES_LIST: 'oeko_comptes_list',
   ETABLISSEMENTS: 'oeko_etablissements',
   UTILISATEURS: 'oeko_utilisateurs',
   CURRENT_USER_ID: 'oeko_current_user_id',
@@ -99,7 +102,88 @@ export function getTerminology(type_activite?: TypeActivite) {
 }
 
 export const offlineDB = {
-  // --- ÉTABLISSEMENT & SECTEUR ---
+  // --- NIVEAU 1 : COMPTE GOOGLE (GMAIL) ---
+  getCompteActuel(): CompteUtilisateur | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      const data = localStorage.getItem(KEYS.CURRENT_COMPTE);
+      if (data) {
+        return JSON.parse(data);
+      }
+      const defaultCompte: CompteUtilisateur = {
+        id: 'compte-google-demo',
+        email: 'patronne.demo@gmail.com',
+        nom: 'Mme Patronne (Démo)',
+        provider: 'google',
+        created_at: new Date().toISOString(),
+      };
+      localStorage.setItem(KEYS.CURRENT_COMPTE, JSON.stringify(defaultCompte));
+      return defaultCompte;
+    } catch {
+      return null;
+    }
+  },
+
+  loginWithGoogle(email: string, nom: string, photo_url?: string): CompteUtilisateur {
+    const compte: CompteUtilisateur = {
+      id: `compte-${Date.now()}`,
+      email: email.trim().toLowerCase(),
+      nom: nom.trim() || 'Utilisateur Google',
+      photo_url,
+      provider: 'google',
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.CURRENT_COMPTE, JSON.stringify(compte));
+        const allComptes = this.getComptesGlobal();
+        const existingIdx = allComptes.findIndex((c) => c.email === compte.email);
+        if (existingIdx >= 0) allComptes[existingIdx] = compte;
+        else allComptes.push(compte);
+        localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(allComptes));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    return compte;
+  },
+
+  logoutGoogleCompte() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(KEYS.CURRENT_COMPTE);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  getComptesGlobal(): CompteUtilisateur[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.COMPTES_LIST);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  getActivitesDuCompte(compteId?: string): Etablissement[] {
+    const compte = compteId ? { id: compteId } : this.getCompteActuel();
+    const all = this.getEtablissements();
+    if (!compte) return all;
+    return all.filter(
+      (e) => (e.compte_id && e.compte_id === compte.id) || (e.email_patron && (compte as any).email && e.email_patron.toLowerCase() === (compte as any).email.toLowerCase()) || !e.compte_id
+    );
+  },
+
+  dismissWelcomeModal(etabId: string) {
+    this.updateEtablissement(etabId, { show_welcome_modal: false });
+  },
+
+  // --- NIVEAU 2 : ACTIVITÉ / COMMERCE (PROFIL NETFLIX) ---
   getEtablissement(): Etablissement {
     try {
       const activeId = typeof window !== 'undefined' ? localStorage.getItem(KEYS.ACTIVE_ETAB_ID) : null;
@@ -206,6 +290,7 @@ export const offlineDB = {
     patronPin: string;
   }): Etablissement {
     const etabs = this.getEtablissements();
+    const currentCompte = this.getCompteActuel();
     const newId = `etab-${Date.now()}`;
     const act = params.type_activite;
     const tarif = TARIFS_ABONNEMENT[act] || 5000;
@@ -215,6 +300,7 @@ export const offlineDB = {
 
     const newEtab: Etablissement = {
       id: newId,
+      compte_id: currentCompte?.id,
       nom: params.nom,
       type: params.type || (act as TypeEtablissement),
       type_activite: act,
@@ -222,12 +308,13 @@ export const offlineDB = {
       ville: params.ville,
       adresse: params.adresse,
       telephone: params.telephone,
-      email_patron: params.email_patron,
+      email_patron: params.email_patron || currentCompte?.email,
       plan: 'Premium',
       statut_abonnement: 'essai',
       tarif_mensuel: tarif,
       date_fin_essai: endTrialIso,
       date_prochain_paiement: endTrialIso,
+      show_welcome_modal: true, // Déclenche le modal de bienvenue spécifique à cette activité
       created_at: nowIso,
     };
 
