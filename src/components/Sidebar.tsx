@@ -20,6 +20,7 @@ import {
   BarChart3,
   MessageSquare,
   ShoppingBag,
+  Truck,
   Eye,
   Trash2,
   RefreshCw
@@ -83,7 +84,7 @@ export default function Sidebar() {
     router.refresh();
   };
 
-  const act = etablissement?.type_activite || 'snack';
+  const act = etablissement?.type_activite || 'boutique';
 
   const navItems = [
     {
@@ -96,6 +97,15 @@ export default function Sidebar() {
       href: `/${act}/ventes`,
       icon: etablissement?.type_activite === 'boutique' ? ShoppingBag : LayoutDashboard,
     },
+    ...(etablissement?.type_activite === 'boutique' || !etablissement?.type_activite
+      ? [
+          {
+            name: 'Commandes à Livrer (En Ligne)',
+            href: '/boutique/ventes?tab=livraisons',
+            icon: Truck,
+          },
+        ]
+      : []),
     {
       name: term.stockLabel,
       href: `/${act}/produits`,
@@ -115,7 +125,7 @@ export default function Sidebar() {
       href: '/commun/clients',
       icon: Users,
     },
-    ...(etablissement?.type_activite === 'boutique'
+    ...(etablissement?.type_activite === 'boutique' || !etablissement?.type_activite
       ? [
           {
             name: 'Réservations / Mise de Côté',
@@ -223,7 +233,7 @@ export default function Sidebar() {
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Commerce Actif</span>
               <span className="text-[9px] font-black uppercase bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
-                {etablissement?.type_activite || 'Snack'}
+                {etablissement?.type_activite || 'Boutique'}
               </span>
             </div>
             <p className="font-serif font-black text-sm text-white truncate">{etablissement?.nom}</p>
@@ -236,7 +246,7 @@ export default function Sidebar() {
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href.split('?')[0];
             const Icon = item.icon;
 
             return (
