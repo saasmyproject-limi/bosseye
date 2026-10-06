@@ -57,11 +57,17 @@ export const TARIFS_ABONNEMENT: Record<TypeActivite, number> = {
 
 export interface PalierTarifaire {
   id: string;
+  code_palier: 'essentiel' | 'standard' | 'pro';
   nom: string;
-  articles_distincts_max: number; // Ex: 100, 500, 999999
-  tarif_mensuel: number; // Ex: 5000, 10000, 15000 FCFA
+  tarif_mensuel: number; // Ex: 3000, 5000, 10000 FCFA
+  articles_max: number; // Ex: 100, 400, 999999 (Boutique)
+  tables_max: number; // Ex: 5, 15, 999999 (Bar)
+  utilisateurs_max: number; // Ex: 1, 3, 999999 (Illimité)
   description: string;
+  modules_inclus: string[];
+  badge_recommande?: boolean;
 }
+
 
 export interface Etablissement {
   id: string;

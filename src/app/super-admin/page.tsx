@@ -17,7 +17,11 @@ import {
   Search,
   Zap,
   Lock,
-  EyeOff
+  EyeOff,
+  Package,
+  Layers,
+  Star,
+  Trash2
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { Etablissement, Paiement, PalierTarifaire, StatutAbonnement } from '@/types';
@@ -34,10 +38,9 @@ export default function SuperAdminDashboardPage() {
   const [statusFilter, setStatusFilter] = useState<string>('tous');
   const [successMsg, setSuccessMsg] = useState<string>('');
 
-  // Modal Ajustement Manuel Abonnement / Grace Period
+  // Modal Ajustement Manuel
   const [selectedEtabForAction, setSelectedEtabForAction] = useState<Etablissement | null>(null);
   const [extendDaysInput, setExtendDaysInput] = useState<number>(7);
-  const [graceDaysInput, setGraceDaysInput] = useState<number>(5);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -51,7 +54,6 @@ export default function SuperAdminDashboardPage() {
       setEtablissements(etabs);
       setPaliers(offlineDB.getPaliersTarifaires());
 
-      // Simulation/récupération des paiements globaux
       const dataPaiements = typeof window !== 'undefined' ? localStorage.getItem('oeko_paiements') : null;
       const parsedPaiements: Paiement[] = dataPaiements
         ? JSON.parse(dataPaiements)
@@ -78,7 +80,9 @@ export default function SuperAdminDashboardPage() {
             },
           ];
       setPaiements(parsedPaiements);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -114,13 +118,20 @@ export default function SuperAdminDashboardPage() {
   const handleSaveTierThresholds = (e: React.FormEvent) => {
     e.preventDefault();
     offlineDB.savePaliersTarifaires(paliers);
-    setSuccessMsg('Les seuils et tarifs des paliers ont été mis à jour avec succès.');
+    setSuccessMsg('La grille des paliers tarifaires et critères a été enregistrée avec succès.');
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
   const totalRevenuEncaisse = paiements
     .filter((p) => p.statut === 'reussi')
     .reduce((acc, p) => acc + p.montant, 0);
+
+  // Distribution des commerces par palier
+  const countEssentiel = etablissements.filter((e) => (e.tarif_mensuel || 5000) <= 3000).length;
+  const countStandard = etablissements.filter(
+    (e) => (e.tarif_mensuel || 5000) > 3000 && (e.tarif_mensuel || 5000) <= 5000
+  ).length;
+  const countPro = etablissements.filter((e) => (e.tarif_mensuel || 5000) > 5000).length;
 
   const trialsExpiringIn48h = etablissements.filter((e) => {
     const daysLeft = offlineDB.getTrialDaysRemaining(e);
@@ -141,13 +152,16 @@ export default function SuperAdminDashboardPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#0F291E] text-white flex items-center justify-center p-4">
-        <form onSubmit={handleAdminLogin} className="bg-[#1B4332] border border-[#2D6A4F] rounded-3xl p-8 w-full max-w-md shadow-2xl space-y-5 text-center">
+        <form
+          onSubmit={handleAdminLogin}
+          className="bg-[#1B4332] border border-[#2D6A4F] rounded-3xl p-8 w-full max-w-md shadow-2xl space-y-5 text-center"
+        >
           <div className="w-14 h-14 rounded-2xl bg-[#E8A33D] text-[#0F291E] flex items-center justify-center text-3xl font-black mx-auto shadow-md">
             👁️
           </div>
           <div>
             <h1 className="font-serif font-black text-2xl text-white">œko Super-Admin</h1>
-            <p className="text-xs text-[#E8A33D] font-bold">Espace Réservé au Créateur d'œko</p>
+            <p className="text-xs text-[#E8A33D] font-bold">Espace de Gestion de la Grille & Abonnements</p>
           </div>
 
           {authError && (
@@ -157,7 +171,9 @@ export default function SuperAdminDashboardPage() {
           )}
 
           <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">Mot de passe Super-Admin</label>
+            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+              Mot de passe Super-Admin
+            </label>
             <input
               type="password"
               placeholder="••••••••"
@@ -194,7 +210,9 @@ export default function SuperAdminDashboardPage() {
                 Accès Créateur
               </span>
             </div>
-            <p className="text-xs text-gray-600 font-bold">Vue globale des commerces, abonnements, paiements et paliers tarifaires</p>
+            <p className="text-xs text-gray-600 font-bold">
+              Répartition des clients par palier & Configuration dynamique de la grille tarifaire
+            </p>
           </div>
         </div>
 
@@ -213,7 +231,7 @@ export default function SuperAdminDashboardPage() {
         </div>
       )}
 
-      {/* Grid KPIs Globaux */}
+      {/* Grid KPIs Globaux & Répartition des Clients par Palier */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-3xl bg-white border border-[#E2D5C3] shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-2xl font-bold">
@@ -264,23 +282,190 @@ export default function SuperAdminDashboardPage() {
         </div>
       </div>
 
-      {/* Note d'isolation de sécurité */}
-      <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl text-xs font-bold text-blue-900 flex items-center gap-2">
-        <EyeOff className="w-4 h-4 text-blue-700 shrink-0" />
-        <span>Isolation stricte activée : le Super-Admin n'a pas accès aux données opérationnelles détaillées des commerces (ventes clients, panier détaillé). Seules les métriques d'abonnement sont visibles.</span>
+      {/* BLOC RÉPARTITION DES CLIENTS PAR PALIER D'ABONNEMENT */}
+      <div className="p-5 rounded-3xl bg-[#1B4332] text-white shadow-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-serif font-black text-lg text-[#E8A33D] flex items-center gap-2">
+            <Layers className="w-5 h-5 text-[#E8A33D]" />
+            Répartition des Commerces par Palier d'Abonnement
+          </h2>
+          <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-full text-gray-200">
+            {etablissements.length} commerces au total
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          <div className="p-4 rounded-2xl bg-[#0F291E] border border-[#2D6A4F] flex justify-between items-center">
+            <div>
+              <span className="text-[10px] font-bold uppercase text-gray-400 block">Palier 1 : Essentiel (3 000 FCFA)</span>
+              <span className="font-serif font-black text-2xl text-white">{countEssentiel} client(s)</span>
+            </div>
+            <span className="text-xs font-black text-[#E8A33D] bg-[#E8A33D]/10 px-2.5 py-1 rounded-full border border-[#E8A33D]/30">
+              {etablissements.length > 0 ? Math.round((countEssentiel / etablissements.length) * 100) : 0}%
+            </span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#0F291E] border border-[#E8A33D]/40 flex justify-between items-center shadow-sm">
+            <div>
+              <span className="text-[10px] font-bold uppercase text-[#E8A33D] block">Palier 2 : Standard (5 000 FCFA) ★</span>
+              <span className="font-serif font-black text-2xl text-white">{countStandard} client(s)</span>
+            </div>
+            <span className="text-xs font-black text-emerald-400 bg-emerald-950 px-2.5 py-1 rounded-full border border-emerald-800">
+              {etablissements.length > 0 ? Math.round((countStandard / etablissements.length) * 100) : 0}%
+            </span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#0F291E] border border-[#2D6A4F] flex justify-between items-center">
+            <div>
+              <span className="text-[10px] font-bold uppercase text-gray-400 block">Palier 3 : Pro (10 000 FCFA)</span>
+              <span className="font-serif font-black text-2xl text-white">{countPro} client(s)</span>
+            </div>
+            <span className="text-xs font-black text-[#E8A33D] bg-[#E8A33D]/10 px-2.5 py-1 rounded-full border border-[#E8A33D]/30">
+              {etablissements.length > 0 ? Math.round((countPro / etablissements.length) * 100) : 0}%
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Section 1: Liste et Gestion des Commerces Inscrits */}
+      {/* SECTION CONFIGURATION DYNAMIQUE DES PALIERS ET CRITÈRES */}
+      <div className="bg-white border border-[#E2D5C3] rounded-3xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-serif font-black text-lg text-[#1B4332]">
+              Configuration Dynamique de la Grille des Paliers
+            </h2>
+            <p className="text-xs text-gray-600 font-medium">
+              Ajustez les tarifs et critères (articles max, tables max, utilisateurs max) sans modifier le code.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveTierThresholds} className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {paliers.map((palier, idx) => (
+            <div key={palier.id} className="p-5 rounded-3xl bg-[#FBF7EF] border-2 border-[#E2D5C3] space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full">
+                  Code : {palier.code_palier || `palier-${idx+1}`}
+                </span>
+                {palier.badge_recommande && (
+                  <span className="text-[9px] font-black bg-[#E8A33D] text-[#0F291E] px-2 py-0.5 rounded-full">
+                    Recommandé Démo
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1">Nom du Palier</label>
+                <input
+                  type="text"
+                  value={palier.nom}
+                  onChange={(e) => {
+                    const copy = [...paliers];
+                    copy[idx].nom = e.target.value;
+                    setPaliers(copy);
+                  }}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 mb-1">Tarif (FCFA/mois)</label>
+                  <input
+                    type="number"
+                    value={palier.tarif_mensuel}
+                    onChange={(e) => {
+                      const copy = [...paliers];
+                      copy[idx].tarif_mensuel = parseInt(e.target.value, 10) || 3000;
+                      setPaliers(copy);
+                    }}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-black text-[#B8442C]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 mb-1">Utilisateurs Max</label>
+                  <input
+                    type="number"
+                    value={palier.utilisateurs_max}
+                    onChange={(e) => {
+                      const copy = [...paliers];
+                      copy[idx].utilisateurs_max = parseInt(e.target.value, 10) || 1;
+                      setPaliers(copy);
+                    }}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 mb-1">Articles Max (Boutique)</label>
+                  <input
+                    type="number"
+                    value={palier.articles_max}
+                    onChange={(e) => {
+                      const copy = [...paliers];
+                      copy[idx].articles_max = parseInt(e.target.value, 10) || 100;
+                      setPaliers(copy);
+                    }}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 mb-1">Tables Max (Bar)</label>
+                  <input
+                    type="number"
+                    value={palier.tables_max}
+                    onChange={(e) => {
+                      const copy = [...paliers];
+                      copy[idx].tables_max = parseInt(e.target.value, 10) || 5;
+                      setPaliers(copy);
+                    }}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-600 mb-1">Description Terrain</label>
+                <textarea
+                  rows={2}
+                  value={palier.description}
+                  onChange={(e) => {
+                    const copy = [...paliers];
+                    copy[idx].description = e.target.value;
+                    setPaliers(copy);
+                  }}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-medium text-[#1B4332]"
+                />
+              </div>
+            </div>
+          ))}
+
+          <div className="md:col-span-3 pt-2 text-right">
+            <button
+              type="submit"
+              className="py-3.5 px-6 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md transition-transform active:scale-95"
+            >
+              Enregistrer les Nouveaux Paliers & Tarifs ➔
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* SECTION LISTE DES COMMERCES ET ACTIONS ADMIN */}
       <div className="bg-white border border-[#E2D5C3] rounded-3xl p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <h2 className="font-serif font-black text-lg text-[#1B4332]">Liste des Commerces Inscrits</h2>
+          <h2 className="font-serif font-black text-lg text-[#1B4332]">Gestion des Commerces & Inscriptions</h2>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-64">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
               <input
                 type="text"
-                placeholder="Rechercher par nom, secteur, ville..."
+                placeholder="Rechercher nom, ville, secteur..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl pl-9 pr-3 py-2 text-xs font-bold text-[#1B4332]"
@@ -306,17 +491,16 @@ export default function SuperAdminDashboardPage() {
             <thead className="bg-[#FBF7EF] border-b border-[#E2D5C3] text-[11px] font-black text-[#1B4332] uppercase">
               <tr>
                 <th className="p-3">Nom Commerce</th>
-                <th className="p-3">Secteur Déclaré</th>
+                <th className="p-3">Activité</th>
                 <th className="p-3">Ville</th>
-                <th className="p-3">Statut Abonnement</th>
-                <th className="p-3">Essai / Échéance</th>
-                <th className="p-3 text-center">Actions Manuelles</th>
+                <th className="p-3">Tarif & Palier</th>
+                <th className="p-3">Statut</th>
+                <th className="p-3 text-center">Actions Admin</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2D5C3]">
               {filteredEtabs.map((etab) => {
                 const daysLeft = offlineDB.getTrialDaysRemaining(etab);
-                const isRestricted = offlineDB.isRestrictedMode(etab);
 
                 return (
                   <tr key={etab.id} className="hover:bg-[#FBF7EF]/50">
@@ -331,33 +515,29 @@ export default function SuperAdminDashboardPage() {
                     </td>
                     <td className="p-3 font-medium text-gray-700">{etab.ville}</td>
                     <td className="p-3">
+                      <span className="font-serif font-black text-xs text-[#B8442C]">
+                        {(etab.tarif_mensuel || 5000).toLocaleString('fr-FR')} FCFA
+                      </span>
+                    </td>
+                    <td className="p-3">
                       <span
                         className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
                           etab.statut_abonnement === 'actif'
                             ? 'bg-emerald-100 text-emerald-900'
                             : etab.statut_abonnement === 'suspendu'
                             ? 'bg-red-100 text-red-900'
-                            : isRestricted
-                            ? 'bg-amber-100 text-amber-900'
-                            : 'bg-blue-100 text-blue-900'
+                            : 'bg-amber-100 text-amber-900'
                         }`}
                       >
-                        {etab.statut_abonnement}
+                        {etab.statut_abonnement} ({daysLeft}j)
                       </span>
-                    </td>
-                    <td className="p-3 font-medium text-gray-600">
-                      {etab.statut_abonnement === 'essai' ? (
-                        <span>{daysLeft} jours restants</span>
-                      ) : (
-                        <span>{new Date(etab.date_prochain_paiement).toLocaleDateString('fr-FR')}</span>
-                      )}
                     </td>
                     <td className="p-3 text-center space-x-1">
                       <button
                         onClick={() => setSelectedEtabForAction(etab)}
                         className="px-2.5 py-1 bg-[#1B4332] text-white rounded-lg text-[11px] font-bold hover:bg-[#2D6A4F]"
                       >
-                        Ajuster / Prolonger
+                        Prolonger
                       </button>
                       <button
                         onClick={() => handleToggleEtabActive(etab.id, etab.statut_abonnement)}
@@ -378,85 +558,17 @@ export default function SuperAdminDashboardPage() {
         </div>
       </div>
 
-      {/* Section 2: Configuration des Paliers Tarifaires */}
-      <div className="bg-white border border-[#E2D5C3] rounded-3xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-serif font-black text-lg text-[#1B4332]">Paliers Tarifaires par Volume de Stock</h2>
-            <p className="text-xs text-gray-600 font-medium">Configurez les seuils d'articles distincts et tarifs d'abonnement applicables.</p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSaveTierThresholds} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {paliers.map((palier, idx) => (
-            <div key={palier.id} className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-3">
-              <span className="text-xs font-black uppercase text-[#B8442C]">Palier #{idx + 1}</span>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1">Nom du Palier</label>
-                <input
-                  type="text"
-                  value={palier.nom}
-                  onChange={(e) => {
-                    const copy = [...paliers];
-                    copy[idx].nom = e.target.value;
-                    setPaliers(copy);
-                  }}
-                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Articles Max</label>
-                  <input
-                    type="number"
-                    value={palier.articles_distincts_max}
-                    onChange={(e) => {
-                      const copy = [...paliers];
-                      copy[idx].articles_distincts_max = parseInt(e.target.value, 10) || 100;
-                      setPaliers(copy);
-                    }}
-                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Tarif (FCFA/mois)</label>
-                  <input
-                    type="number"
-                    value={palier.tarif_mensuel}
-                    onChange={(e) => {
-                      const copy = [...paliers];
-                      copy[idx].tarif_mensuel = parseInt(e.target.value, 10) || 5000;
-                      setPaliers(copy);
-                    }}
-                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#B8442C]"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-
-          <div className="md:col-span-3 pt-2 text-right">
-            <button
-              type="submit"
-              className="py-3 px-6 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
-            >
-              Enregistrer les Paliers Tarifaires ➔
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Modal Action Manuelle sur un Commerce */}
+      {/* Modal Prolongation d'essai */}
       {selectedEtabForAction && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 text-center">
-            <h3 className="font-serif font-black text-xl text-[#1B4332]">Ajustement pour "{selectedEtabForAction.nom}"</h3>
+            <h3 className="font-serif font-black text-xl text-[#1B4332]">
+              Prolonger l'Essai de "{selectedEtabForAction.nom}"
+            </h3>
 
             <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] space-y-3 text-left">
               <div>
-                <label className="block text-xs font-bold text-[#1B4332] mb-1">Prolonger l'Essai de (Jours)</label>
+                <label className="block text-xs font-bold text-[#1B4332] mb-1">Jours à Ajouter</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -469,7 +581,7 @@ export default function SuperAdminDashboardPage() {
                     onClick={() => handleExtendTrial(selectedEtabForAction.id)}
                     className="px-4 py-2 bg-[#B8442C] text-white rounded-xl font-bold text-xs"
                   >
-                    Prolonger Essai
+                    Prolonger
                   </button>
                 </div>
               </div>

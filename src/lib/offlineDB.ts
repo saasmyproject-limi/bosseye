@@ -1732,37 +1732,79 @@ export const offlineDB = {
     return newCloture;
   },
 
-  // --- PALIERS TARIFAIRES ---
+  // --- PALIERS TARIFAIRES CONFIGURABLES ---
   getPaliersTarifaires(): PalierTarifaire[] {
     const defaultPaliers: PalierTarifaire[] = [
       {
-        id: 'palier-1',
-        nom: 'Débutant (Jusqu\'à 100 articles distincts)',
-        articles_distincts_max: 100,
+        id: 'palier-essentiel',
+        code_palier: 'essentiel',
+        nom: 'Essentiel',
+        tarif_mensuel: 3000,
+        articles_max: 100,
+        tables_max: 5,
+        utilisateurs_max: 1,
+        description: 'Pour démarrer simplement : stock, ventes au comptoir et factures imprimables (Patron seul).',
+        modules_inclus: [
+          'Stock & Ventes au comptoir',
+          'Facture imprimable',
+          'Patron seul (1 utilisateur max)',
+        ],
+      },
+      {
+        id: 'palier-standard',
+        code_palier: 'standard',
+        nom: 'Standard',
         tarif_mensuel: 5000,
-        description: 'Pour petites boutiques et commerces de quartier.',
+        articles_max: 400,
+        tables_max: 15,
+        utilisateurs_max: 3,
+        description: 'Le choix idéal : équipe jusqu\'à 3 personnes, ardoises/WhatsApp et commandes en ligne/livraison.',
+        modules_inclus: [
+          'Stock & Ventes',
+          'Facture imprimable',
+          'Jusqu\'à 3 utilisateurs (Patron + 2 employés)',
+          'Module Crédit / Ardoise & Relance WhatsApp',
+          'Commandes en ligne & Livraison',
+        ],
+        badge_recommande: true,
       },
       {
-        id: 'palier-2',
-        nom: 'Pro (Jusqu\'à 500 articles distincts)',
-        articles_distincts_max: 500,
+        id: 'palier-pro',
+        code_palier: 'pro',
+        nom: 'Pro',
         tarif_mensuel: 10000,
-        description: 'Pour boutiques de prêt-à-porter et magasins d\'électronique.',
-      },
-      {
-        id: 'palier-3',
-        nom: 'Illimité (Plus de 500 articles distincts)',
-        articles_distincts_max: 999999,
-        tarif_mensuel: 15000,
-        description: 'Pour grandes boutiques, pharmacies et superettes.',
+        articles_max: 999999,
+        tables_max: 999999,
+        utilisateurs_max: 999999,
+        description: 'Pour grands commerces et lounges : tout illimité, mode série/IMEI, multi-caisses et rapports comptables.',
+        modules_inclus: [
+          'Articles & Tables illimités',
+          'Utilisateurs illimités',
+          'Suivi Unité / Série / IMEI / Autocollants',
+          'Multi-caisses / zones',
+          'Clôtures & Rapports comptables avancés',
+        ],
       },
     ];
 
     try {
       if (typeof window === 'undefined') return defaultPaliers;
       const data = localStorage.getItem(KEYS.PALIERS_TARIFAIRES);
-      return data ? JSON.parse(data) : defaultPaliers;
-    } catch { return defaultPaliers; }
+      if (!data) {
+        localStorage.setItem(KEYS.PALIERS_TARIFAIRES, JSON.stringify(defaultPaliers));
+        return defaultPaliers;
+      }
+      const parsed: PalierTarifaire[] = JSON.parse(data);
+      return parsed.map((p) => ({
+        ...p,
+        articles_max: p.articles_max ?? (p as any).articles_distincts_max ?? 100,
+        tables_max: p.tables_max ?? (p.code_palier === 'essentiel' ? 5 : p.code_palier === 'standard' ? 15 : 999999),
+        utilisateurs_max: p.utilisateurs_max ?? (p.code_palier === 'essentiel' ? 1 : p.code_palier === 'standard' ? 3 : 999999),
+        modules_inclus: p.modules_inclus || [],
+      }));
+    } catch {
+      return defaultPaliers;
+    }
   },
 
   savePaliersTarifaires(paliers: PalierTarifaire[]) {
@@ -1770,40 +1812,92 @@ export const offlineDB = {
       if (typeof window !== 'undefined') {
         localStorage.setItem(KEYS.PALIERS_TARIFAIRES, JSON.stringify(paliers));
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   },
 
-  checkStockTierOverflow(etabTarget?: Etablissement): {
+  checkEtablissementTierUsage(etabTarget?: Etablissement): {
     distinctCount: number;
+    tablesCount: number;
+    usersCount: number;
     currentTier: PalierTarifaire;
-    nextTier?: PalierTarifaire;
+    recommendedTier: PalierTarifaire;
     isOverflow: boolean;
+    overflowReason?: string;
   } {
     const etab = etabTarget || this.getEtablissement();
     const prods = this.getProduits();
-    const distinctCount = prods.length;
+    const users = this.getUtilisateurs();
+    const sessions = this.getSessionsBar();
     const paliers = this.getPaliersTarifaires();
 
-    let currentTier = paliers[0];
-    let nextTier: PalierTarifaire | undefined = undefined;
+    const distinctCount = prods.length;
+    const usersCount = users.filter((u) => u.actif).length;
+    const tablesCount = new Set(sessions.map((s) => s.table_numero)).size || 1;
 
-    if (distinctCount <= 100) {
-      currentTier = paliers[0];
-      nextTier = paliers[1];
-    } else if (distinctCount <= 500) {
-      currentTier = paliers[1];
-      nextTier = paliers[2];
+    const essentielTier = paliers.find((p) => p.code_palier === 'essentiel') || paliers[0];
+    const standardTier = paliers.find((p) => p.code_palier === 'standard') || paliers[1] || paliers[0];
+    const proTier = paliers.find((p) => p.code_palier === 'pro') || paliers[2] || paliers[paliers.length - 1];
+
+    let currentTier = essentielTier;
+    if (etab.tarif_mensuel >= (proTier?.tarif_mensuel || 8000)) {
+      currentTier = proTier;
+    } else if (etab.tarif_mensuel >= (standardTier?.tarif_mensuel || 5000)) {
+      currentTier = standardTier;
     } else {
-      currentTier = paliers[2] || paliers[paliers.length - 1];
+      currentTier = essentielTier;
     }
 
-    const isOverflow = distinctCount > currentTier.articles_distincts_max;
+    let recommendedTier = essentielTier;
+    let reasons: string[] = [];
+
+    const isBar = etab.type_activite === 'bar';
+
+    const excedeEssentiel =
+      distinctCount > essentielTier.articles_max ||
+      (isBar && tablesCount > essentielTier.tables_max) ||
+      usersCount > essentielTier.utilisateurs_max;
+
+    const excedeStandard =
+      distinctCount > standardTier.articles_max ||
+      (isBar && tablesCount > standardTier.tables_max) ||
+      usersCount > standardTier.utilisateurs_max;
+
+    if (excedeStandard) {
+      recommendedTier = proTier;
+      if (distinctCount > standardTier.articles_max) reasons.push(`${distinctCount} articles (${standardTier.articles_max} max pour Standard)`);
+      if (isBar && tablesCount > standardTier.tables_max) reasons.push(`${tablesCount} tables (${standardTier.tables_max} max pour Standard)`);
+      if (usersCount > standardTier.utilisateurs_max) reasons.push(`${usersCount} utilisateurs (${standardTier.utilisateurs_max} max pour Standard)`);
+    } else if (excedeEssentiel) {
+      recommendedTier = standardTier;
+      if (distinctCount > essentielTier.articles_max) reasons.push(`${distinctCount} articles (${essentielTier.articles_max} max pour Essentiel)`);
+      if (isBar && tablesCount > essentielTier.tables_max) reasons.push(`${tablesCount} tables (${essentielTier.tables_max} max pour Essentiel)`);
+      if (usersCount > essentielTier.utilisateurs_max) reasons.push(`${usersCount} utilisateurs (${essentielTier.utilisateurs_max} max pour Essentiel)`);
+    } else {
+      recommendedTier = essentielTier;
+    }
+
+    const isOverflow = recommendedTier.tarif_mensuel > currentTier.tarif_mensuel;
 
     return {
       distinctCount,
+      tablesCount,
+      usersCount,
       currentTier,
-      nextTier: isOverflow ? nextTier : undefined,
+      recommendedTier,
       isOverflow,
+      overflowReason: isOverflow ? reasons.join(', ') : undefined,
+    };
+  },
+
+  checkStockTierOverflow(etabTarget?: Etablissement) {
+    const res = this.checkEtablissementTierUsage(etabTarget);
+    return {
+      distinctCount: res.distinctCount,
+      currentTier: res.currentTier,
+      nextTier: res.isOverflow ? res.recommendedTier : undefined,
+      isOverflow: res.isOverflow,
     };
   },
 
