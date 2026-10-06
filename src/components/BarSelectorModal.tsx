@@ -304,68 +304,21 @@ export default function BarSelectorModal({
               <span>Essai gratuit de 7 jours activé automatiquement, synchronisation Cloud incluse !</span>
             </div>
 
-            {/* 3 Cartes Métier œko */}
-            <div>
-              <label className="text-xs font-bold text-[#1B4332] block mb-2">
-                1. Choisissez la Catégorie de votre Activité *
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Card 1: Boutique */}
-                <div
-                  onClick={() => setTypeActivite('boutique')}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all text-left space-y-2 ${
-                    typeActivite === 'boutique'
-                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                      : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3]'
-                  }`}
-                >
-                  <span className="text-2xl">👗</span>
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-serif font-black text-sm">Boutique</h4>
-                    <span className="text-[10px] font-black text-[#E8A33D]">5 000 F/m</span>
+            {/* Catégorie Activité - Exclusivement Boutique */}
+            <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-xl shadow-sm">
+                    👗
                   </div>
-                  <p className="text-[11px] opacity-80 leading-snug font-medium">
-                    Vêtements & chaussures. Variantes tailles/couleurs, livraisons en ligne.
-                  </p>
-                </div>
-
-                {/* Card 2: Bar */}
-                <div
-                  onClick={() => setTypeActivite('bar')}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all text-left space-y-2 ${
-                    typeActivite === 'bar'
-                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                      : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3]'
-                  }`}
-                >
-                  <span className="text-2xl">🍺</span>
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-serif font-black text-sm">Bar / Lounge</h4>
-                    <span className="text-[10px] font-black text-[#E8A33D]">5 000 F/m</span>
+                  <div>
+                    <h4 className="font-serif font-black text-sm text-[#1B4332]">Activité : Boutique</h4>
+                    <p className="text-[11px] text-gray-600 font-medium">Gestion du stock d'articles, déclinaisons & ventes</p>
                   </div>
-                  <p className="text-[11px] opacity-80 leading-snug font-medium">
-                    Tables ouvertes, note divisible par personne, déstockage au service.
-                  </p>
                 </div>
-
-                {/* Card 3: Snack */}
-                <div
-                  onClick={() => setTypeActivite('snack')}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all text-left space-y-2 ${
-                    typeActivite === 'snack'
-                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                      : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3]'
-                  }`}
-                >
-                  <span className="text-2xl">🍟</span>
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-serif font-black text-sm">Snack-Bar</h4>
-                    <span className="text-[10px] font-black text-[#E8A33D]">10 000 F/m</span>
-                  </div>
-                  <p className="text-[11px] opacity-80 leading-snug font-medium">
-                    Flux 2 étapes, multi-caisses, carrés VIP et patron à distance.
-                  </p>
-                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-[#E8A33D]/20 text-[#1B4332] border border-[#E8A33D]/40 px-2.5 py-1 rounded-full">
+                  Essai 7j Gratuit
+                </span>
               </div>
             </div>
 

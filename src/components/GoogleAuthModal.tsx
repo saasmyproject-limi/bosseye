@@ -129,12 +129,18 @@ export default function GoogleAuthModal({ isOpen, onClose, onSuccess }: GoogleAu
             </button>
           ) : (
             <form onSubmit={handleCustomSubmit} className="bg-white/80 p-4 rounded-2xl border border-[#E2D5C3] space-y-3">
-              <div className="text-xs font-bold text-[#1B4332]">Saisissez votre adresse Gmail :</div>
+              <div className="text-xs font-bold text-[#1B4332]">Créer / Connecter mon Compte Gmail :</div>
               <input
                 type="email"
-                placeholder="votre.nom@gmail.com"
+                placeholder="votre.nom@gmail.com *"
                 value={customEmail}
                 onChange={(e) => setCustomEmail(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-black"
+              />
+              <input
+                type="password"
+                placeholder="Mot de passe du compte *"
                 required
                 className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-black"
               />
@@ -157,7 +163,7 @@ export default function GoogleAuthModal({ isOpen, onClose, onSuccess }: GoogleAu
                   type="submit"
                   className="flex-1 py-2 text-xs font-bold text-white bg-[#1B4332] rounded-xl hover:bg-[#143326]"
                 >
-                  Continuer avec Google
+                  Créer / Connecter mon Compte
                 </button>
               </div>
             </form>
