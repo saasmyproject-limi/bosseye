@@ -2,26 +2,27 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import BarSelectorModal from '@/components/BarSelectorModal';
+import GoogleAuthModal from '@/components/GoogleAuthModal';
 import PinLoginModal from '@/components/PinLoginModal';
 import OfflineBadge from '@/components/OfflineBadge';
 import { offlineDB } from '@/lib/offlineDB';
+import { Lock, UserPlus, LogIn, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
   const router = useRouter();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   return (
     <main className="min-h-screen bg-[#FAF9F5] text-[#1B4332] font-sans selection:bg-[#E8A33D] selection:text-[#0F291E] flex flex-col items-center justify-between p-6 sm:p-10 relative overflow-hidden">
-      {/* Discreet Header with Offline Badge */}
+      {/* Header with Offline Badge */}
       <header className="w-full max-w-md flex justify-end items-center z-10 min-h-[32px]">
         <OfflineBadge />
       </header>
 
       {/* Main Centered Content */}
       <section className="my-auto flex flex-col items-center text-center max-w-lg w-full py-6 z-10">
-        {/* Abstract Eye Illustration */}
+        {/* Abstract Eye Logo */}
         <div className="relative mb-8 sm:mb-10 flex items-center justify-center cursor-pointer group">
           <div className="absolute inset-0 rounded-full bg-[#10B981]/15 blur-3xl transform scale-125 group-hover:scale-150 transition-transform duration-700" />
 
@@ -31,7 +32,6 @@ export default function LandingPage() {
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >
-            {/* Outer Soft Teal/Mint Circle with Fine Green Stroke */}
             <circle
               cx="120"
               cy="120"
@@ -41,14 +41,10 @@ export default function LandingPage() {
               strokeWidth="1.5"
               strokeOpacity="0.7"
             />
-
-            {/* White Eye Contour */}
             <path
               d="M48 120C48 120 78 82 120 82C162 82 192 120 192 120C192 120 162 158 120 158C78 158 48 120 48 120Z"
               fill="#FFFFFF"
             />
-
-            {/* Amber Pupil Outer Ring */}
             <circle
               cx="120"
               cy="120"
@@ -57,16 +53,12 @@ export default function LandingPage() {
               stroke="#E8A33D"
               strokeWidth="3.2"
             />
-
-            {/* Amber Pupil Center */}
             <circle
               cx="120"
               cy="120"
               r="11"
               fill="#D97706"
             />
-
-            {/* Reflection Highlight */}
             <circle
               cx="116"
               cy="116"
@@ -77,57 +69,62 @@ export default function LandingPage() {
           </svg>
         </div>
 
-        {/* Name */}
+        {/* Brand Name & Slogan */}
         <h1 className="font-serif font-black text-3xl sm:text-4xl text-[#1B4332] tracking-tight">
-          Œko
+          œko
         </h1>
-
-        {/* Catchphrase */}
         <p className="text-sm sm:text-base font-semibold text-gray-500 mt-1 tracking-wide">
           L'œil du patron
         </p>
 
-        {/* Single Description Line */}
         <p className="text-sm sm:text-base font-medium text-[#1B4332]/90 mt-6 sm:mt-8 max-w-xs sm:max-w-md leading-snug">
-          Stock, ventes, crédits clients — depuis votre téléphone
+          Gestion de stock & ventes de boutiques — depuis votre téléphone
         </p>
 
-        {/* Two Action Buttons */}
+        {/* Level 1 Account Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full max-w-sm mt-8 sm:mt-10">
           <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-[#E2F5EE] hover:bg-[#D3EEE4] border-2 border-[#10B981]/60 text-[#1B4332] font-black text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center"
+            onClick={() => setIsAuthModalOpen(true)}
+            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-black text-sm shadow-md transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2"
           >
-            Crée ton compte
+            <UserPlus className="w-4 h-4 text-[#E8A33D]" />
+            <span>Crée ton compte</span>
           </button>
 
           <button
-            onClick={() => setIsPinModalOpen(true)}
-            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-white hover:bg-gray-50 border-2 border-[#E2D5C3] text-[#1B4332] font-bold text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center"
+            onClick={() => setIsAuthModalOpen(true)}
+            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-white hover:bg-gray-50 border-2 border-[#E2D5C3] text-[#1B4332] font-bold text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2"
           >
-            Connecte-toi
+            <LogIn className="w-4 h-4 text-[#1B4332]" />
+            <span>Connecte-toi</span>
           </button>
         </div>
+
+        {/* Quick Tablet PIN Link */}
+        <button
+          onClick={() => setIsPinModalOpen(true)}
+          className="mt-4 text-xs font-bold text-gray-600 hover:text-[#1B4332] flex items-center justify-center gap-1.5 transition-colors"
+        >
+          <Lock className="w-3.5 h-3.5 text-[#E8A33D]" />
+          <span>Accès rapide Tablette Caisse (Code PIN)</span>
+        </button>
       </section>
 
-      {/* Footer */}
       <footer className="w-full text-center py-2 text-[11px] font-semibold text-gray-400 z-10">
-        © 2026 Œko
+        © 2026 œko — L'œil du patron
       </footer>
 
-      {/* Account Creation Modal */}
-      {isCreateModalOpen && (
-        <BarSelectorModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onSelectSuccess={(etab) => {
-            setIsCreateModalOpen(false);
-            router.push(`/${etab.type_activite || 'boutique'}/dashboard`);
-          }}
-        />
-      )}
+      {/* Level 1 Google / Gmail Account Creation Modal */}
+      <GoogleAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={() => {
+          setIsAuthModalOpen(false);
+          router.push('/activites');
+        }}
+      />
 
-      {/* PIN Login Modal */}
+      {/* Tablet PIN Login Modal */}
       {isPinModalOpen && (
         <PinLoginModal
           isOpen={isPinModalOpen}

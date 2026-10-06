@@ -42,6 +42,7 @@ export default function BarSelectorModal({
 
   // Form State pour création d'un nouveau commerce œko
   const [typeActivite, setTypeActivite] = useState<TypeActivite>('boutique');
+  const [selectedPalierCode, setSelectedPalierCode] = useState<'essentiel' | 'standard' | 'pro'>('standard');
   const [nomCommerce, setNomCommerce] = useState('');
   const [secteurBoutique, setSecteurBoutique] = useState('Vêtements & Mode');
   const [ville, setVille] = useState('Douala');
@@ -95,6 +96,9 @@ export default function BarSelectorModal({
     if (!nomCommerce.trim() || !adresse.trim() || !patronNom.trim()) return;
     if (typeActivite === 'boutique' && !secteurBoutique.trim()) return;
 
+    const tarifMap: Record<string, number> = { essentiel: 3000, standard: 5000, pro: 10000 };
+    const selectedTarif = tarifMap[selectedPalierCode] || 5000;
+
     const newEtab = offlineDB.createEtablissement({
       nom: nomCommerce.trim(),
       type_activite: typeActivite,
@@ -105,6 +109,7 @@ export default function BarSelectorModal({
       telephone: patronTelephone.trim() || undefined,
       email_patron: emailPatron.trim() || undefined,
       patronPin: patronPin.trim() || '1234',
+      tarif_mensuel: selectedTarif,
     });
 
     // Sauvegarder immédiatement sur le cloud
@@ -312,13 +317,75 @@ export default function BarSelectorModal({
                     👗
                   </div>
                   <div>
-                    <h4 className="font-serif font-black text-sm text-[#1B4332]">Activité : Boutique</h4>
+                    <h4 className="font-serif font-black text-sm text-[#1B4332]">Activité : Boutique / Commerce</h4>
                     <p className="text-[11px] text-gray-600 font-medium">Gestion du stock d'articles, déclinaisons & ventes</p>
                   </div>
                 </div>
                 <span className="text-[10px] font-black uppercase tracking-wider bg-[#E8A33D]/20 text-[#1B4332] border border-[#E8A33D]/40 px-2.5 py-1 rounded-full">
                   Essai 7j Gratuit
                 </span>
+              </div>
+            </div>
+
+            {/* Choix des 3 Paliers Tarifaires de la Boutique */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#1B4332] block">
+                1. Choisissez le Palier Tarifaire de votre Boutique *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Palier 1: Essentiel */}
+                <div
+                  onClick={() => setSelectedPalierCode('essentiel')}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 ${
+                    selectedPalierCode === 'essentiel'
+                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
+                      : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-serif font-black text-xs">Essentiel</span>
+                    <span className="text-[10px] font-black text-[#E8A33D]">3 000 F/m</span>
+                  </div>
+                  <p className="text-[10px] opacity-85 leading-snug">
+                    Patron solo (1 personne), 100 articles max.
+                  </p>
+                </div>
+
+                {/* Palier 2: Standard */}
+                <div
+                  onClick={() => setSelectedPalierCode('standard')}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 relative ${
+                    selectedPalierCode === 'standard'
+                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
+                      : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-serif font-black text-xs">Standard</span>
+                    <span className="text-[10px] font-black text-[#E8A33D]">5 000 F/m</span>
+                  </div>
+                  <p className="text-[10px] opacity-85 leading-snug">
+                    2-3 employés, 400 articles max. (Recommandé)
+                  </p>
+                </div>
+
+                {/* Palier 3: Pro */}
+                <div
+                  onClick={() => setSelectedPalierCode('pro')}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 ${
+                    selectedPalierCode === 'pro'
+                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
+                      : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-serif font-black text-xs">Pro</span>
+                    <span className="text-[10px] font-black text-[#E8A33D]">10 000 F/m</span>
+                  </div>
+                  <p className="text-[10px] opacity-85 leading-snug">
+                    Multi-employés illimités, WhatsApp, Crédit client.
+                  </p>
+                </div>
               </div>
             </div>
 

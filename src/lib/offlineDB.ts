@@ -288,12 +288,13 @@ export const offlineDB = {
     telephone?: string;
     email_patron?: string;
     patronPin: string;
+    tarif_mensuel?: number;
   }): Etablissement {
     const etabs = this.getEtablissements();
     const currentCompte = this.getCompteActuel();
     const newId = `etab-${Date.now()}`;
     const act = params.type_activite;
-    const tarif = TARIFS_ABONNEMENT[act] || 5000;
+    const tarif = params.tarif_mensuel || TARIFS_ABONNEMENT[act] || 5000;
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
     const nowIso = new Date().toISOString();
     const endTrialIso = new Date(Date.now() + SEVEN_DAYS_MS).toISOString();
