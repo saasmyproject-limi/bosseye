@@ -171,12 +171,22 @@ export const offlineDB = {
   },
 
   getActivitesDuCompte(compteId?: string): Etablissement[] {
-    const compte = compteId ? { id: compteId } : this.getCompteActuel();
+    const compte = compteId ? this.getComptesGlobal().find(c => c.id === compteId) || { id: compteId } : this.getCompteActuel();
     const all = this.getEtablissements();
-    if (!compte) return all;
-    return all.filter(
-      (e) => (e.compte_id && e.compte_id === compte.id) || (e.email_patron && (compte as any).email && e.email_patron.toLowerCase() === (compte as any).email.toLowerCase()) || !e.compte_id
-    );
+    if (!compte || !compte.id) return [];
+    
+    // Si c'est le compte démo par défaut, renvoyer les établissements de démonstration
+    if (compte.email === 'patronne.demo@gmail.com' || compte.id === 'compte-google-demo') {
+      return all;
+    }
+
+    // Filtrer strictement les établissements créés par ce compte utilisateur ou rattachés à son email
+    return all.filter((e) => {
+      if (!e) return false;
+      if (e.compte_id && e.compte_id === compte.id) return true;
+      if (e.email_patron && (compte as any).email && e.email_patron.toLowerCase() === (compte as any).email.toLowerCase()) return true;
+      return false;
+    });
   },
 
   dismissWelcomeModal(etabId: string) {

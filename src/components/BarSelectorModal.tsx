@@ -9,19 +9,15 @@ import {
   MapPin,
   Sparkles,
   ShoppingBag,
-  Beer,
-  Utensils,
   X,
   Lock,
-  Eye,
-  CloudDownload,
-  CloudUpload,
-  RefreshCw,
-  Search
+  Phone,
+  User,
+  ArrowRight
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
-import { TypeActivite, Etablissement, TARIFS_ABONNEMENT } from '@/types';
-import { syncShopToCloud, downloadShopFromCloud } from '@/lib/supabaseSync';
+import { TypeActivite, Etablissement } from '@/types';
+import { syncShopToCloud } from '@/lib/supabaseSync';
 
 interface BarSelectorModalProps {
   isOpen: boolean;
@@ -35,13 +31,8 @@ export default function BarSelectorModal({
   onSelectSuccess,
 }: BarSelectorModalProps) {
   const router = useRouter();
-  const etablissements = offlineDB.getEtablissements();
-  const currentEtab = offlineDB.getEtablissement();
 
-  const [mode, setMode] = useState<'list' | 'create' | 'cloud'>('list');
-
-  // Form State pour création d'un nouveau commerce œko
-  const [typeActivite, setTypeActivite] = useState<TypeActivite>('boutique');
+  // Form State pour création d'un nouveau commerce œko (Boutique)
   const [selectedPalierCode, setSelectedPalierCode] = useState<'essentiel' | 'standard' | 'pro'>('standard');
   const [nomCommerce, setNomCommerce] = useState('');
   const [secteurBoutique, setSecteurBoutique] = useState('Vêtements & Mode');
@@ -49,492 +40,262 @@ export default function BarSelectorModal({
   const [adresse, setAdresse] = useState('');
   const [patronNom, setPatronNom] = useState('');
   const [patronTelephone, setPatronTelephone] = useState('');
-  const [emailPatron, setEmailPatron] = useState('');
   const [patronPin, setPatronPin] = useState('1234');
-
-  // Form State pour téléchargement cloud
-  const [cloudSearchCode, setCloudSearchCode] = useState('');
-  const [cloudPinCode, setCloudPinCode] = useState('');
-  const [cloudSyncStatus, setCloudSyncStatus] = useState<{ loading: boolean; message: string; success?: boolean } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
-
-  const handleSelectEtab = (id: string) => {
-    offlineDB.switchEtablissement(id);
-    const etab = offlineDB.getEtablissement();
-    if (onSelectSuccess) onSelectSuccess(etab);
-    onClose();
-    router.refresh();
-  };
-
-  const handleSyncToCloud = async (etabId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCloudSyncStatus({ loading: true, message: 'Sauvegarde sur le cloud en cours...' });
-    const res = await syncShopToCloud(etabId);
-    setCloudSyncStatus({ loading: false, message: res.message, success: res.success });
-  };
-
-  const handleDownloadFromCloud = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cloudSearchCode.trim()) return;
-
-    setCloudSyncStatus({ loading: true, message: 'Recherche et téléchargement de la boutique...' });
-    const res = await downloadShopFromCloud(cloudSearchCode.trim(), cloudPinCode.trim());
-    setCloudSyncStatus({ loading: false, message: res.message, success: res.success });
-
-    if (res.success && res.etab) {
-      if (onSelectSuccess) onSelectSuccess(res.etab);
-      setTimeout(() => {
-        onClose();
-        router.refresh();
-      }, 1500);
-    }
-  };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nomCommerce.trim() || !adresse.trim() || !patronNom.trim()) return;
-    if (typeActivite === 'boutique' && !secteurBoutique.trim()) return;
 
     const tarifMap: Record<string, number> = { essentiel: 3000, standard: 5000, pro: 10000 };
     const selectedTarif = tarifMap[selectedPalierCode] || 5000;
 
+    setIsSubmitting(true);
+
     const newEtab = offlineDB.createEtablissement({
       nom: nomCommerce.trim(),
-      type_activite: typeActivite,
-      secteur_boutique: typeActivite === 'boutique' ? (secteurBoutique || 'Vêtements & Mode') : undefined,
+      type_activite: 'boutique',
+      secteur_boutique: secteurBoutique.trim() || 'Commerce général',
       ville,
       adresse: adresse.trim(),
       patronNom: patronNom.trim(),
       telephone: patronTelephone.trim() || undefined,
-      email_patron: emailPatron.trim() || undefined,
       patronPin: patronPin.trim() || '1234',
       tarif_mensuel: selectedTarif,
     });
 
-    // Sauvegarder immédiatement sur le cloud
+    // Sauvegarder sur le cloud en arrière-plan
     syncShopToCloud(newEtab.id);
 
     if (onSelectSuccess) onSelectSuccess(newEtab);
+    setIsSubmitting(false);
     onClose();
-    const act = newEtab.type_activite || 'snack';
-    router.push(`/${act}/dashboard`);
+    router.push('/boutique/dashboard');
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#FAF9F5] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl relative space-y-5 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-gray-500 hover:text-black p-1 rounded-xl bg-[#FBF7EF]"
+          className="absolute top-5 right-5 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-200/60 transition-colors cursor-pointer"
+          aria-label="Fermer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-xl font-black shadow-md">
-            👁️
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-2xl font-black shadow-md">
+            👗
           </div>
           <div>
-            <h2 className="font-serif font-black text-xl text-[#1B4332]">œko — L'œil du patron</h2>
-            <p className="text-xs text-gray-600 font-bold">Sélection, création ou synchronisation multi-appareils</p>
+            <h2 className="font-serif font-black text-xl sm:text-2xl text-[#1B4332]">
+              Création d'une nouvelle activité Boutique
+            </h2>
+            <p className="text-xs text-gray-600 font-semibold">
+              Configurez votre commerce. Essai gratuit de 7 jours inclus sans engagement.
+            </p>
           </div>
         </div>
 
-        {/* Status Alert Banner */}
-        {cloudSyncStatus && (
-          <div
-            className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
-              cloudSyncStatus.loading
-                ? 'bg-blue-100 text-blue-900 border border-blue-300'
-                : cloudSyncStatus.success
-                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                : 'bg-red-100 text-red-900 border border-red-300'
-            }`}
-          >
-            {cloudSyncStatus.loading && <RefreshCw className="w-4 h-4 animate-spin text-blue-700" />}
-            <span>{cloudSyncStatus.message}</span>
+        {/* Form */}
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
+          {/* Choix des 3 Paliers Tarifaires */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-[#1B4332] block">
+              1. Choisissez le Palier Tarifaire de votre Boutique *
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* Palier 1: Essentiel */}
+              <div
+                onClick={() => setSelectedPalierCode('essentiel')}
+                className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 ${
+                  selectedPalierCode === 'essentiel'
+                    ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
+                    : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-serif font-black text-xs">Essentiel</span>
+                  <span className="text-[10px] font-black text-[#E8A33D]">3 000 F/m</span>
+                </div>
+                <p className="text-[10px] opacity-85 leading-snug">
+                  Patron solo (1 personne), 100 articles max.
+                </p>
+              </div>
+
+              {/* Palier 2: Standard */}
+              <div
+                onClick={() => setSelectedPalierCode('standard')}
+                className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 relative ${
+                  selectedPalierCode === 'standard'
+                    ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
+                    : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-serif font-black text-xs">Standard</span>
+                  <span className="text-[10px] font-black text-[#E8A33D]">5 000 F/m</span>
+                </div>
+                <p className="text-[10px] opacity-85 leading-snug">
+                  2-3 employés, 400 articles max. (Recommandé)
+                </p>
+              </div>
+
+              {/* Palier 3: Pro */}
+              <div
+                onClick={() => setSelectedPalierCode('pro')}
+                className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 ${
+                  selectedPalierCode === 'pro'
+                    ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
+                    : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-serif font-black text-xs">Pro</span>
+                  <span className="text-[10px] font-black text-[#E8A33D]">10 000 F/m</span>
+                </div>
+                <p className="text-[10px] opacity-85 leading-snug">
+                  Multi-employés illimités, WhatsApp, Crédit client.
+                </p>
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* Mode Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-[#FBF7EF] p-1.5 rounded-2xl border border-[#E2D5C3]">
-          <button
-            onClick={() => setMode('list')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-              mode === 'list' ? 'bg-[#1B4332] text-white shadow-md' : 'text-[#1B4332]'
-            }`}
-          >
-            Mes Commerces ({etablissements.length})
-          </button>
+          {/* Produits vendus */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] space-y-2.5">
+            <label className="text-xs font-bold text-[#1B4332] block">
+              2. Que vendez-vous principalement dans votre Boutique ? *
+            </label>
 
-          <button
-            onClick={() => setMode('cloud')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'cloud' ? 'bg-[#1B4332] text-white shadow-md' : 'text-[#1B4332]'
-            }`}
-          >
-            <CloudDownload className="w-4 h-4 text-[#E8A33D]" />
-            <span>Rejoindre sur 2è Appareil (Cloud)</span>
-          </button>
-
-          <button
-            onClick={() => setMode('create')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              mode === 'create' ? 'bg-[#B8442C] text-white shadow-md' : 'text-[#1B4332]'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>Créer un Compte</span>
-          </button>
-        </div>
-
-        {/* MODE 1: LISTE DES COMMERCES EXISTANTS */}
-        {mode === 'list' && (
-          <div className="space-y-3">
-            {etablissements.map((etab) => {
-              const isSelected = etab.id === currentEtab?.id;
-              const isBoutique = etab.type_activite === 'boutique';
-              const isBar = etab.type_activite === 'bar';
-
-              return (
-                <div
-                  key={etab.id}
-                  onClick={() => handleSelectEtab(etab.id)}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between gap-2 ${
-                    isSelected
-                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                      : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
+            <div className="flex flex-wrap gap-2">
+              {[
+                '👗 Vêtements & Mode',
+                '📱 Téléphones & Électronique',
+                '🔌 Électroménager',
+                '🛒 Alimentation générale',
+                '👞 Chaussures & Maroquinerie',
+              ].map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setSecteurBoutique(chip)}
+                  className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    secteurBoutique === chip
+                      ? 'bg-[#1B4332] text-white shadow-md'
+                      : 'bg-gray-50 text-[#1B4332] border border-[#E2D5C3] hover:bg-gray-100'
                   }`}
                 >
-                  <div className="flex items-center gap-3 truncate">
-                    <div className="w-10 h-10 rounded-xl bg-[#E8A33D] text-[#0F291E] flex items-center justify-center text-xl font-bold shrink-0">
-                      {isBoutique ? '👗' : isBar ? '🍺' : '🍟'}
-                    </div>
-                    <div className="truncate">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-serif font-black text-base truncate">{etab.nom}</h4>
-                        <span className="text-[9px] font-black uppercase tracking-wider bg-[#E8A33D]/20 px-2 py-0.5 rounded-full border border-[#E8A33D]/40">
-                          {etab.type_activite || 'Boutique'}
-                        </span>
-                      </div>
-                      <p className="text-xs opacity-80 truncate">{etab.ville} - {etab.adresse}</p>
-                    </div>
-                  </div>
+                  {chip}
+                </button>
+              ))}
+            </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={(e) => handleSyncToCloud(etab.id, e)}
-                      title="Sauvegarder sur le Cloud pour y accéder depuis un autre ordinateur/téléphone"
-                      className="px-2.5 py-1.5 rounded-xl bg-[#0F291E] text-[#E8A33D] hover:bg-[#E8A33D] hover:text-[#0F291E] text-[10px] font-bold flex items-center gap-1 transition-all border border-[#E8A33D]/40"
-                    >
-                      <CloudUpload className="w-3.5 h-3.5" />
-                      <span>Sync Cloud</span>
-                    </button>
-                    {isSelected && <Check className="w-6 h-6 text-[#E8A33D]" />}
-                  </div>
-                </div>
-              );
-            })}
+            <input
+              type="text"
+              placeholder="Ex: Vêtements, Chaussures, Accessoires de mode..."
+              value={secteurBoutique}
+              onChange={(e) => setSecteurBoutique(e.target.value)}
+              className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+              required
+            />
           </div>
-        )}
 
-        {/* MODE 2: TELECHARGEMENT DEPUIS LE CLOUD POUR AUTRE APPAREIL */}
-        {mode === 'cloud' && (
-          <form onSubmit={handleDownloadFromCloud} className="space-y-4">
-            <div className="p-4 rounded-2xl bg-[#E2F5EE] border border-[#10B981]/50 text-[#1B4332] text-xs font-bold space-y-2">
-              <div className="flex items-center gap-2 text-sm font-black text-[#1B4332]">
-                <CloudDownload className="w-5 h-5 text-[#10B981]" />
-                <span>Synchronisation sur plusieurs appareils</span>
-              </div>
-              <p className="text-[11px] leading-relaxed font-normal opacity-90">
-                Si vous avez créé votre boutique et son stock sur l'ordinateur de la boutique, vous pouvez récupérer <strong>l'intégralité de la boutique à la maison</strong> en saisissant le Nom, Téléphone ou Code de votre boutique ci-dessous.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">
-                  1. Nom ou Téléphone de la Boutique *
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Ex: Boutique Éléganza ou 699000000"
-                    value={cloudSearchCode}
-                    onChange={(e) => setCloudSearchCode(e.target.value)}
-                    className="w-full bg-white border-2 border-[#1B4332] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332]"
-                    required
-                  />
-                  <Search className="w-4 h-4 text-[#1B4332] absolute left-3 top-3.5" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">
-                  2. Mot de Passe / Code PIN *
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    maxLength={8}
-                    placeholder="Ex: 1234"
-                    value={cloudPinCode}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setCloudPinCode(e.target.value)}
-                    className="w-full bg-white border-2 border-[#1B4332] rounded-2xl p-3 pl-10 text-xs font-bold text-[#1B4332] tracking-widest"
-                    required
-                  />
-                  <Lock className="w-4 h-4 text-[#1B4332] absolute left-3 top-3.5" />
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={cloudSyncStatus?.loading}
-              className="w-full py-4 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#0F291E] text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50"
-            >
-              <CloudDownload className="w-5 h-5 text-[#E8A33D]" />
-              <span>Télécharger & Synchroniser cette Boutique ➔</span>
-            </button>
-          </form>
-        )}
-
-        {/* MODE 3: ONBOARDING & CRÉATION DE COMPTE */}
-        {mode === 'create' && (
-          <form onSubmit={handleCreateSubmit} className="space-y-4">
-            <div className="p-3.5 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-emerald-800 shrink-0" />
-              <span>Essai gratuit de 7 jours activé automatiquement, synchronisation Cloud incluse !</span>
-            </div>
-
-            {/* Catégorie Activité - Exclusivement Boutique */}
-            <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-xl shadow-sm">
-                    👗
-                  </div>
-                  <div>
-                    <h4 className="font-serif font-black text-sm text-[#1B4332]">Activité : Boutique / Commerce</h4>
-                    <p className="text-[11px] text-gray-600 font-medium">Gestion du stock d'articles, déclinaisons & ventes</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-[#E8A33D]/20 text-[#1B4332] border border-[#E8A33D]/40 px-2.5 py-1 rounded-full">
-                  Essai 7j Gratuit
-                </span>
-              </div>
-            </div>
-
-            {/* Choix des 3 Paliers Tarifaires de la Boutique */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#1B4332] block">
-                1. Choisissez le Palier Tarifaire de votre Boutique *
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {/* Palier 1: Essentiel */}
-                <div
-                  onClick={() => setSelectedPalierCode('essentiel')}
-                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 ${
-                    selectedPalierCode === 'essentiel'
-                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                      : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-serif font-black text-xs">Essentiel</span>
-                    <span className="text-[10px] font-black text-[#E8A33D]">3 000 F/m</span>
-                  </div>
-                  <p className="text-[10px] opacity-85 leading-snug">
-                    Patron solo (1 personne), 100 articles max.
-                  </p>
-                </div>
-
-                {/* Palier 2: Standard */}
-                <div
-                  onClick={() => setSelectedPalierCode('standard')}
-                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 relative ${
-                    selectedPalierCode === 'standard'
-                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                      : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-serif font-black text-xs">Standard</span>
-                    <span className="text-[10px] font-black text-[#E8A33D]">5 000 F/m</span>
-                  </div>
-                  <p className="text-[10px] opacity-85 leading-snug">
-                    2-3 employés, 400 articles max. (Recommandé)
-                  </p>
-                </div>
-
-                {/* Palier 3: Pro */}
-                <div
-                  onClick={() => setSelectedPalierCode('pro')}
-                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all space-y-1.5 ${
-                    selectedPalierCode === 'pro'
-                      ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-md'
-                      : 'bg-white text-[#1B4332] border-[#E2D5C3] hover:border-[#1B4332]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-serif font-black text-xs">Pro</span>
-                    <span className="text-[10px] font-black text-[#E8A33D]">10 000 F/m</span>
-                  </div>
-                  <p className="text-[10px] opacity-85 leading-snug">
-                    Multi-employés illimités, WhatsApp, Crédit client.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Champ spécifique Boutique */}
-            {typeActivite === 'boutique' && (
-              <div className="p-4 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-3">
-                <label className="text-xs font-bold text-[#1B4332] block">
-                  2. Que vendez-vous principalement dans votre Boutique ? *
-                </label>
-
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: '👗 Vêtements & Mode', val: 'Vêtements & Mode' },
-                    { label: '📱 Téléphones & Électronique', val: 'Téléphones & Électronique' },
-                    { label: '🔌 Électroménager', val: 'Électroménager' },
-                    { label: '🛒 Alimentation générale', val: 'Alimentation générale' },
-                    { label: '👞 Chaussures & Maroquinerie', val: 'Chaussures & Maroquinerie' },
-                  ].map((chip) => (
-                    <button
-                      key={chip.val}
-                      type="button"
-                      onClick={() => setSecteurBoutique(chip.val)}
-                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                        secteurBoutique === chip.val
-                          ? 'bg-[#1B4332] text-white shadow-md'
-                          : 'bg-white text-[#1B4332] border border-[#E2D5C3] hover:bg-[#E2D5C3]/40'
-                      }`}
-                    >
-                      {chip.label}
-                    </button>
-                  ))}
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="Ou précisez en texte libre (ex: Vêtements traditionnels, Pagne)..."
-                  value={secteurBoutique}
-                  onChange={(e) => setSecteurBoutique(e.target.value)}
-                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
-                  required
-                />
-              </div>
-            )}
-
-            {/* Informations du commerce */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Commerce *</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Boutique Éléganza"
-                  value={nomCommerce}
-                  onChange={(e) => setNomCommerce(e.target.value)}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Ville *</label>
-                <select
-                  value={ville}
-                  onChange={(e) => setVille(e.target.value)}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
-                >
-                  <option value="Douala">Douala</option>
-                  <option value="Yaoundé">Yaoundé</option>
-                  <option value="Bafoussam">Bafoussam</option>
-                  <option value="Garoua">Garoua</option>
-                  <option value="Kribi">Kribi</option>
-                </select>
-              </div>
-            </div>
-
+          {/* Informations du commerce */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-[#1B4332] block mb-1">Quartier & Adresse *</label>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Commerce *</label>
               <input
                 type="text"
-                placeholder="Ex: Rue Joffre - Akwa"
-                value={adresse}
-                onChange={(e) => setAdresse(e.target.value)}
-                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
+                placeholder="Ex: Boutique Élégance Akwa"
+                value={nomCommerce}
+                onChange={(e) => setNomCommerce(e.target.value)}
+                className="w-full bg-white border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
                 required
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#E2D5C3]">
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Patron / Patronne *</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Mme EBOLE"
-                  value={patronNom}
-                  onChange={(e) => setPatronNom(e.target.value)}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
-                  required
-                />
-              </div>
+            <div>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Ville *</label>
+              <select
+                value={ville}
+                onChange={(e) => setVille(e.target.value)}
+                className="w-full bg-white border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+              >
+                <option value="Douala">Douala</option>
+                <option value="Yaoundé">Yaoundé</option>
+                <option value="Bafoussam">Bafoussam</option>
+                <option value="Garoua">Garoua</option>
+                <option value="Kribi">Kribi</option>
+              </select>
+            </div>
+          </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">Code PIN à 4 Chiffres *</label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  placeholder="1234"
-                  value={patronPin}
-                  onChange={(e) => setPatronPin(e.target.value)}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332] text-center tracking-widest"
-                  required
-                />
-              </div>
+          <div>
+            <label className="text-xs font-bold text-[#1B4332] block mb-1">Quartier & Adresse *</label>
+            <input
+              type="text"
+              placeholder="Ex: Rue Joffre - Akwa"
+              value={adresse}
+              onChange={(e) => setAdresse(e.target.value)}
+              className="w-full bg-white border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+              required
+            />
+          </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">
-                  Téléphone / WhatsApp * <span className="text-[10px] text-gray-500 font-normal">(Restauration & Alertes)</span>
-                </label>
-                <input
-                  type="tel"
-                  placeholder="Ex: 699 00 00 00"
-                  value={patronTelephone}
-                  onChange={(e) => setPatronTelephone(e.target.value)}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[#1B4332] block mb-1">
-                  Email / Gmail <span className="text-[10px] text-gray-500 font-normal">(Optionnel — Nouveautés & Bilan)</span>
-                </label>
-                <input
-                  type="email"
-                  placeholder="Ex: patron@gmail.com"
-                  value={emailPatron}
-                  onChange={(e) => setEmailPatron(e.target.value)}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl p-3 text-xs font-bold text-[#1B4332]"
-                />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#E2D5C3]">
+            <div>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Patron / Gérant *</label>
+              <input
+                type="text"
+                placeholder="Ex: Mme EBOLE"
+                value={patronNom}
+                onChange={(e) => setPatronNom(e.target.value)}
+                className="w-full bg-white border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                required
+              />
             </div>
 
-            <button
-              type="submit"
-              className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-glow-brique transition-transform active:scale-95"
-            >
-              <Sparkles className="w-5 h-5 text-white" />
-              <span>Créer mon Compte œko (Essai 7j Offert)</span>
-            </button>
-          </form>
-        )}
+            <div>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Téléphone / WhatsApp *</label>
+              <input
+                type="tel"
+                placeholder="Ex: 699 00 00 00"
+                value={patronTelephone}
+                onChange={(e) => setPatronTelephone(e.target.value)}
+                className="w-full bg-white border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Code PIN à 4 Chiffres *</label>
+              <input
+                type="password"
+                maxLength={4}
+                placeholder="1234"
+                value={patronPin}
+                onChange={(e) => setPatronPin(e.target.value)}
+                className="w-full bg-white border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332] text-center tracking-widest focus:outline-none focus:border-[#1B4332]"
+                required
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 cursor-pointer mt-2"
+          >
+            <Sparkles className="w-5 h-5 text-[#E8A33D]" />
+            <span>Valider & Créer mon activité Boutique (Essai 7j offert)</span>
+            <ArrowRight className="w-4 h-4 text-[#E8A33D]" />
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -117,7 +117,6 @@ function ActivitesContent() {
           </div>
           <div>
             <h1 className="font-serif font-black text-xl leading-none">œko — Mes Activités</h1>
-            <p className="text-[11px] text-[#E8A33D] font-bold mt-0.5">Niveau 2 : Vos commerces & abonnements</p>
           </div>
         </div>
 
@@ -154,21 +153,17 @@ function ActivitesContent() {
         {/* Banner Section */}
         <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1B4332] text-white text-xs font-bold mb-1">
-              <Sparkles className="w-3.5 h-3.5 text-[#E8A33D]" />
-              Modèle Façon Netflix
-            </div>
             <h2 className="font-serif font-black text-2xl text-[#1B4332]">
               Sélectionnez une activité pour y accéder
             </h2>
             <p className="text-xs text-[#1B4332]/80 font-medium max-w-xl">
-              Chaque activité possède son propre stock, ses ventes, son palier tarifaire et son propre statut d'abonnement. Un même compte Google peut créer plusieurs commerces.
+              Chaque activité possède son propre stock, ses ventes, son palier tarifaire et son propre statut d'abonnement. Un même compte permet de gérer plusieurs commerces.
             </p>
           </div>
 
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-5 py-3.5 rounded-2xl bg-[#B8442C] hover:bg-[#a03822] text-white font-bold text-sm shadow-lg flex items-center gap-2 transition-all shrink-0"
+            className="px-5 py-3.5 rounded-2xl bg-[#B8442C] hover:bg-[#a03822] text-white font-bold text-sm shadow-lg flex items-center gap-2 transition-all shrink-0 cursor-pointer"
           >
             <Plus className="w-5 h-5" />
             <span>Créer une nouvelle activité</span>
