@@ -35,7 +35,6 @@ export default function BarSelectorModal({
   // Form State pour création d'un nouveau commerce œko (Boutique)
   const [selectedPalierCode, setSelectedPalierCode] = useState<'essentiel' | 'standard' | 'pro'>('standard');
   const [nomCommerce, setNomCommerce] = useState('');
-  const [secteurBoutique, setSecteurBoutique] = useState('Vêtements & Mode');
   const [ville, setVille] = useState('Douala');
   const [adresse, setAdresse] = useState('');
   const [patronNom, setPatronNom] = useState('');
@@ -57,7 +56,7 @@ export default function BarSelectorModal({
     const newEtab = offlineDB.createEtablissement({
       nom: nomCommerce.trim(),
       type_activite: 'boutique',
-      secteur_boutique: secteurBoutique.trim() || 'Commerce général',
+      secteur_boutique: 'Commerce général',
       ville,
       adresse: adresse.trim(),
       patronNom: patronNom.trim(),
@@ -90,11 +89,11 @@ export default function BarSelectorModal({
         {/* Header */}
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-2xl font-black shadow-md">
-            👗
+            👁️
           </div>
           <div>
             <h2 className="font-serif font-black text-xl sm:text-2xl text-[#1B4332]">
-              Création d'une nouvelle activité Boutique
+              Création d'une nouvelle Boutique
             </h2>
             <p className="text-xs text-gray-600 font-semibold">
               Configurez votre commerce. Essai gratuit de 7 jours inclus sans engagement.
@@ -164,45 +163,6 @@ export default function BarSelectorModal({
                 </p>
               </div>
             </div>
-          </div>
-
-          {/* Produits vendus */}
-          <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] space-y-2.5">
-            <label className="text-xs font-bold text-[#1B4332] block">
-              2. Que vendez-vous principalement dans votre Boutique ? *
-            </label>
-
-            <div className="flex flex-wrap gap-2">
-              {[
-                '👗 Vêtements & Mode',
-                '📱 Téléphones & Électronique',
-                '🔌 Électroménager',
-                '🛒 Alimentation générale',
-                '👞 Chaussures & Maroquinerie',
-              ].map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => setSecteurBoutique(chip)}
-                  className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    secteurBoutique === chip
-                      ? 'bg-[#1B4332] text-white shadow-md'
-                      : 'bg-gray-50 text-[#1B4332] border border-[#E2D5C3] hover:bg-gray-100'
-                  }`}
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-
-            <input
-              type="text"
-              placeholder="Ex: Vêtements, Chaussures, Accessoires de mode..."
-              value={secteurBoutique}
-              onChange={(e) => setSecteurBoutique(e.target.value)}
-              className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-              required
-            />
           </div>
 
           {/* Informations du commerce */}
@@ -292,7 +252,7 @@ export default function BarSelectorModal({
             className="w-full py-4 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 cursor-pointer mt-2"
           >
             <Sparkles className="w-5 h-5 text-[#E8A33D]" />
-            <span>Valider & Créer mon activité Boutique (Essai 7j offert)</span>
+            <span>Valider & Créer ma nouvelle Boutique (Essai 7j offert)</span>
             <ArrowRight className="w-4 h-4 text-[#E8A33D]" />
           </button>
         </form>
