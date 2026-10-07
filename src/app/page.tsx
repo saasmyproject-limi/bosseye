@@ -11,6 +11,7 @@ import { Lock, UserPlus, LogIn, ArrowRight } from 'lucide-react';
 export default function LandingPage() {
   const router = useRouter();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
 
   return (
@@ -82,16 +83,22 @@ export default function LandingPage() {
         {/* Level 1 Account Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full max-w-sm mt-8 sm:mt-10">
           <button
-            onClick={() => setIsAuthModalOpen(true)}
-            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-black text-sm shadow-md transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2"
+            onClick={() => {
+              setAuthMode('register');
+              setIsAuthModalOpen(true);
+            }}
+            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-black text-sm shadow-md transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2 cursor-pointer"
           >
             <UserPlus className="w-4 h-4 text-[#E8A33D]" />
             <span>Crée ton compte</span>
           </button>
 
           <button
-            onClick={() => setIsAuthModalOpen(true)}
-            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-white hover:bg-gray-50 border-2 border-[#E2D5C3] text-[#1B4332] font-bold text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2"
+            onClick={() => {
+              setAuthMode('login');
+              setIsAuthModalOpen(true);
+            }}
+            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-white hover:bg-gray-50 border-2 border-[#E2D5C3] text-[#1B4332] font-bold text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2 cursor-pointer"
           >
             <LogIn className="w-4 h-4 text-[#1B4332]" />
             <span>Connecte-toi</span>
@@ -106,6 +113,7 @@ export default function LandingPage() {
       {/* Level 1 Google / Gmail Account Creation Modal */}
       <GoogleAuthModal
         isOpen={isAuthModalOpen}
+        initialMode={authMode}
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={() => {
           setIsAuthModalOpen(false);
