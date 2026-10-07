@@ -15,10 +15,8 @@ export default function LandingPage() {
 
   return (
     <main className="min-h-screen bg-[#FAF9F5] text-[#1B4332] font-sans selection:bg-[#E8A33D] selection:text-[#0F291E] flex flex-col items-center justify-between p-6 sm:p-10 relative overflow-hidden">
-      {/* Header with Offline Badge */}
-      <header className="w-full max-w-md flex justify-end items-center z-10 min-h-[32px]">
-        <OfflineBadge />
-      </header>
+      {/* Header */}
+      <header className="w-full max-w-md flex justify-end items-center z-10 min-h-[32px]" />
 
       {/* Main Centered Content */}
       <section className="my-auto flex flex-col items-center text-center max-w-lg w-full py-6 z-10">
@@ -78,7 +76,7 @@ export default function LandingPage() {
         </p>
 
         <p className="text-sm sm:text-base font-medium text-[#1B4332]/90 mt-6 sm:mt-8 max-w-xs sm:max-w-md leading-snug">
-          Gestion de stock & ventes de boutiques — depuis votre téléphone
+          Gestion de stock, ventes, dettes & créances clients — tout en un
         </p>
 
         {/* Level 1 Account Actions */}
@@ -99,15 +97,6 @@ export default function LandingPage() {
             <span>Connecte-toi</span>
           </button>
         </div>
-
-        {/* Quick Tablet PIN Link */}
-        <button
-          onClick={() => setIsPinModalOpen(true)}
-          className="mt-4 text-xs font-bold text-gray-600 hover:text-[#1B4332] flex items-center justify-center gap-1.5 transition-colors"
-        >
-          <Lock className="w-3.5 h-3.5 text-[#E8A33D]" />
-          <span>Accès rapide Tablette Caisse (Code PIN)</span>
-        </button>
       </section>
 
       <footer className="w-full text-center py-2 text-[11px] font-semibold text-gray-400 z-10">
