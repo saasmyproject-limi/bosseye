@@ -171,7 +171,7 @@ export const offlineDB = {
   },
 
   getActivitesDuCompte(compteId?: string): Etablissement[] {
-    const compte = compteId ? this.getComptesGlobal().find(c => c.id === compteId) || { id: compteId } : this.getCompteActuel();
+    const compte = compteId ? this.getComptesGlobal().find(c => c.id === compteId) || { id: compteId, email: '', nom: '', provider: 'google', created_at: '' } : this.getCompteActuel();
     const all = this.getEtablissements();
     if (!compte || !compte.id) return [];
     
@@ -184,7 +184,7 @@ export const offlineDB = {
     return all.filter((e) => {
       if (!e) return false;
       if (e.compte_id && e.compte_id === compte.id) return true;
-      if (e.email_patron && (compte as any).email && e.email_patron.toLowerCase() === (compte as any).email.toLowerCase()) return true;
+      if (e.email_patron && compte.email && e.email_patron.toLowerCase() === compte.email.toLowerCase()) return true;
       return false;
     });
   },
