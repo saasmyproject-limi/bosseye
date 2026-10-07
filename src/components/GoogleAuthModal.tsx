@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, User, ArrowRight, X, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, X, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { CompteUtilisateur } from '@/types';
 
@@ -25,6 +25,8 @@ export default function GoogleAuthModal({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nom, setNom] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,13 +62,18 @@ export default function GoogleAuthModal({
     setSuccessMsg('');
 
     if (!email.trim()) {
-      setError('Veuillez saisir votre adresse e-mail / Gmail.');
+      setError('Veuillez saisir votre adresse Gmail / E-mail.');
       return;
     }
 
     const formattedEmail = email.trim().toLowerCase();
-    if (!formattedEmail.includes('@')) {
-      setError('Veuillez entrer une adresse e-mail valide (ex: exemple@gmail.com).');
+    if (!formattedEmail.includes('@') || !formattedEmail.includes('.')) {
+      setError('L\'adresse e-mail doit impérativement contenir un "@" et un nom de domaine valide (ex: exemple@gmail.com).');
+      return;
+    }
+
+    if (mode === 'register' && !nom.trim()) {
+      setError('Le nom complet est obligatoire pour créer votre compte.');
       return;
     }
 
@@ -76,8 +83,12 @@ export default function GoogleAuthModal({
     }
 
     if (mode === 'register') {
-      if (password.length < 4) {
-        setError('Le mot de passe doit contenir au moins 4 caractères.');
+      if (password.length < 6) {
+        setError('Sécurité du mot de passe : Il doit contenir au moins 6 caractères.');
+        return;
+      }
+      if (!/\d/.test(password) || !/[a-zA-Z]/.test(password)) {
+        setError('Sécurité du mot de passe : Veuillez mélanger au moins une lettre et un chiffre.');
         return;
       }
       if (password !== confirmPassword) {
@@ -88,10 +99,10 @@ export default function GoogleAuthModal({
       setIsSubmitting(true);
       setTimeout(() => {
         setIsSubmitting(false);
-        setSuccessMsg("Compte créé avec succès ! Un lien de confirmation a été envoyé à votre adresse Gmail.");
+        setSuccessMsg("Compte créé avec succès ! Un e-mail d'activation a été envoyé à votre adresse Gmail. Veuillez consulter votre boîte mail pour valider.");
         setTimeout(() => {
           handleLogin(formattedEmail, nom);
-        }, 1200);
+        }, 1500);
       }, 500);
     } else {
       setIsSubmitting(true);
@@ -109,19 +120,19 @@ export default function GoogleAuthModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#FAF9F5] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-6 animate-in fade-in zoom-in duration-200">
+      <div className="bg-[#FAF9F5] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-5 animate-in fade-in zoom-in duration-200">
         {/* Close Button */}
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition-colors cursor-pointer"
             aria-label="Fermer"
           >
             <X className="w-5 h-5" />
           </button>
         )}
 
-        {/* Header */}
+        {/* Header - Minimalist */}
         <div className="text-center space-y-2 pt-1">
           <div className="w-14 h-14 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center mx-auto text-2xl font-black shadow-md">
             👁️
@@ -130,9 +141,6 @@ export default function GoogleAuthModal({
             {mode === 'register' ? 'Création de compte ' : 'Connexion à '}
             <span className="text-[#B8442C]">œko</span>
           </h2>
-          <p className="text-xs text-[#1B4332]/80 font-semibold max-w-xs mx-auto leading-relaxed">
-            Niveau 1 — Votre compte unique (Gmail / E-mail). Vos commerces et activités seront rattachés ici.
-          </p>
         </div>
 
         {/* Error / Success alerts */}
@@ -153,7 +161,7 @@ export default function GoogleAuthModal({
           {mode === 'register' && (
             <div>
               <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
-                Nom complet (optionnel)
+                Nom complet *
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -162,6 +170,7 @@ export default function GoogleAuthModal({
                   placeholder="ex: Marie Dupont"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
+                  required
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
                 />
               </div>
@@ -192,14 +201,27 @@ export default function GoogleAuthModal({
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                title={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
+            {mode === 'register' && (
+              <p className="text-[10px] text-gray-500 mt-1 font-medium">
+                🔒 Recommandé : au moins 6 caractères mélangés (lettres + chiffres).
+              </p>
+            )}
           </div>
 
           {mode === 'register' && (
@@ -210,13 +232,21 @@ export default function GoogleAuthModal({
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title={showConfirmPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
           )}
