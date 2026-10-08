@@ -53,6 +53,7 @@ export default function BarSelectorModal({
 
     setIsSubmitting(true);
 
+    const currentCompte = offlineDB.getCompteActuel();
     const newEtab = offlineDB.createEtablissement({
       nom: nomCommerce.trim(),
       type_activite: 'boutique',
@@ -61,6 +62,7 @@ export default function BarSelectorModal({
       adresse: adresse.trim(),
       patronNom: patronNom.trim(),
       telephone: patronTelephone.trim() || undefined,
+      email_patron: currentCompte?.email,
       patronPin: patronPin.trim() || '1234',
       tarif_mensuel: selectedTarif,
     });

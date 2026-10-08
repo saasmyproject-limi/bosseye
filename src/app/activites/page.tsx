@@ -40,12 +40,6 @@ function ActivitesContent() {
     loadData();
   }, []);
 
-  useEffect(() => {
-    if (autoCreate && compte) {
-      setIsCreateModalOpen(true);
-    }
-  }, [autoCreate, compte]);
-
   const loadData = async () => {
     let currentCompte = offlineDB.getCompteActuel();
     if (!currentCompte) {
@@ -54,15 +48,17 @@ function ActivitesContent() {
     }
     setCompte(currentCompte);
 
-    let list = offlineDB.getActivitesDuCompte(currentCompte.id);
-    setActivites(list);
-
     // Télécharger automatiquement depuis le Cloud (Supabase) les boutiques rattachées à ce compte Gmail
     if (currentCompte.email) {
-      const cloudShops = await syncUserShopsFromCloud(currentCompte.email);
-      if (cloudShops && cloudShops.length > 0) {
-        setActivites(offlineDB.getActivitesDuCompte(currentCompte.id));
-      }
+      await syncUserShopsFromCloud(currentCompte.email);
+    }
+
+    const list = offlineDB.getActivitesDuCompte(currentCompte.id);
+    setActivites(list);
+
+    // N'ouvrir le modal de création que si l'utilisateur n'a aucune boutique disponible
+    if (autoCreate && list.length === 0) {
+      setIsCreateModalOpen(true);
     }
   };
 

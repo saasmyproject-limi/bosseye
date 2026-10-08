@@ -23,6 +23,16 @@ export async function syncShopToCloud(etabId?: string): Promise<{ success: boole
     const etab = etabId ? offlineDB.getEtablissements().find((e) => e.id === etabId) : offlineDB.getEtablissement();
     if (!etab) return { success: false, message: 'Établissement introuvable.' };
 
+    const currentCompte = offlineDB.getCompteActuel();
+    if (currentCompte) {
+      if (!etab.email_patron && currentCompte.email) {
+        etab.email_patron = currentCompte.email;
+      }
+      if (!etab.compte_id && currentCompte.id) {
+        etab.compte_id = currentCompte.id;
+      }
+    }
+
     const targetEtabId = etab.id;
     const produits = offlineDB.getProduits().filter((p) => !p.etablissement_id || p.etablissement_id === targetEtabId);
     const factures = offlineDB.getFactures().filter((f) => !f.etablissement_id || f.etablissement_id === targetEtabId);

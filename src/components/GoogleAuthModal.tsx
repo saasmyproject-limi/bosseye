@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, User, ArrowRight, X, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
+import { syncUserShopsFromCloud } from '@/lib/supabaseSync';
 import { CompteUtilisateur } from '@/types';
 
 interface GoogleAuthModalProps {
@@ -39,10 +40,19 @@ export default function GoogleAuthModal({
 
   if (!isOpen) return null;
 
-  const handleLogin = (userEmail: string, userNom?: string, userPhoto?: string) => {
+  const handleLogin = async (userEmail: string, userNom?: string, userPhoto?: string) => {
     const formattedEmail = userEmail.trim().toLowerCase();
     const displayName = userNom?.trim() || formattedEmail.split('@')[0];
     const compte = offlineDB.loginWithGoogle(formattedEmail, displayName, userPhoto);
+
+    setIsSubmitting(true);
+    try {
+      // Télécharger immédiatement les boutiques associées à ce compte Gmail depuis Supabase
+      await syncUserShopsFromCloud(formattedEmail);
+    } catch (e) {
+      console.warn('Sync cloud notice:', e);
+    }
+    setIsSubmitting(false);
 
     if (onSuccess) onSuccess(compte);
 
@@ -50,6 +60,7 @@ export default function GoogleAuthModal({
     if (activites.length === 0) {
       router.push('/activites?create=true');
     } else {
+      offlineDB.switchEtablissement(activites[0].id);
       router.push('/activites');
     }
 
