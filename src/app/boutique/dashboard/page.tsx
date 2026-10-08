@@ -141,32 +141,19 @@ export default function BoutiqueDashboardPage() {
         {/* Top Greeting Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full border border-[#B8442C]/30">
-                👗 Mode Boutique Mode & Prêt-à-porter
-              </span>
+            <div className="flex items-center gap-2 mb-1">
               {daysLeftTrial > 0 && !isTrialExpired && (
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">
                   Essai : {daysLeftTrial}j restant{daysLeftTrial > 1 ? 's' : ''}
                 </span>
               )}
             </div>
-            <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
-              {salutation}, {currentUser?.nom || 'Patron'} 👋
+            <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332]">
+              Salut, {currentUser?.nom || 'Patron'} 👋
             </h1>
-            <p className="text-xs text-[#1B4332]/70 font-medium">
+            <p className="text-xs text-[#1B4332]/70 font-medium mt-1">
               Aperçu des ventes en comptoir, réservations d'articles et livraisons WhatsApp.
             </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/boutique/ventes"
-              className="py-3 px-5 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2 transition-transform active:scale-95"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>Vente Comptoir & Livraisons ➔</span>
-            </Link>
           </div>
         </div>
 
