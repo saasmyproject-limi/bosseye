@@ -514,7 +514,7 @@ export default function BoutiqueProduitsPage() {
               {/* Code Article Structuré (Etiquette & Code-barres OKO) Tout en bas */}
               <div className="p-3.5 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-black text-[#1B4332]">Code Article / Etiquette Sticker</label>
+                  <label className="block text-xs font-black text-[#1B4332]">Code Article / Étiquette Sticker</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -525,15 +525,47 @@ export default function BoutiqueProduitsPage() {
                     🔄 Auto-générer
                   </button>
                 </div>
-                <input
-                  type="text"
-                  placeholder="ex: PEP-ROB-ROU-001 (auto-généré si vide)"
-                  value={customOkoCode}
-                  onChange={(e) => setCustomOkoCode(e.target.value.toUpperCase())}
-                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-mono font-black text-[#1B4332] uppercase"
-                />
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="ex: PEP-ROB-ROU-001 (auto-généré si vide)"
+                    value={customOkoCode}
+                    onChange={(e) => setCustomOkoCode(e.target.value.toUpperCase())}
+                    className="flex-1 bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-mono font-black text-[#1B4332] uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      let code = customOkoCode;
+                      if (!code) {
+                        code = offlineDB.generateStructuredOkoCode({ categorie });
+                        setCustomOkoCode(code);
+                      }
+                      const tempProduit: Produit = {
+                        id: 'temp-' + Date.now(),
+                        etablissement_id: etablissement?.id || 'demo',
+                        nom: nom || 'Article En Cours',
+                        categorie: categorie || 'Vêtements',
+                        prix_vente_unitaire: prixVenteUnitaire || 0,
+                        prix_achat_unitaire: prixAchatUnitaire || 0,
+                        quantite_totale: quantiteTotalePiece || 1,
+                        seuil_alerte: 5,
+                        oko_code: code,
+                        date_creation: new Date().toISOString()
+                      };
+                      setLabelModalProduit(tempProduit);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
+                    title="Aperçu et impression de l'étiquette sticker pour cet article"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Imprimer Étiquette</span>
+                  </button>
+                </div>
+
                 <p className="text-[10px] text-gray-500 font-medium">
-                  Code imprimable sur étiquette papier autocollant pour vos articles. Permet la recherche directe en caisse.
+                  Imprime l'étiquette avec code-barres / code OKO sur papier autocollant à coller directement sur vos articles.
                 </p>
               </div>
 
