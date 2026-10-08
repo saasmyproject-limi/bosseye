@@ -246,28 +246,17 @@ export default function BoutiqueProduitsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
           <div>
             <span className="text-xs font-black uppercase tracking-widest text-[#B8442C] bg-[#B8442C]/10 px-2.5 py-0.5 rounded-full border border-[#B8442C]/30">
-              Stock Articles Boutique
+              STOCK ARTICLES
             </span>
-            <h1 className="font-serif text-2xl lg:text-3xl font-black text-[#1B4332] mt-1">
-              Catalogue Articles & Variantes (Tailles & Couleurs)
-            </h1>
-            <p className="text-xs text-[#1B4332]/70 font-medium">
-              Gérez votre stock de vêtements, chaussures, accessoires et définissez vos variantes SKU.
+            <p className="text-xs text-[#1B4332]/80 font-semibold mt-1">
+              Gérez votre stock d'articles.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsAiScanOpen(true)}
-              className="py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 border border-[#E8A33D]"
-            >
-              <Sparkles className="w-4 h-4 text-[#E8A33D]" />
-              <span>📸 Scan IA Vision</span>
-            </button>
-
-            <button
               onClick={() => setIsExcelImportOpen(true)}
-              className="py-3 px-4 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95"
+              className="py-2.5 px-4 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4 text-[#1B4332]" />
               <span>📊 Import Excel/CSV</span>
@@ -275,9 +264,9 @@ export default function BoutiqueProduitsPage() {
 
             <button
               onClick={() => setIsModalOpen(true)}
-              className="py-3 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2 transition-transform active:scale-95"
+              className="py-2.5 px-4 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] border border-[#B8442C] text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 text-white" />
               <span>Ajouter un article</span>
             </button>
           </div>
