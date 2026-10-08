@@ -191,7 +191,7 @@ export const offlineDB = {
     // Filtrer les établissements créés par ce compte utilisateur ou rattachés à son email
     const filtered = all.filter((e) => {
       if (!e) return false;
-      const etabEmail = (e.email_patron || e.compte_email || '').trim().toLowerCase();
+      const etabEmail = (e.email_patron || (e as any).compte_email || '').trim().toLowerCase();
       if (etabEmail && targetEmail && etabEmail === targetEmail) return true;
       if (e.compte_id && targetCompteId && e.compte_id === targetCompteId) return true;
       return false;
