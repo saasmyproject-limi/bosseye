@@ -547,12 +547,15 @@ export default function BoutiqueProduitsPage() {
                         etablissement_id: etablissement?.id || 'demo',
                         nom: nom || 'Article En Cours',
                         categorie: categorie || 'Vêtements',
+                        unite: 'piece',
                         prix_vente_unitaire: prixVenteUnitaire || 0,
                         prix_achat_unitaire: prixAchatUnitaire || 0,
+                        cout_achat_unitaire_cmp: prixAchatUnitaire || 0,
                         quantite_totale: quantiteTotalePiece || 1,
                         seuil_alerte: 5,
                         oko_code: code,
-                        date_creation: new Date().toISOString()
+                        actif: true,
+                        created_at: new Date().toISOString()
                       };
                       setLabelModalProduit(tempProduit);
                     }}
