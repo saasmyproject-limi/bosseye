@@ -43,8 +43,9 @@ function ActivitesContent() {
   const loadData = async () => {
     let currentCompte = offlineDB.getCompteActuel();
     if (!currentCompte) {
-      // Auto-connect avec un compte demo par défaut si aucun compte n'est défini
-      currentCompte = offlineDB.loginWithGoogle('marie.dupont@gmail.com', 'Marie Dupont');
+      setCompte(null);
+      setIsGoogleAuthOpen(true);
+      return;
     }
     setCompte(currentCompte);
 

@@ -110,15 +110,7 @@ export const offlineDB = {
       if (data) {
         return JSON.parse(data);
       }
-      const defaultCompte: CompteUtilisateur = {
-        id: 'compte-google-demo',
-        email: 'patronne.demo@gmail.com',
-        nom: 'Mme Patronne (Démo)',
-        provider: 'google',
-        created_at: new Date().toISOString(),
-      };
-      localStorage.setItem(KEYS.CURRENT_COMPTE, JSON.stringify(defaultCompte));
-      return defaultCompte;
+      return null;
     } catch {
       return null;
     }
@@ -181,29 +173,21 @@ export const offlineDB = {
     const targetEmail = (currentCompte?.email || '').trim().toLowerCase();
 
     const all = this.getEtablissements();
-    if (!targetCompteId && !targetEmail) return all;
+    if (!targetCompteId && !targetEmail) return [];
 
     // Si c'est le compte démo par défaut, renvoyer les établissements de démonstration
-    if (targetEmail === 'patronne.demo@gmail.com' || targetEmail === 'marie.dupont@gmail.com' || targetCompteId === 'compte-google-demo') {
+    if (targetEmail === 'patronne.demo@gmail.com' || targetCompteId === 'compte-google-demo') {
       return all;
     }
 
     // Filtrer les établissements créés par ce compte utilisateur ou rattachés à son email
-    const filtered = all.filter((e) => {
+    return all.filter((e) => {
       if (!e) return false;
       const etabEmail = (e.email_patron || (e as any).compte_email || '').trim().toLowerCase();
       if (etabEmail && targetEmail && etabEmail === targetEmail) return true;
       if (e.compte_id && targetCompteId && e.compte_id === targetCompteId) return true;
       return false;
     });
-
-    // Secours : s'il existe des commerces personnalisés (id commençant par etab-), les inclure si le filtre est vide
-    if (filtered.length === 0 && all.length > 0) {
-      const customEtabs = all.filter((e) => e && e.id && e.id.startsWith('etab-'));
-      if (customEtabs.length > 0) return customEtabs;
-    }
-
-    return filtered.length > 0 ? filtered : all;
   },
 
   dismissWelcomeModal(etabId: string) {
@@ -257,19 +241,16 @@ export const offlineDB = {
 
   getEtablissements(): Etablissement[] {
     try {
-      if (typeof window === 'undefined') return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
-      const isResetZero = localStorage.getItem(KEYS.RESET_ZERO) === 'true';
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.ETABLISSEMENTS);
 
       if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
-        return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+        return [];
       }
       const parsed: Etablissement[] = JSON.parse(data);
       return (parsed || []).map((e) => this.normalizeEtablissement(e));
     } catch {
-      return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+      return [];
     }
   },
 
