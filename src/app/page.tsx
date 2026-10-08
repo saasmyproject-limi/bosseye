@@ -14,6 +14,29 @@ export default function LandingPage() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
 
+  const handleFullReset = async () => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            await reg.unregister();
+          }
+        }
+        window.location.href = '/';
+      } catch (e) {
+        console.error(e);
+        window.location.reload();
+      }
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#FAF9F5] text-[#1B4332] font-sans selection:bg-[#E8A33D] selection:text-[#0F291E] flex flex-col items-center justify-between p-6 sm:p-10 relative overflow-hidden">
       {/* Header */}
@@ -106,8 +129,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="w-full text-center py-2 text-[11px] font-semibold text-gray-400 z-10">
-        © 2026 œko — L'œil du patron
+      <footer className="w-full text-center py-3 flex flex-col items-center gap-2 z-10">
+        <button
+          onClick={handleFullReset}
+          className="text-[11px] font-bold text-gray-500 hover:text-red-700 underline transition-colors cursor-pointer"
+          title="Effacer les mémoires locales et forcer le rechargement de la dernière version Vercel"
+        >
+          🧹 Nettoyer la mémoire du téléphone & Forcer la mise à jour Vercel
+        </button>
+        <span className="text-[11px] font-semibold text-gray-400">© 2026 œko — L'œil du patron</span>
       </footer>
 
       {/* Level 1 Google / Gmail Account Creation Modal */}

@@ -36,6 +36,10 @@ export default function GoogleAuthModal({
     setMode(initialMode);
     setError('');
     setSuccessMsg('');
+    setEmail('');
+    setNom('');
+    setPassword('');
+    setConfirmPassword('');
   }, [initialMode, isOpen]);
 
   if (!isOpen) return null;
