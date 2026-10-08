@@ -125,20 +125,25 @@ export const offlineDB = {
   },
 
   loginWithGoogle(email: string, nom: string, photo_url?: string): CompteUtilisateur {
+    const cleanEmail = email.trim().toLowerCase();
+    const allComptes = this.getComptesGlobal();
+    const existing = allComptes.find((c) => c && c.email && c.email.toLowerCase() === cleanEmail);
+
+    const compteId = existing?.id || `compte-${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+
     const compte: CompteUtilisateur = {
-      id: `compte-${Date.now()}`,
-      email: email.trim().toLowerCase(),
-      nom: nom.trim() || 'Utilisateur Google',
-      photo_url,
+      id: compteId,
+      email: cleanEmail,
+      nom: nom.trim() || existing?.nom || 'Utilisateur Google',
+      photo_url: photo_url || existing?.photo_url,
       provider: 'google',
-      created_at: new Date().toISOString(),
+      created_at: existing?.created_at || new Date().toISOString(),
     };
 
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem(KEYS.CURRENT_COMPTE, JSON.stringify(compte));
-        const allComptes = this.getComptesGlobal();
-        const existingIdx = allComptes.findIndex((c) => c.email === compte.email);
+        const existingIdx = allComptes.findIndex((c) => c && c.email && c.email.toLowerCase() === cleanEmail);
         if (existingIdx >= 0) allComptes[existingIdx] = compte;
         else allComptes.push(compte);
         localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(allComptes));
@@ -171,22 +176,34 @@ export const offlineDB = {
   },
 
   getActivitesDuCompte(compteId?: string): Etablissement[] {
-    const compte = compteId ? this.getComptesGlobal().find(c => c.id === compteId) || { id: compteId, email: '', nom: '', provider: 'google', created_at: '' } : this.getCompteActuel();
+    const currentCompte = this.getCompteActuel();
+    const targetCompteId = compteId || currentCompte?.id;
+    const targetEmail = (currentCompte?.email || '').trim().toLowerCase();
+
     const all = this.getEtablissements();
-    if (!compte || !compte.id) return [];
-    
+    if (!targetCompteId && !targetEmail) return all;
+
     // Si c'est le compte démo par défaut, renvoyer les établissements de démonstration
-    if (compte.email === 'patronne.demo@gmail.com' || compte.id === 'compte-google-demo') {
+    if (targetEmail === 'patronne.demo@gmail.com' || targetEmail === 'marie.dupont@gmail.com' || targetCompteId === 'compte-google-demo') {
       return all;
     }
 
-    // Filtrer strictement les établissements créés par ce compte utilisateur ou rattachés à son email
-    return all.filter((e) => {
+    // Filtrer les établissements créés par ce compte utilisateur ou rattachés à son email
+    const filtered = all.filter((e) => {
       if (!e) return false;
-      if (e.compte_id && e.compte_id === compte.id) return true;
-      if (e.email_patron && compte.email && e.email_patron.toLowerCase() === compte.email.toLowerCase()) return true;
+      const etabEmail = (e.email_patron || e.compte_email || '').trim().toLowerCase();
+      if (etabEmail && targetEmail && etabEmail === targetEmail) return true;
+      if (e.compte_id && targetCompteId && e.compte_id === targetCompteId) return true;
       return false;
     });
+
+    // Secours : s'il existe des commerces personnalisés (id commençant par etab-), les inclure si le filtre est vide
+    if (filtered.length === 0 && all.length > 0) {
+      const customEtabs = all.filter((e) => e && e.id && e.id.startsWith('etab-'));
+      if (customEtabs.length > 0) return customEtabs;
+    }
+
+    return filtered.length > 0 ? filtered : all;
   },
 
   dismissWelcomeModal(etabId: string) {
