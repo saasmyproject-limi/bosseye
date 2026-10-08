@@ -33,13 +33,25 @@ export default function GoogleAuthModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setMode(initialMode);
-    setError('');
-    setSuccessMsg('');
-    setEmail('');
-    setNom('');
-    setPassword('');
-    setConfirmPassword('');
+    if (isOpen) {
+      setMode(initialMode);
+      setError('');
+      setSuccessMsg('');
+      setEmail('');
+      setNom('');
+      setPassword('');
+      setConfirmPassword('');
+
+      // Délais de sécurité de 100ms pour effacer tout pré-remplissage automatique par le navigateur (Chrome/Safari)
+      const timer = setTimeout(() => {
+        setEmail('');
+        setNom('');
+        setPassword('');
+        setConfirmPassword('');
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
   }, [initialMode, isOpen]);
 
   if (!isOpen) return null;
@@ -172,7 +184,11 @@ export default function GoogleAuthModal({
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <form onSubmit={handleSubmit} className="space-y-3.5" autoComplete="off">
+          {/* Inputs masqués factices pour neutraliser le moteur d'autofill de Chrome / Safari / Google Password Manager */}
+          <input type="text" name="fake_email_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" readOnly />
+          <input type="password" name="fake_password_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" readOnly />
+
           {mode === 'register' && (
             <div>
               <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
@@ -182,9 +198,12 @@ export default function GoogleAuthModal({
                 <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
+                  name="oeko_clean_nom_input"
+                  id="oeko_clean_nom_input"
                   placeholder="ex: Marie Dupont"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
+                  autoComplete="off"
                   required
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
                 />
@@ -200,9 +219,13 @@ export default function GoogleAuthModal({
               <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="email"
+                name="oeko_clean_email_input"
+                id="oeko_clean_email_input"
                 placeholder="votre.adresse@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="off"
+                data-lpignore="true"
                 required
                 className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
               />
@@ -217,9 +240,13 @@ export default function GoogleAuthModal({
               <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type={showPassword ? 'text' : 'password'}
+                name="oeko_clean_password_input"
+                id="oeko_clean_password_input"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                data-lpignore="true"
                 required
                 className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
               />
@@ -248,9 +275,13 @@ export default function GoogleAuthModal({
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
+                  name="oeko_clean_confirmpassword_input"
+                  id="oeko_clean_confirmpassword_input"
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  data-lpignore="true"
                   required
                   className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
                 />
