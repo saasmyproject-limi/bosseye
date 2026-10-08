@@ -446,40 +446,6 @@ export default function BoutiqueProduitsPage() {
                 </button>
               </div>
 
-              {/* Mode de Suivi du Stock */}
-              <div className="p-3 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
-                <label className="block text-xs font-black text-[#1B4332]">Mode de Suivi du Stock *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setModeSuivi('quantite')}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold text-center border transition-all ${
-                      modeSuivi === 'quantite'
-                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
-                        : 'bg-white text-[#1B4332] border-[#E2D5C3]'
-                    }`}
-                  >
-                    📦 1. Quantité Globale
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModeSuivi('unite_serie')}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold text-center border transition-all ${
-                      modeSuivi === 'unite_serie'
-                        ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
-                        : 'bg-white text-[#1B4332] border-[#E2D5C3]'
-                    }`}
-                  >
-                    🏷️ 2. À l'Unité / Code Unique
-                  </button>
-                </div>
-                <p className="text-[10px] text-gray-500 font-medium">
-                  {modeSuivi === 'unite_serie'
-                    ? 'Chaque exemplaire physique est identifié individuellement par un code unique (OKO-XXXXXX ou N° de Série).'
-                    : 'Suivi classique par quantité globale en stock.'}
-                </p>
-              </div>
-
               <div>
                 <label className="block text-xs font-bold text-[#1B4332] mb-1">Nom de l'Article *</label>
                 <input
@@ -490,32 +456,6 @@ export default function BoutiqueProduitsPage() {
                   onChange={(e) => setNom(e.target.value)}
                   className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                 />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-[#1B4332]">Code Article Structuré (Etiquette & Code-barres)</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const firstCouleur = couleursInput.split(',')[0]?.trim();
-                      setCustomOkoCode(offlineDB.generateStructuredOkoCode({ categorie, couleur: firstCouleur }));
-                    }}
-                    className="text-[10px] font-bold text-[#B8442C] hover:underline"
-                  >
-                    🔄 Auto-générer
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  placeholder="ex: PEP-ROB-ROU-001 (auto-généré si vide)"
-                  value={customOkoCode}
-                  onChange={(e) => setCustomOkoCode(e.target.value.toUpperCase())}
-                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-mono font-black text-[#1B4332] uppercase"
-                />
-                <p className="text-[10px] text-gray-500 mt-1 font-medium">
-                  Format : [BOUTIQUE]-[CATÉGORIE]-[COULEUR]-[NUMÉRO]. Personnalisable à tout moment par le patron.
-                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -541,37 +481,6 @@ export default function BoutiqueProduitsPage() {
                   />
                 </div>
               </div>
-
-              {/* Champs Suggérés Dynamiques selon Secteur / Mode */}
-              {modeSuivi === 'unite_serie' && (
-                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 space-y-2">
-                  <span className="text-[11px] font-black text-amber-900 block">Champs Spécifiques</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Marque (ex: Apple, Samsung)"
-                      value={champMarque}
-                      onChange={(e) => setChampMarque(e.target.value)}
-                      className="bg-white border border-amber-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Modèle (ex: iPhone 13 Pro)"
-                      value={champModele}
-                      onChange={(e) => setChampModele(e.target.value)}
-                      className="bg-white border border-amber-300 rounded-xl p-2 text-xs font-medium text-[#1B4332]"
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Code Unique / N° de Série du 1er exemplaire (Optionnel)"
-                    value={champImei}
-                    onChange={(e) => setChampImei(e.target.value)}
-                    className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-mono text-[#1B4332]"
-                  />
-                  <p className="text-[10px] text-amber-800 font-medium">Si non fourni, un code unique OKO-XXXXXX sera généré automatiquement.</p>
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -602,39 +511,31 @@ export default function BoutiqueProduitsPage() {
                 <span>+{calcMargeUnit.toLocaleString('fr-FR')} FCFA ({calcTauxMarge.toFixed(1)}%)</span>
               </div>
 
-              {/* Variantes Tailles & Couleurs (Actif uniquement en mode quantité) */}
-              {modeSuivi === 'quantite' && (
-                <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black uppercase text-[#B8442C] block">Définition Libre des Variantes</span>
-                    <span className="text-[10px] text-gray-500 font-medium">Optionnel</span>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#1B4332] mb-1">
-                      Attribut 1 : Tailles, Formats ou Pointures (séparées par virgules)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="ex: S, M, L, XL ou 41, 42, 43 ou 500ml, 1L"
-                      value={taillesInput}
-                      onChange={(e) => setTaillesInput(e.target.value)}
-                      className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#1B4332] mb-1">
-                      Attribut 2 : Couleurs, Modèles ou Finitions (séparées par virgules)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="ex: Noir, Blanc, Rouge ou Mat, Brillant"
-                      value={couleursInput}
-                      onChange={(e) => setCouleursInput(e.target.value)}
-                      className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
-                  </div>
+              {/* Code Article Structuré (Etiquette & Code-barres OKO) Tout en bas */}
+              <div className="p-3.5 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-[#1B4332]">Code Article / Etiquette Sticker</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomOkoCode(offlineDB.generateStructuredOkoCode({ categorie }));
+                    }}
+                    className="text-[10px] font-bold text-[#B8442C] hover:underline"
+                  >
+                    🔄 Auto-générer
+                  </button>
                 </div>
-              )}
+                <input
+                  type="text"
+                  placeholder="ex: PEP-ROB-ROU-001 (auto-généré si vide)"
+                  value={customOkoCode}
+                  onChange={(e) => setCustomOkoCode(e.target.value.toUpperCase())}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-mono font-black text-[#1B4332] uppercase"
+                />
+                <p className="text-[10px] text-gray-500 font-medium">
+                  Code imprimable sur étiquette papier autocollant pour vos articles. Permet la recherche directe en caisse.
+                </p>
+              </div>
 
               <div className="flex items-center gap-2 pt-2">
                 <button

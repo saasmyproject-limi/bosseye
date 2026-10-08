@@ -21,7 +21,8 @@ import {
   Search
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
-import { Etablissement, CompteUtilisateur, TypeActivite, TARIFS_ABONNEMENT } from '@/types';
+import { CompteUtilisateur, Etablissement } from '@/types';
+import { syncShopToCloud, syncUserShopsFromCloud } from '@/lib/supabaseSync';
 import GoogleAuthModal from '@/components/GoogleAuthModal';
 import BarSelectorModal from '@/components/BarSelectorModal';
 
@@ -45,7 +46,7 @@ function ActivitesContent() {
     }
   }, [autoCreate, compte]);
 
-  const loadData = () => {
+  const loadData = async () => {
     let currentCompte = offlineDB.getCompteActuel();
     if (!currentCompte) {
       // Auto-connect avec un compte demo par défaut si aucun compte n'est défini
@@ -53,12 +54,15 @@ function ActivitesContent() {
     }
     setCompte(currentCompte);
 
-    const list = offlineDB.getActivitesDuCompte(currentCompte.id);
+    let list = offlineDB.getActivitesDuCompte(currentCompte.id);
     setActivites(list);
 
-    // Si 0 activités, ouvrir directement le modal de création
-    if (list.length === 0) {
-      setIsCreateModalOpen(true);
+    // Télécharger automatiquement depuis le Cloud (Supabase) les boutiques rattachées à ce compte Gmail
+    if (currentCompte.email) {
+      const cloudShops = await syncUserShopsFromCloud(currentCompte.email);
+      if (cloudShops && cloudShops.length > 0) {
+        setActivites(offlineDB.getActivitesDuCompte(currentCompte.id));
+      }
     }
   };
 

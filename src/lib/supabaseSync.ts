@@ -298,3 +298,89 @@ export async function pullShopFromCloud(etabId?: string): Promise<{ success: boo
     return { success: false, message: err?.message || 'Erreur lors de la synchronisation cloud.' };
   }
 }
+
+/**
+ * Synchronise et télécharge automatiquement tous les commerces rattachés à un compte Gmail depuis le Cloud.
+ * Permet de retrouver instantanément sur Téléphone les boutiques créées sur PC (et inversement) !
+ */
+export async function syncUserShopsFromCloud(userEmail: string): Promise<Etablissement[]> {
+  try {
+    const cleanEmail = userEmail.trim().toLowerCase();
+    if (!cleanEmail) return [];
+
+    let fetchedShops: CloudShopData[] = [];
+
+    try {
+      const apiUrl = `${SUPABASE_URL}/rest/v1/cloud_shops?select=*`;
+      const res = await fetch(apiUrl, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
+
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows && rows.length > 0) {
+          rows.forEach((row: any) => {
+            if (row && row.data && row.data.etablissement) {
+              const etab = row.data.etablissement as Etablissement;
+              if (
+                (etab.email_patron && etab.email_patron.trim().toLowerCase() === cleanEmail) ||
+                (row.data.etablissement.compte_email && row.data.etablissement.compte_email.trim().toLowerCase() === cleanEmail)
+              ) {
+                fetchedShops.push(row.data);
+              }
+            }
+          });
+        }
+      }
+    } catch (apiErr) {
+      console.warn('Supabase fetch user shops notice:', apiErr);
+    }
+
+    // Backup registry local
+    if (typeof window !== 'undefined') {
+      const cloudRegistry = JSON.parse(localStorage.getItem('oeko_cloud_shops_registry') || '{}');
+      Object.values(cloudRegistry).forEach((item: any) => {
+        if (item && item.etablissement && item.etablissement.email_patron) {
+          if (item.etablissement.email_patron.trim().toLowerCase() === cleanEmail) {
+            if (!fetchedShops.some((fs) => fs.etablissement && fs.etablissement.id === item.etablissement.id)) {
+              fetchedShops.push(item);
+            }
+          }
+        }
+      });
+    }
+
+    if (fetchedShops.length === 0) return [];
+
+    const existingEtabs = offlineDB.getEtablissements();
+    const updatedEtabs = [...existingEtabs];
+
+    fetchedShops.forEach((cs) => {
+      const etab = cs.etablissement;
+      const idx = updatedEtabs.findIndex((e) => e.id === etab.id);
+      if (idx >= 0) {
+        updatedEtabs[idx] = etab;
+      } else {
+        updatedEtabs.push(etab);
+      }
+
+      if (cs.produits && cs.produits.length > 0) {
+        const localProds = offlineDB.getProduits();
+        const mergedProdsMap = new Map<string, Produit>();
+        localProds.forEach((p) => mergedProdsMap.set(p.id, p));
+        cs.produits.forEach((p) => mergedProdsMap.set(p.id, p));
+        offlineDB.saveProduits(Array.from(mergedProdsMap.values()));
+      }
+    });
+
+    offlineDB.saveEtablissements(updatedEtabs);
+    return updatedEtabs.filter((e) => e.email_patron && e.email_patron.toLowerCase() === cleanEmail);
+  } catch (err) {
+    console.error('Erreur syncUserShopsFromCloud:', err);
+    return [];
+  }
+}
+
