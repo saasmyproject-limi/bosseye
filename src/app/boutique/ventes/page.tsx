@@ -148,14 +148,10 @@ export default function BoutiqueVentesPage() {
   };
 
   const handleAddToCart = (p: Produit, variante?: VarianteProduit) => {
-    if (p.variantes && p.variantes.length > 0 && !variante) {
-      setSelectedProductForVariant(p);
-      return;
-    }
-
-    const itemPrice = p.prix_vente_unitaire || 0;
+    const selectedVar = variante || (p.variantes && p.variantes.length > 0 ? p.variantes[0] : undefined);
+    const itemPrice = selectedVar?.prix_vente || p.prix_vente_unitaire || 0;
     const existingIndex = cart.findIndex(
-      (item) => item.produit.id === p.id && item.variante?.id === variante?.id
+      (item) => item.produit.id === p.id && item.variante?.id === selectedVar?.id
     );
 
     if (existingIndex >= 0) {
@@ -163,7 +159,7 @@ export default function BoutiqueVentesPage() {
       copy[existingIndex].quantite += 1;
       setCart(copy);
     } else {
-      setCart([...cart, { produit: p, variante, quantite: 1, prix_unitaire: itemPrice }]);
+      setCart([...cart, { produit: p, variante: selectedVar, quantite: 1, prix_unitaire: itemPrice }]);
     }
   };
 
@@ -404,16 +400,6 @@ export default function BoutiqueVentesPage() {
                     className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-9 pr-4 py-3 text-xs font-bold text-[#1B4332]"
                   />
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsBarcodeScannerOpen(true)}
-                  className="py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow flex items-center justify-center gap-2 transition-transform active:scale-95 border border-[#E8A33D] whitespace-nowrap"
-                  title="Scanner le code-barres de l'étiquette"
-                >
-                  <Camera className="w-4 h-4 text-[#E8A33D]" />
-                  <span className="hidden sm:inline">Scan Code OKO</span>
-                </button>
               </div>
 
               {/* Grid Cards Articles */}
@@ -532,10 +518,10 @@ export default function BoutiqueVentesPage() {
                         setMontantVerseInput(cartTotalFinal);
                         setIsPaymentModalOpen(true);
                       }}
-                      className="py-3 px-2 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                      className="py-3 px-2 rounded-2xl bg-[#B8442C] disabled:bg-gray-300 text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
                       <CreditCard className="w-4 h-4 text-white" />
-                      <span>1. Vente Directe</span>
+                      <span>Payé Comptant</span>
                     </button>
 
                     <button
@@ -547,10 +533,10 @@ export default function BoutiqueVentesPage() {
                         setNewCmdAdresse('');
                         setIsNewDeliveryModalOpen(true);
                       }}
-                      className="py-3 px-2 rounded-2xl bg-[#1B4332] disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                      className="py-3 px-2 rounded-2xl bg-[#1B4332] disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Truck className="w-4 h-4 text-[#E8A33D]" />
-                      <span>2. Livraison</span>
+                      <span>À Livrer</span>
                     </button>
 
                     <button
@@ -560,10 +546,10 @@ export default function BoutiqueVentesPage() {
                         setMontantVerseInput(0);
                         setIsPaymentModalOpen(true);
                       }}
-                      className="py-3 px-2 rounded-2xl bg-purple-900 disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                      className="py-3 px-2 rounded-2xl bg-purple-900 disabled:bg-gray-300 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <Bookmark className="w-4 h-4 text-[#E8A33D]" />
-                      <span>3. Réservation</span>
+                      <span>Réservation</span>
                     </button>
                   </div>
                 </div>

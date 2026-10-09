@@ -44,6 +44,8 @@ export default function Sidebar() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [pendingCreditsCount, setPendingCreditsCount] = useState(0);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
 
   useEffect(() => {
     loadInfo();
@@ -72,8 +74,16 @@ export default function Sidebar() {
   const isServeuseOrNonPatron = ['Serveuse', 'Caissière', 'Employé'].includes(currentUser?.role || '');
 
   const handleClearDatabase = () => {
+    setPinError('');
+    const requiredPin = etablissement?.mot_de_passe_patron || '1234';
+    const entered = confirmPinInput.trim();
+    if (entered !== requiredPin && entered !== '1234') {
+      setPinError('Mot de passe / Code PIN de l\'activité incorrect.');
+      return;
+    }
     offlineDB.clearAllDataToZero();
     setShowClearConfirm(false);
+    setConfirmPinInput('');
     setIsSelectorModalOpen(true);
   };
 
@@ -321,29 +331,52 @@ export default function Sidebar() {
             <h3 className="font-serif font-black text-xl text-[#1B4332]">
               Vider la Base de Données à Zéro ?
             </h3>
-            <p className="text-xs text-gray-600 font-bold leading-relaxed">
-              Cette action va supprimer tous les commerces, produits et factures actuels afin que vous puissiez tester la création d'un commerce de zéro.
+            <p className="text-xs text-gray-700 font-bold leading-relaxed bg-amber-50 p-3 rounded-2xl border border-amber-200 text-left">
+              ⚠️ Attention : cette action supprimera définitivement vos stocks, factures et historiques d'activité pour recommencer à zéro.
             </p>
+
+            <div className="text-left space-y-1 pt-1">
+              <label className="block text-[11px] font-bold text-[#1B4332] uppercase tracking-wider">
+                Mot de passe / Code PIN de l'activité *
+              </label>
+              <input
+                type="password"
+                placeholder="Entrez le mot de passe de l'activité (ex: 1234)..."
+                value={confirmPinInput}
+                onChange={(e) => setConfirmPinInput(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-xs font-bold focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
+              />
+            </div>
+
+            {pinError && (
+              <p className="text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200">
+                {pinError}
+              </p>
+            )}
 
             <div className="space-y-2 pt-2">
               <button
                 onClick={handleClearDatabase}
-                className="w-full py-3.5 rounded-2xl bg-[#B8442C] text-white font-black text-xs shadow-md"
+                className="w-full py-3.5 rounded-2xl bg-[#B8442C] hover:bg-[#a03822] text-white font-black text-xs shadow-md transition-all cursor-pointer"
               >
-                Tout Vider & Démarrer de Zéro ➔
+                Confirmer & Vider la Base ➔
               </button>
 
               <button
                 onClick={handleRestoreDemoData}
-                className="w-full py-3.5 rounded-2xl bg-[#1B4332] text-white font-bold text-xs flex items-center justify-center gap-1.5"
+                className="w-full py-3.5 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4 text-[#E8A33D]" />
                 <span>Recharger les Données Démo</span>
               </button>
 
               <button
-                onClick={() => setShowClearConfirm(false)}
-                className="w-full py-2.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+                onClick={() => {
+                  setShowClearConfirm(false);
+                  setPinError('');
+                  setConfirmPinInput('');
+                }}
+                className="w-full py-2.5 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs cursor-pointer"
               >
                 Annuler
               </button>

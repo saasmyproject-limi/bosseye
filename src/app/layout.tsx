@@ -16,13 +16,13 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Œko — L'œil du patron | SaaS de gestion boutiques, bars & snacks au Cameroun",
+  title: "œko — L'œil du patron",
   description: "Solution SaaS de gestion 100% adaptée au Cameroun : boutiques de vêtements, bars/lounges et snack-bars. Ventes au comptoir, gestion de stock, crédits clients et mode 100% hors-ligne.",
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Œko',
+    title: 'œko',
   },
 };
 

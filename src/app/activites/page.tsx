@@ -18,11 +18,12 @@ import {
   ChevronRight,
   Store,
   RefreshCw,
-  Search
+  Search,
+  Trash2
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { CompteUtilisateur, Etablissement } from '@/types';
-import { syncShopToCloud, syncUserShopsFromCloud } from '@/lib/supabaseSync';
+import { syncShopToCloud, syncUserShopsFromCloud, deleteShopFromCloud } from '@/lib/supabaseSync';
 import GoogleAuthModal from '@/components/GoogleAuthModal';
 import BarSelectorModal from '@/components/BarSelectorModal';
 
@@ -67,6 +68,13 @@ function ActivitesContent() {
     offlineDB.switchEtablissement(etab.id);
     const act = etab.type_activite || 'snack';
     router.push(`/${act}/dashboard`);
+  };
+
+  const handleDeleteActivite = async (etab: Etablissement) => {
+    if (confirm(`Voulez-vous vraiment supprimer définitivement le commerce "${etab.nom}" ? Cette action effacera cette boutique et son stock du Cloud et du téléphone.`)) {
+      await deleteShopFromCloud(etab.id);
+      loadData();
+    }
   };
 
   const handleLogoutGoogle = () => {
@@ -249,13 +257,23 @@ function ActivitesContent() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleSelectActivite(etab)}
-                      className="w-full py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all group"
-                    >
-                      <span>Accéder à {etab.nom}</span>
-                      <ChevronRight className="w-4 h-4 text-[#E8A33D] group-hover:translate-x-1 transition-transform" />
-                    </button>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => handleSelectActivite(etab)}
+                        className="flex-1 py-3 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all group cursor-pointer"
+                      >
+                        <span>Accéder à {etab.nom}</span>
+                        <ChevronRight className="w-4 h-4 text-[#E8A33D] group-hover:translate-x-1 transition-transform" />
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteActivite(etab)}
+                        title={`Supprimer définitivement ${etab.nom}`}
+                        className="p-3 rounded-2xl border-2 border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all cursor-pointer shrink-0"
+                      >
+                        <Trash2 className="w-4.5 h-4.5" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

@@ -73,6 +73,7 @@ export async function syncShopToCloud(etabId?: string): Promise<{ success: boole
           id: targetEtabId,
           shop_code: cleanCode,
           shop_name: etab.nom,
+          compte_email: (etab.email_patron || currentCompte?.email || '').trim().toLowerCase(),
           data: payload,
           updated_at: new Date().toISOString(),
         }),
@@ -335,10 +336,18 @@ export async function syncUserShopsFromCloud(userEmail: string): Promise<Etablis
           rows.forEach((row: any) => {
             if (row && row.data && row.data.etablissement) {
               const etab = row.data.etablissement as Etablissement;
-              if (
-                (etab.email_patron && etab.email_patron.trim().toLowerCase() === cleanEmail) ||
-                (row.data.etablissement.compte_email && row.data.etablissement.compte_email.trim().toLowerCase() === cleanEmail)
-              ) {
+              const etabEmail = (
+                etab.email_patron ||
+                (row.data as any).compte_email ||
+                (row.etablissement as any)?.email_patron ||
+                row.compte_email ||
+                ''
+              )
+                .trim()
+                .toLowerCase();
+
+              if (etabEmail === cleanEmail || !etabEmail) {
+                etab.email_patron = cleanEmail;
                 fetchedShops.push(row.data);
               }
             }
@@ -391,6 +400,45 @@ export async function syncUserShopsFromCloud(userEmail: string): Promise<Etablis
   } catch (err) {
     console.error('Erreur syncUserShopsFromCloud:', err);
     return [];
+  }
+}
+
+/**
+ * Supprime définitivement une boutique du Cloud (Supabase) et de la mémoire locale
+ */
+export async function deleteShopFromCloud(etabId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const etab = offlineDB.getEtablissements().find((e) => e.id === etabId);
+    const etabName = etab?.nom || 'Commerce';
+
+    // 1. Suppression du registre Cloud local
+    if (typeof window !== 'undefined') {
+      const cloudRegistry = JSON.parse(localStorage.getItem('oeko_cloud_shops_registry') || '{}');
+      delete cloudRegistry[etabId];
+      if (etabName) delete cloudRegistry[etabName.toLowerCase().trim()];
+      localStorage.setItem('oeko_cloud_shops_registry', JSON.stringify(cloudRegistry));
+    }
+
+    // 2. Suppression de Supabase REST API
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/cloud_shops?id=eq.${encodeURIComponent(etabId)}`, {
+        method: 'DELETE',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
+    } catch (apiErr) {
+      console.warn('Supabase delete shop notice:', apiErr);
+    }
+
+    // 3. Suppression locale dans offlineDB
+    offlineDB.deleteEtablissement(etabId);
+
+    return { success: true, message: `Boutique "${etabName}" supprimée avec succès.` };
+  } catch (err: any) {
+    console.error('Erreur deleteShopFromCloud:', err);
+    return { success: false, message: err?.message || 'Erreur lors de la suppression de la boutique.' };
   }
 }
 

@@ -285,6 +285,23 @@ export const offlineDB = {
     return updated;
   },
 
+  deleteEtablissement(id: string): boolean {
+    const etabs = this.getEtablissements();
+    const filtered = etabs.filter((e) => e.id !== id);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(filtered));
+        const activeId = localStorage.getItem(KEYS.ACTIVE_ETAB_ID);
+        if (activeId === id) {
+          localStorage.removeItem(KEYS.ACTIVE_ETAB_ID);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return true;
+  },
+
   createEtablissement(params: {
     nom: string;
     type?: TypeEtablissement;
