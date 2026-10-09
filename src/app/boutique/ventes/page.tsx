@@ -149,7 +149,7 @@ export default function BoutiqueVentesPage() {
 
   const handleAddToCart = (p: Produit, variante?: VarianteProduit) => {
     const selectedVar = variante || (p.variantes && p.variantes.length > 0 ? p.variantes[0] : undefined);
-    const itemPrice = selectedVar?.prix_vente || p.prix_vente_unitaire || 0;
+    const itemPrice = selectedVar?.prix_vente_override || p.prix_vente_unitaire || 0;
     const existingIndex = cart.findIndex(
       (item) => item.produit.id === p.id && item.variante?.id === selectedVar?.id
     );
