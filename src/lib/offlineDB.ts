@@ -2232,13 +2232,17 @@ export const offlineDB = {
     reference_mouvement_id?: string;
     correction_reference_id?: string;
     auto_confirm?: boolean;
+    statut_confirmation?: StatutConfirmationStock;
+    confirme_par_id?: string;
+    confirme_par_nom?: string;
+    confirme_le?: string;
   }): AuditStockLog {
     const etab = this.getEtablissement();
     const user = this.getCurrentUser();
     const isPatron = ['Patron', 'Patronne', 'Directeur'].includes(user?.role || '');
 
-    let statutConf: StatutConfirmationStock = 'non_confirme';
-    if (params.auto_confirm || !isPatron) {
+    let statutConf: StatutConfirmationStock = params.statut_confirmation || 'non_confirme';
+    if (params.auto_confirm || (!params.statut_confirmation && !isPatron)) {
       statutConf = 'confirme';
     }
 
@@ -2260,9 +2264,9 @@ export const offlineDB = {
       reference_mouvement_id: params.reference_mouvement_id,
       correction_reference_id: params.correction_reference_id,
       statut_confirmation: statutConf,
-      confirme_par_id: statutConf === 'confirme' ? user?.id : undefined,
-      confirme_par_nom: statutConf === 'confirme' ? user?.nom : undefined,
-      confirme_le: statutConf === 'confirme' ? new Date().toISOString() : undefined,
+      confirme_par_id: params.confirme_par_id || (statutConf === 'confirme' ? user?.id : undefined),
+      confirme_par_nom: params.confirme_par_nom || (statutConf === 'confirme' ? user?.nom : undefined),
+      confirme_le: params.confirme_le || (statutConf === 'confirme' ? new Date().toISOString() : undefined),
       created_at: new Date().toISOString(),
     };
 
@@ -2280,7 +2284,13 @@ export const offlineDB = {
     return newLog;
   },
 
-  confirmOrContestAuditLog(logId: string, isConfirmed: boolean, comment?: string): boolean {
+  confirmOrContestAuditLog(
+    logId: string,
+    action: StatutConfirmationStock,
+    userId?: string,
+    userNom?: string,
+    comment?: string
+  ): boolean {
     try {
       if (typeof window === 'undefined') return false;
       const user = this.getCurrentUser();
@@ -2292,9 +2302,9 @@ export const offlineDB = {
       const current = all[idx];
       all[idx] = {
         ...current,
-        statut_confirmation: isConfirmed ? 'confirme' : 'conteste',
-        confirme_par_id: user?.id,
-        confirme_par_nom: user?.nom || 'Employé en poste',
+        statut_confirmation: action,
+        confirme_par_id: userId || user?.id,
+        confirme_par_nom: userNom || user?.nom || 'Employé en poste',
         confirme_le: new Date().toISOString(),
         commentaire_employe: comment?.trim() || undefined,
       };
