@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
 import ArticleLabelPrinterModal from '@/components/ArticleLabelPrinterModal';
-import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles, FileSpreadsheet, Printer, Barcode, Bell, AlertCircle, MessageSquare } from 'lucide-react';
+import { Plus, Search, Check, Edit2, X, AlertTriangle, FileSpreadsheet, Printer, Bell } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { syncShopToCloud } from '@/lib/supabaseSync';
 import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle, Utilisateur, AuditStockLog } from '@/types';
@@ -50,8 +50,6 @@ export default function BoutiqueProduitsPage() {
 
   // Champs personnalisés libres
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([]);
-  const [newCustomKey, setNewCustomKey] = useState('');
-  const [newCustomVal, setNewCustomVal] = useState('');
 
   // Variantes pour Boutique (Taille / Couleur)
   const [taillesInput, setTaillesInput] = useState<string>('S, M, L, XL');
@@ -314,9 +312,6 @@ export default function BoutiqueProduitsPage() {
 
   const calcMargeUnit = prixVenteUnitaire - prixAchatUnitaire;
   const calcTauxMarge = prixVenteUnitaire > 0 ? (calcMargeUnit / prixVenteUnitaire) * 100 : 0;
-
-  const editMargeUnit = editPrixVenteUnit - editPrixAchatUnit;
-  const editTauxMarge = editPrixVenteUnit > 0 ? (editMargeUnit / editPrixVenteUnit) * 100 : 0;
 
   return (
     <AppLayout>

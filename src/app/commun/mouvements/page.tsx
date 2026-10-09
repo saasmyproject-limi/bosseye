@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { History, Plus, CheckCircle2, AlertTriangle, Search, Filter, RefreshCcw, ShieldCheck, ClipboardCheck, BarChart3, AlertCircle, Check, X, FileText, Lock } from 'lucide-react';
+import { Plus, CheckCircle2, AlertTriangle, Search, ShieldCheck, ClipboardCheck, BarChart3, Check, X, FileText, Lock } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { offlineDB } from '@/lib/offlineDB';
-import { MouvementStock, AuditStockLog, InventaireReference, Utilisateur, Produit } from '@/types';
+import { AuditStockLog, InventaireReference, Utilisateur, Produit } from '@/types';
 
 export default function CommunMouvementsPage() {
   const [activeTab, setActiveTab] = useState<'journal' | 'inventaire' | 'ecarts'>('journal');
