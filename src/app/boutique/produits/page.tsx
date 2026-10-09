@@ -4,10 +4,10 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
 import ArticleLabelPrinterModal from '@/components/ArticleLabelPrinterModal';
-import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles, FileSpreadsheet, Printer, Barcode } from 'lucide-react';
+import { Package, Plus, Search, Tag, Check, Layers, Edit2, ShieldAlert, DollarSign, TrendingUp, X, Box, AlertTriangle, Sparkles, FileSpreadsheet, Printer, Barcode, Bell, AlertCircle, MessageSquare } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { syncShopToCloud } from '@/lib/supabaseSync';
-import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle } from '@/types';
+import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle, Utilisateur, AuditStockLog } from '@/types';
 
 const StockAiScannerModal = dynamic(() => import('@/components/StockAiScannerModal'), { ssr: false });
 const ExcelCsvImporterModal = dynamic(() => import('@/components/ExcelCsvImporterModal'), { ssr: false });
@@ -15,6 +15,11 @@ const ExcelCsvImporterModal = dynamic(() => import('@/components/ExcelCsvImporte
 export default function BoutiqueProduitsPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
+  const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
+  const [pendingLogs, setPendingLogs] = useState<AuditStockLog[]>([]);
+  const [contestModalLog, setContestModalLog] = useState<AuditStockLog | null>(null);
+  const [contestComment, setContestComment] = useState<string>('');
+
   const [filterCategory, setFilterCategory] = useState<string>('tous');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,6 +36,7 @@ export default function BoutiqueProduitsPage() {
   const [seuilAlerte, setSeuilAlerte] = useState<number>(3);
   const [prixAchatUnitaire, setPrixAchatUnitaire] = useState<number>(12000);
   const [prixVenteUnitaire, setPrixVenteUnitaire] = useState<number>(25000);
+  const [motifCreation, setMotifCreation] = useState<string>('Stock initial à la création');
 
   // Champs spécifiques selon le secteur
   const [champMatiere, setChampMatiere] = useState('');
@@ -59,6 +65,7 @@ export default function BoutiqueProduitsPage() {
   const [editPrixVenteUnit, setEditPrixVenteUnit] = useState<number>(25000);
   const [editSeuilAlerte, setEditSeuilAlerte] = useState<number>(3);
   const [editStockTotal, setEditStockTotal] = useState<number>(10);
+  const [editMotif, setEditMotif] = useState<string>('Ajustement manuel de stock');
 
   useEffect(() => {
     loadData();
@@ -68,8 +75,13 @@ export default function BoutiqueProduitsPage() {
     try {
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
+      const user = offlineDB.getCurrentUser();
+      setCurrentUser(user);
       const prods = offlineDB.getProduits();
       setProduits(prods);
+
+      const pending = offlineDB.getPendingConfirmationsForEmployee();
+      setPendingLogs(pending);
 
       // Auto-suggestion par défaut du mode de suivi selon le secteur
       const sec = etab.secteur_boutique || '';
@@ -80,6 +92,8 @@ export default function BoutiqueProduitsPage() {
       }
     } catch (e) { console.error(e); }
   };
+
+  const isEmployee = currentUser?.role === 'Employé';
 
   const categories = Array.from(new Set(produits.map((p) => p.categorie))).filter(Boolean);
 
@@ -191,11 +205,52 @@ export default function BoutiqueProduitsPage() {
 
     const currentProds = offlineDB.getProduits();
     offlineDB.saveProduits([newProd, ...currentProds]);
+
+    // Enregistrement immuable dans le Journal d'Audit
+    offlineDB.addAuditStockLog({
+      produit_id: newProd.id,
+      nom_produit: newProd.nom,
+      type_action: 'entree',
+      quantite_avant: 0,
+      quantite_modifiee: newProd.quantite_totale,
+      quantite_apres: newProd.quantite_totale,
+      motif: motifCreation.trim() || 'Arrivage de stock initial',
+      statut_confirmation: isEmployee ? 'confirme' : 'non_confirme',
+      confirme_par_id: isEmployee ? currentUser?.id : undefined,
+      confirme_par_nom: isEmployee ? currentUser?.nom : undefined,
+      confirme_le: isEmployee ? new Date().toISOString() : undefined,
+    });
+
     if (etab) syncShopToCloud(etab.id);
 
     setIsModalOpen(false);
     setNom('');
     setCustomFields([]);
+    loadData();
+  };
+
+  const handleConfirmStock = (logId: string) => {
+    if (!currentUser) return;
+    offlineDB.confirmOrContestAuditLog(logId, 'confirme', currentUser.id, currentUser.nom);
+    loadData();
+  };
+
+  const handleOpenContestModal = (log: AuditStockLog) => {
+    setContestModalLog(log);
+    setContestComment('');
+  };
+
+  const handleSubmitContest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contestModalLog || !currentUser) return;
+    offlineDB.confirmOrContestAuditLog(
+      contestModalLog.id,
+      'conteste',
+      currentUser.id,
+      currentUser.nom,
+      contestComment.trim() || 'Quantité comptée différente de l\'entrée patron'
+    );
+    setContestModalLog(null);
     loadData();
   };
 
@@ -207,11 +262,15 @@ export default function BoutiqueProduitsPage() {
     setEditPrixVenteUnit(p.prix_vente_unitaire || 25000);
     setEditSeuilAlerte(p.seuil_alerte || 3);
     setEditStockTotal(p.quantite_totale || 10);
+    setEditMotif('Ajustement manuel de stock');
   };
 
   const handleSaveEditProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduit) return;
+
+    const oldQty = editingProduit.quantite_totale || 0;
+    const diffQty = editStockTotal - oldQty;
 
     const updated = produits.map((p) => {
       if (p.id !== editingProduit.id) return p;
@@ -228,6 +287,25 @@ export default function BoutiqueProduitsPage() {
     });
 
     offlineDB.saveProduits(updated);
+
+    // Enregistrement immuable de l'ajustement dans le Journal d'Audit si la quantité a changé
+    if (diffQty !== 0) {
+      const typeAct = diffQty > 0 ? 'ajustement_hausse' : 'ajustement_baisse';
+      offlineDB.addAuditStockLog({
+        produit_id: editingProduit.id,
+        nom_produit: editNom.trim() || editingProduit.nom,
+        type_action: typeAct,
+        quantite_avant: oldQty,
+        quantite_modifiee: diffQty,
+        quantite_apres: editStockTotal,
+        motif: editMotif.trim() || (diffQty < 0 ? 'Retrait manuel (Casse / Perte / Vol / Erreur)' : 'Ajustement inventaire à la hausse'),
+        statut_confirmation: isEmployee ? 'confirme' : 'non_confirme',
+        confirme_par_id: isEmployee ? currentUser?.id : undefined,
+        confirme_par_nom: isEmployee ? currentUser?.nom : undefined,
+        confirme_le: isEmployee ? new Date().toISOString() : undefined,
+      });
+    }
+
     const etab = offlineDB.getEtablissement();
     if (etab) syncShopToCloud(etab.id);
     setEditingProduit(null);
@@ -242,6 +320,53 @@ export default function BoutiqueProduitsPage() {
 
   return (
     <AppLayout>
+        {/* Banner de Confirmation d'Entrée de Stock pour l'Employé */}
+        {isEmployee && pendingLogs.length > 0 && (
+          <div className="mb-6 p-4 rounded-3xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-900 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-amber-700 animate-bounce" />
+                <h3 className="font-serif font-black text-sm text-amber-900">
+                  🔔 Confirmation de Réception de Stock ({pendingLogs.length} en attente)
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold uppercase bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
+                Preuve Employé
+              </span>
+            </div>
+            <p className="text-xs text-amber-800 font-medium">
+              Le patron a enregistré des entrées de stock. Veuillez vérifier physiquement vos articles et confirmer pour vous protéger en cas d'écart.
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {pendingLogs.map((log) => (
+                <div key={log.id} className="p-3 bg-white/80 rounded-2xl border border-amber-300/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div>
+                    <span className="font-bold text-[#1B4332]">{log.nom_produit}</span> :{' '}
+                    <span className="font-black text-emerald-800">+{log.quantite_modifiee} pcs</span>{' '}
+                    <span className="text-gray-500 font-mono">({new Date(log.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})</span>
+                    <p className="text-[11px] text-gray-600 font-italic mt-0.5">Motif: {log.motif}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleConfirmStock(log.id)}
+                      className="py-1.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>J'ai reçu et compté ces articles</span>
+                    </button>
+                    <button
+                      onClick={() => handleOpenContestModal(log)}
+                      className="py-1.5 px-3 rounded-xl bg-red-100 hover:bg-red-200 text-red-800 font-bold text-xs border border-red-300 transition-colors"
+                    >
+                      Contester
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Top Bar Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E2D5C3]">
           <div>
@@ -412,21 +537,30 @@ export default function BoutiqueProduitsPage() {
                   </div>
                 </div>
 
-                {/* Tarifs & Marges */}
-                <div className="pt-3 border-t border-[#E2D5C3] grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="p-2 rounded-xl bg-[#FBF7EF]">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase block">PA Unitaire</span>
-                    <span className="font-black text-[#1B4332]">{pAchat.toLocaleString('fr-FR')} F</span>
+                {/* Tarifs & Marges : Prix d'achat et Marges STRICTEMENT MASQUÉS pour l'Employé */}
+                {isEmployee ? (
+                  <div className="pt-3 border-t border-[#E2D5C3] text-center text-xs">
+                    <div className="p-2.5 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3]">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase block">Prix de Vente Unitaire</span>
+                      <span className="font-black text-base text-[#1B4332]">{pVente.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
                   </div>
-                  <div className="p-2 rounded-xl bg-[#FBF7EF]">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase block">PV Unitaire</span>
-                    <span className="font-black text-emerald-800">{pVente.toLocaleString('fr-FR')} F</span>
+                ) : (
+                  <div className="pt-3 border-t border-[#E2D5C3] grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-xl bg-[#FBF7EF]">
+                      <span className="text-[9px] font-bold text-gray-400 uppercase block">PA Unitaire</span>
+                      <span className="font-black text-[#1B4332]">{pAchat.toLocaleString('fr-FR')} F</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-[#FBF7EF]">
+                      <span className="text-[9px] font-bold text-gray-400 uppercase block">PV Unitaire</span>
+                      <span className="font-black text-emerald-800">{pVente.toLocaleString('fr-FR')} F</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-[#FBF7EF]">
+                      <span className="text-[9px] font-bold text-gray-400 uppercase block">Marge</span>
+                      <span className="font-black text-[#B8442C]">+{margeUnit.toLocaleString('fr-FR')} F</span>
+                    </div>
                   </div>
-                  <div className="p-2 rounded-xl bg-[#FBF7EF]">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase block">Marge</span>
-                    <span className="font-black text-[#B8442C]">+{margeUnit.toLocaleString('fr-FR')} F</span>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}
@@ -482,18 +616,33 @@ export default function BoutiqueProduitsPage() {
                 </div>
               </div>
 
+              {/* Champ Motif d'entrée */}
+              <div>
+                <label className="block text-xs font-bold text-[#1B4332] mb-1">Motif d'entrée / Origine du stock *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ex: Livraison Fournisseur, Stock initial, Achat grossiste..."
+                  value={motifCreation}
+                  onChange={(e) => setMotifCreation(e.target.value)}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix d'Achat Unitaire (FCFA)</label>
-                  <input
-                    type="number"
-                    onFocus={(e) => e.target.select()}
-                    value={prixAchatUnitaire}
-                    onChange={(e) => setPrixAchatUnitaire(Number(e.target.value))}
-                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
-                  />
-                </div>
-                <div>
+                {!isEmployee && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix d'Achat Unitaire (FCFA)</label>
+                    <input
+                      type="number"
+                      onFocus={(e) => e.target.select()}
+                      value={prixAchatUnitaire}
+                      onChange={(e) => setPrixAchatUnitaire(Number(e.target.value))}
+                      className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    />
+                  </div>
+                )}
+                <div className={isEmployee ? 'col-span-2' : ''}>
                   <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix de Vente Unitaire (FCFA)</label>
                   <input
                     type="number"
@@ -505,11 +654,13 @@ export default function BoutiqueProduitsPage() {
                 </div>
               </div>
 
-              {/* Marge Calculée */}
-              <div className="p-3 rounded-2xl bg-emerald-100/60 border border-emerald-300 text-xs flex justify-between items-center font-bold text-emerald-900">
-                <span>Marge par pièce vendue :</span>
-                <span>+{calcMargeUnit.toLocaleString('fr-FR')} FCFA ({calcTauxMarge.toFixed(1)}%)</span>
-              </div>
+              {/* Marge Calculée - Masquée pour l'Employé */}
+              {!isEmployee && (
+                <div className="p-3 rounded-2xl bg-emerald-100/60 border border-emerald-300 text-xs flex justify-between items-center font-bold text-emerald-900">
+                  <span>Marge par pièce vendue :</span>
+                  <span>+{calcMargeUnit.toLocaleString('fr-FR')} FCFA ({calcTauxMarge.toFixed(1)}%)</span>
+                </div>
+              )}
 
               {/* Code Article Structuré (Etiquette & Code-barres OKO) Tout en bas */}
               <div className="p-3.5 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
@@ -616,16 +767,18 @@ export default function BoutiqueProduitsPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix Achat Unitaire (FCFA)</label>
-                  <input
-                    type="number"
-                    value={editPrixAchatUnit}
-                    onChange={(e) => setEditPrixAchatUnit(Number(e.target.value))}
-                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
-                  />
-                </div>
-                <div>
+                {!isEmployee && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix Achat Unitaire (FCFA)</label>
+                    <input
+                      type="number"
+                      value={editPrixAchatUnit}
+                      onChange={(e) => setEditPrixAchatUnit(Number(e.target.value))}
+                      className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    />
+                  </div>
+                )}
+                <div className={isEmployee ? 'col-span-2' : ''}>
                   <label className="block text-xs font-bold text-[#1B4332] mb-1">Prix Vente Unitaire (FCFA)</label>
                   <input
                     type="number"
@@ -659,6 +812,21 @@ export default function BoutiqueProduitsPage() {
                 </div>
               </div>
 
+              {/* Motif Obligatoire pour tout changement de stock */}
+              <div>
+                <label className="block text-xs font-bold text-[#1B4332] mb-1">
+                  Motif de la modification de stock * <span className="text-red-600">(ex: Casse, Vol, Arrivage, Erreur saisie)</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ex: 1 pièce défectueuse au déballage, Réassort,..."
+                  value={editMotif}
+                  onChange={(e) => setEditMotif(e.target.value)}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                />
+              </div>
+
               <div className="flex items-center gap-2 pt-2">
                 <button
                   type="button"
@@ -672,6 +840,62 @@ export default function BoutiqueProduitsPage() {
                   className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
                 >
                   Enregistrer la Modification
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* MODAL CONTESTATION RÉCEPTION STOCK */}
+        {contestModalLog && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <form
+              onSubmit={handleSubmitContest}
+              className="bg-[#F3ECE0] border-2 border-red-400 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+                <h3 className="font-serif font-black text-lg text-red-900 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <span>Contester la Réception de Stock</span>
+                </h3>
+                <button type="button" onClick={() => setContestModalLog(null)} className="text-gray-500 hover:text-black">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs space-y-1">
+                <p><strong className="text-gray-700">Article :</strong> {contestModalLog.nom_produit}</p>
+                <p><strong className="text-gray-700">Quantité déclarée par le patron :</strong> <span className="font-bold text-[#1B4332]">+{contestModalLog.quantite_modifiee} pcs</span></p>
+                <p><strong className="text-gray-700">Motif d'origine :</strong> {contestModalLog.motif}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#1B4332] mb-1">
+                  Explication / Remarque de l'employé *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="ex: J'ai compté seulement 8 articles au lieu de 10 livrés. 2 articles manquent à l'appel."
+                  value={contestComment}
+                  onChange={(e) => setContestComment(e.target.value)}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setContestModalLog(null)}
+                  className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 px-4 rounded-xl bg-red-700 hover:bg-red-800 text-white font-black text-xs shadow-md"
+                >
+                  Enregistrer la Contestation Immuable
                 </button>
               </div>
             </form>

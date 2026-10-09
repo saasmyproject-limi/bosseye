@@ -476,4 +476,60 @@ export interface ClotureMensuelle {
   cree_par: string;
 }
 
+// --- MODULE TRANSPARENCE & PREUVE GESTION STOCK BOUTIQUE ---
+export type StatutConfirmationStock = 'non_confirme' | 'confirme' | 'conteste';
+
+export interface AuditStockLog {
+  id: string;
+  etablissement_id: string;
+  produit_id: string;
+  nom_produit: string;
+  variante_id?: string;
+  detail_variante?: string;
+  type_action: 'entree' | 'ajustement_hausse' | 'ajustement_baisse' | 'inventaire_initial' | 'correction' | 'vente';
+  quantite_avant: number;
+  quantite_modifiee: number; // ex: +10 ou -2
+  quantite_apres: number;
+  utilisateur_id: string;
+  utilisateur_nom: string;
+  utilisateur_role: string;
+  motif: string; // Ex: "Arrivage fournisseur", "Casse déballage", "Ajustement inventaire"
+  reference_mouvement_id?: string;
+  correction_reference_id?: string; // Référence immuable si correction d'une ligne précédente
+  statut_confirmation: StatutConfirmationStock;
+  confirme_par_id?: string;
+  confirme_par_nom?: string;
+  confirme_le?: string;
+  commentaire_employe?: string;
+  created_at: string;
+}
+
+export interface InventaireReference {
+  id: string;
+  etablissement_id: string;
+  numero_inventaire: string; // Ex: "INV-2026-001"
+  date_comptage: string;
+  statut: 'en_attente_double_validation' | 'valide_officiel' | 'rejete';
+  valide_par_patron: boolean;
+  patron_id?: string;
+  patron_nom?: string;
+  patron_valide_le?: string;
+  valide_par_employe: boolean;
+  employe_id?: string;
+  employe_nom?: string;
+  employe_valide_le?: string;
+  commentaires?: string;
+  lignes: Array<{
+    produit_id: string;
+    nom_produit: string;
+    variante_id?: string;
+    detail_variante?: string;
+    quantite_theorique: number;
+    quantite_physique_comptee: number;
+    ecart: number;
+    note?: string;
+  }>;
+  created_at: string;
+}
+
 

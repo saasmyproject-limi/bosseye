@@ -27,6 +27,9 @@ import {
   SessionBar,
   LigneSessionBar,
   CompteUtilisateur,
+  AuditStockLog,
+  InventaireReference,
+  StatutConfirmationStock,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
@@ -63,6 +66,8 @@ const KEYS = {
   CLOTURES_MENSUELLES: 'oeko_clotures_mensuelles',
   PALIERS_TARIFAIRES: 'oeko_paliers_tarifaires',
   SESSIONS_BAR: 'oeko_sessions_bar',
+  AUDIT_STOCK_LOGS: 'oeko_audit_stock_logs',
+  INVENTAIRES_REFERENCE: 'oeko_inventaires_reference',
   OFFLINE_QUEUE: 'oeko_offline_queue',
   RESET_ZERO: 'oeko_db_reset_zero',
 };
@@ -2199,6 +2204,231 @@ export const offlineDB = {
     });
 
     return totalPlats;
+  },
+
+  // --- MODULE AUDIT IMMUABLE & TRANSPARENCE PREUVE STOCK ---
+  getAuditStockLogs(etabIdTarget?: string): AuditStockLog[] {
+    try {
+      const etab = etabIdTarget ? { id: etabIdTarget } : this.getEtablissement();
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.AUDIT_STOCK_LOGS);
+      const all: AuditStockLog[] = data ? JSON.parse(data) : [];
+      return (all || []).filter((l) => l && l.etablissement_id === etab.id);
+    } catch {
+      return [];
+    }
+  },
+
+  addAuditStockLog(params: {
+    produit_id: string;
+    nom_produit: string;
+    variante_id?: string;
+    detail_variante?: string;
+    type_action: 'entree' | 'ajustement_hausse' | 'ajustement_baisse' | 'inventaire_initial' | 'correction' | 'vente';
+    quantite_avant: number;
+    quantite_modifiee: number;
+    quantite_apres: number;
+    motif: string;
+    reference_mouvement_id?: string;
+    correction_reference_id?: string;
+    auto_confirm?: boolean;
+  }): AuditStockLog {
+    const etab = this.getEtablissement();
+    const user = this.getCurrentUser();
+    const isPatron = ['Patron', 'Patronne', 'Directeur'].includes(user?.role || '');
+
+    let statutConf: StatutConfirmationStock = 'non_confirme';
+    if (params.auto_confirm || !isPatron) {
+      statutConf = 'confirme';
+    }
+
+    const newLog: AuditStockLog = {
+      id: `audit-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      etablissement_id: etab.id,
+      produit_id: params.produit_id,
+      nom_produit: params.nom_produit,
+      variante_id: params.variante_id,
+      detail_variante: params.detail_variante,
+      type_action: params.type_action,
+      quantite_avant: params.quantite_avant,
+      quantite_modifiee: params.quantite_modifiee,
+      quantite_apres: params.quantite_apres,
+      utilisateur_id: user?.id || 'u-patron',
+      utilisateur_nom: user?.nom || 'Patron / Gérant',
+      utilisateur_role: user?.role || 'Patron',
+      motif: params.motif || 'Mouvement de stock',
+      reference_mouvement_id: params.reference_mouvement_id,
+      correction_reference_id: params.correction_reference_id,
+      statut_confirmation: statutConf,
+      confirme_par_id: statutConf === 'confirme' ? user?.id : undefined,
+      confirme_par_nom: statutConf === 'confirme' ? user?.nom : undefined,
+      confirme_le: statutConf === 'confirme' ? new Date().toISOString() : undefined,
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem(KEYS.AUDIT_STOCK_LOGS);
+        const all: AuditStockLog[] = data ? JSON.parse(data) : [];
+        all.unshift(newLog);
+        localStorage.setItem(KEYS.AUDIT_STOCK_LOGS, JSON.stringify(all));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    return newLog;
+  },
+
+  confirmOrContestAuditLog(logId: string, isConfirmed: boolean, comment?: string): boolean {
+    try {
+      if (typeof window === 'undefined') return false;
+      const user = this.getCurrentUser();
+      const data = localStorage.getItem(KEYS.AUDIT_STOCK_LOGS);
+      const all: AuditStockLog[] = data ? JSON.parse(data) : [];
+      const idx = all.findIndex((l) => l.id === logId);
+      if (idx < 0) return false;
+
+      const current = all[idx];
+      all[idx] = {
+        ...current,
+        statut_confirmation: isConfirmed ? 'confirme' : 'conteste',
+        confirme_par_id: user?.id,
+        confirme_par_nom: user?.nom || 'Employé en poste',
+        confirme_le: new Date().toISOString(),
+        commentaire_employe: comment?.trim() || undefined,
+      };
+
+      localStorage.setItem(KEYS.AUDIT_STOCK_LOGS, JSON.stringify(all));
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  },
+
+  getPendingConfirmationsForEmployee(): AuditStockLog[] {
+    const logs = this.getAuditStockLogs();
+    return logs.filter((l) => l.statut_confirmation === 'non_confirme');
+  },
+
+  // --- INVENTAIRE DE RÉFÉRENCE CONJOINT ---
+  getInventairesReference(): InventaireReference[] {
+    try {
+      const etab = this.getEtablissement();
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.INVENTAIRES_REFERENCE);
+      const all: InventaireReference[] = data ? JSON.parse(data) : [];
+      return (all || []).filter((inv) => inv && inv.etablissement_id === etab.id);
+    } catch {
+      return [];
+    }
+  },
+
+  createInventaireReference(params: {
+    lignes: Array<{
+      produit_id: string;
+      nom_produit: string;
+      variante_id?: string;
+      detail_variante?: string;
+      quantite_theorique: number;
+      quantite_physique_comptee: number;
+      note?: string;
+    }>;
+    commentaires?: string;
+  }): InventaireReference {
+    const etab = this.getEtablissement();
+    const user = this.getCurrentUser();
+    const isPatron = ['Patron', 'Patronne', 'Directeur'].includes(user?.role || '');
+
+    const nowIso = new Date().toISOString();
+    const count = this.getInventairesReference().length + 1;
+    const numInv = `INV-${new Date().getFullYear()}-${String(count).padStart(3, '0')}`;
+
+    const newInv: InventaireReference = {
+      id: `inv-ref-${Date.now()}`,
+      etablissement_id: etab.id,
+      numero_inventaire: numInv,
+      date_comptage: nowIso,
+      statut: 'en_attente_double_validation',
+      valide_par_patron: isPatron,
+      patron_id: isPatron ? user?.id : undefined,
+      patron_nom: isPatron ? user?.nom : undefined,
+      patron_valide_le: isPatron ? nowIso : undefined,
+      valide_par_employe: !isPatron,
+      employe_id: !isPatron ? user?.id : undefined,
+      employe_nom: !isPatron ? user?.nom : undefined,
+      employe_valide_le: !isPatron ? nowIso : undefined,
+      commentaires: params.commentaires,
+      lignes: params.lignes.map((l) => ({
+        ...l,
+        ecart: l.quantite_physique_comptee - l.quantite_theorique,
+      })),
+      created_at: nowIso,
+    };
+
+    try {
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem(KEYS.INVENTAIRES_REFERENCE);
+        const all: InventaireReference[] = data ? JSON.parse(data) : [];
+        all.unshift(newInv);
+        localStorage.setItem(KEYS.INVENTAIRES_REFERENCE, JSON.stringify(all));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    return newInv;
+  },
+
+  validateInventaireReference(invId: string, role: 'patron' | 'employe', userNom?: string): InventaireReference | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      const user = this.getCurrentUser();
+      const data = localStorage.getItem(KEYS.INVENTAIRES_REFERENCE);
+      const all: InventaireReference[] = data ? JSON.parse(data) : [];
+      const idx = all.findIndex((inv) => inv.id === invId);
+      if (idx < 0) return null;
+
+      const current = all[idx];
+      const nowIso = new Date().toISOString();
+
+      let patronValid = current.valide_par_patron;
+      let employeValid = current.valide_par_employe;
+
+      if (role === 'patron') {
+        patronValid = true;
+        current.patron_id = user?.id;
+        current.patron_nom = userNom || user?.nom || 'Patron';
+        current.patron_valide_le = nowIso;
+      } else {
+        employeValid = true;
+        current.employe_id = user?.id;
+        current.employe_nom = userNom || user?.nom || 'Employé';
+        current.employe_valide_le = nowIso;
+      }
+
+      const isBothValid = patronValid && employeValid;
+      const updatedInv: InventaireReference = {
+        ...current,
+        valide_par_patron: patronValid,
+        valide_par_employe: employeValid,
+        statut: isBothValid ? 'valide_officiel' : 'en_attente_double_validation',
+      };
+
+      all[idx] = updatedInv;
+      localStorage.setItem(KEYS.INVENTAIRES_REFERENCE, JSON.stringify(all));
+      return updatedInv;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  },
+
+  getLatestOfficialInventaireReference(): InventaireReference | null {
+    const list = this.getInventairesReference();
+    const official = list.find((inv) => inv.statut === 'valide_officiel');
+    return official || null;
   },
 
 };
