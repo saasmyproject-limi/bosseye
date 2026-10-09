@@ -59,7 +59,23 @@ export async function syncShopToCloud(etabId?: string): Promise<{ success: boole
       localStorage.setItem('oeko_cloud_shops_registry', JSON.stringify(cloudRegistry));
     }
 
-    // 2. Envoi vers Supabase REST API
+    // 2. Envoi vers l'API Cloud de synchronisation Vercel / œko
+    try {
+      await fetch('/api/sync/shops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userEmail: etab.email_patron || currentCompte?.email,
+          etabId: targetEtabId,
+          shopName: etab.nom,
+          shopData: payload,
+        }),
+      });
+    } catch (apiErr) {
+      console.warn('API sync endpoint notice:', apiErr);
+    }
+
+    // 3. Envoi vers Supabase REST API (si actif)
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/cloud_shops`, {
         method: 'POST',
@@ -321,6 +337,26 @@ export async function syncUserShopsFromCloud(userEmail: string): Promise<Etablis
 
     let fetchedShops: CloudShopData[] = [];
 
+    // 1. Récupération depuis l'API Cloud de synchronisation Vercel / œko
+    try {
+      const apiRes = await fetch(`/api/sync/shops?email=${encodeURIComponent(cleanEmail)}`);
+      if (apiRes.ok) {
+        const apiData = await apiRes.json();
+        if (apiData.success && Array.isArray(apiData.shops)) {
+          apiData.shops.forEach((cs: CloudShopData) => {
+            if (cs && cs.etablissement) {
+              if (!fetchedShops.some((fs) => fs.etablissement && fs.etablissement.id === cs.etablissement.id)) {
+                fetchedShops.push(cs);
+              }
+            }
+          });
+        }
+      }
+    } catch (apiErr) {
+      console.warn('API sync fetch notice:', apiErr);
+    }
+
+    // 2. Récupération depuis Supabase REST API (si actif)
     try {
       const apiUrl = `${SUPABASE_URL}/rest/v1/cloud_shops?select=*`;
       const res = await fetch(apiUrl, {
@@ -348,7 +384,9 @@ export async function syncUserShopsFromCloud(userEmail: string): Promise<Etablis
 
               if (etabEmail === cleanEmail || !etabEmail) {
                 etab.email_patron = cleanEmail;
-                fetchedShops.push(row.data);
+                if (!fetchedShops.some((fs) => fs.etablissement && fs.etablissement.id === etab.id)) {
+                  fetchedShops.push(row.data);
+                }
               }
             }
           });
@@ -419,7 +457,20 @@ export async function deleteShopFromCloud(etabId: string): Promise<{ success: bo
       localStorage.setItem('oeko_cloud_shops_registry', JSON.stringify(cloudRegistry));
     }
 
-    // 2. Suppression de Supabase REST API
+    // 2. Suppression de l'API Cloud Sync Vercel / œko
+    try {
+      const currentCompte = offlineDB.getCompteActuel();
+      const cleanEmail = (etab?.email_patron || currentCompte?.email || '').trim().toLowerCase();
+      if (cleanEmail) {
+        await fetch(`/api/sync/shops?email=${encodeURIComponent(cleanEmail)}&etabId=${encodeURIComponent(etabId)}`, {
+          method: 'DELETE',
+        });
+      }
+    } catch (apiErr) {
+      console.warn('API delete shop notice:', apiErr);
+    }
+
+    // 3. Suppression de Supabase REST API
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/cloud_shops?id=eq.${encodeURIComponent(etabId)}`, {
         method: 'DELETE',
