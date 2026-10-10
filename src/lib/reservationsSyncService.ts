@@ -24,6 +24,7 @@ export async function fetchReservationsFromCloud(
       etablissement_id: r.activite_id,
       numero_reservation: `RES-${r.id.slice(-6)}`,
       client_id: undefined,
+      utilisateur_id: r.serveur_id || r.client_id || 'systeme',
       client: {
         id: `cli-${r.id}`,
         etablissement_id: r.activite_id,
@@ -33,16 +34,19 @@ export async function fetchReservationsFromCloud(
       },
       lignes: [
         {
+          id: `lres-${r.id}`,
+          reservation_id: r.id,
           produit_id: r.article_id || '',
           nom_produit: r.article_nom || 'Article',
           quantite: r.quantite || 1,
           prix_unitaire: Number(r.prix_total) / Math.max(1, r.quantite || 1),
+          sous_total: Number(r.prix_total) || 0,
         },
       ],
       montant_total: Number(r.prix_total) || 0,
       acompte_paye: Number(r.acompte_paye) || 0,
       reste_a_solder: Math.max(0, (Number(r.prix_total) || 0) - (Number(r.acompte_paye) || 0)),
-      statut: r.statut === 'soldee' ? 'payee' : r.statut === 'annulee' ? 'annulee' : 'en_attente',
+      statut: r.statut === 'soldee' ? 'soldee_recuperee' : r.statut === 'annulee' ? 'annulee' : 'en_attente',
       created_at: r.created_at,
     }));
 

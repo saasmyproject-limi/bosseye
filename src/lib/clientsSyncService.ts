@@ -142,7 +142,7 @@ export async function recordReglementCreditToCloud(params: {
       offlineDB.processRemboursementCredit({
         facture_id: params.venteId,
         montant_regle: params.montantRegle,
-        methode: params.modeReglement,
+        methode: params.modeReglement === 'especes' ? 'cash' : (params.modeReglement as any),
       });
 
       // Mettre à jour le solde du reste_a_payer sur Supabase pour la vente

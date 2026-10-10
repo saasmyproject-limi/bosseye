@@ -71,7 +71,7 @@ export default function BoutiqueCreditsPage() {
       clientId: selectedFactureForPay.client_id,
       venteId: selectedFactureForPay.id,
       montantRegle: montantRegleInput,
-      modeReglement: methodePaiement,
+      modeReglement: methodePaiement === 'cash' ? 'especes' : methodePaiement,
       auteurNom: 'Employé',
       notes: `Règlement facture #${selectedFactureForPay.numero_facture}`,
     });

@@ -1774,6 +1774,13 @@ export const offlineDB = {
     } catch { return []; }
   },
 
+  saveCloturesJournalieres(list: ClotureJournaliere[]): void {
+    try {
+      if (typeof window === 'undefined') return;
+      localStorage.setItem(KEYS.CLOTURES_JOURNALIERES, JSON.stringify(list));
+    } catch (e) { console.error(e); }
+  },
+
   cloturerJournee(dateTarget?: string, createdByNom?: string): ClotureJournaliere {
     const etab = this.getEtablissement();
     const user = this.getCurrentUser();
