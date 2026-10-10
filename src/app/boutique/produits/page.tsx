@@ -7,6 +7,7 @@ import ArticleLabelPrinterModal from '@/components/ArticleLabelPrinterModal';
 import { Plus, Search, Check, Edit2, X, AlertTriangle, FileSpreadsheet, Printer, Bell } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { syncShopToCloud } from '@/lib/supabaseSync';
+import { fetchArticlesFromCloud, saveArticleToCloud, recordStockMouvementToCloud } from '@/lib/articlesSyncService';
 import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle, Utilisateur, AuditStockLog } from '@/types';
 
 const StockAiScannerModal = dynamic(() => import('@/components/StockAiScannerModal'), { ssr: false });
@@ -69,20 +70,30 @@ export default function BoutiqueProduitsPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
       const user = offlineDB.getCurrentUser();
       setCurrentUser(user);
-      const prods = offlineDB.getProduits();
-      setProduits(prods);
+
+      if (etab && etab.id) {
+        const cloudRes = await fetchArticlesFromCloud(etab.id);
+        if (cloudRes.success) {
+          setProduits(cloudRes.produits);
+        } else {
+          setProduits(offlineDB.getProduits());
+        }
+      } else {
+        const prods = offlineDB.getProduits();
+        setProduits(prods);
+      }
 
       const pending = offlineDB.getPendingConfirmationsForEmployee();
       setPendingLogs(pending);
 
       // Auto-suggestion par défaut du mode de suivi selon le secteur
-      const sec = etab.secteur_boutique || '';
+      const sec = etab?.secteur_boutique || '';
       if (sec.includes('Téléphone') || sec.includes('Électronique') || sec.includes('Électroménager') || sec.includes('Pharmacie')) {
         setModeSuivi('unite_serie');
       } else {
@@ -219,7 +230,21 @@ export default function BoutiqueProduitsPage() {
       confirme_le: isEmployee ? new Date().toISOString() : undefined,
     });
 
-    if (etab) syncShopToCloud(etab.id);
+    // Persistance Supabase Cloud (articles + couts_articles + mouvements_stock)
+    if (etab) {
+      saveArticleToCloud(newProd, isEmployee ? undefined : prixAchatUnitaire);
+      recordStockMouvementToCloud({
+        activiteId: etab.id,
+        articleId: newProd.id,
+        typeMouvement: 'entree',
+        quantite: newProd.quantite_totale,
+        motif: motifCreation.trim() || 'Arrivage de stock initial',
+        auteurNom: currentUser?.nom || 'Patron',
+        quantiteAvant: 0,
+        quantiteApres: newProd.quantite_totale,
+      });
+      syncShopToCloud(etab.id);
+    }
 
     setIsModalOpen(false);
     setNom('');
