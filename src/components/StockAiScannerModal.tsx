@@ -84,11 +84,6 @@ export default function StockAiScannerModal({
     'Chaussures',
     'Accessoires',
     'Électronique',
-    'Bières',
-    'Softs',
-    'Jus',
-    'Vins & Spiritueux',
-    'Plats / Snacks',
     'Produits Divers',
   ];
   const uniqueCategories = Array.from(new Set(defaultCategoryList));

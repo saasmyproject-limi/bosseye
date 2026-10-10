@@ -109,7 +109,7 @@ export default function CommunPayerPage() {
           </p>
           <div className="pt-2">
             <Link
-              href={`/${etablissement?.type_activite || 'snack'}/ventes`}
+              href={`/${etablissement?.type_activite || 'boutique'}/ventes`}
               className="inline-block py-3.5 px-6 rounded-2xl bg-[#1B4332] text-white font-black text-xs shadow-md hover:bg-[#2D6A4F] transition-all"
             >
               ← Retour à la Prise de Ventes

@@ -126,13 +126,11 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
         {etablissements.length > 0 && (
           <div className="mb-4 text-left space-y-1">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#1B4332]/70 block">
-              1. Choisir le commerce / bar / boutique :
+              1. Choisir le commerce :
             </span>
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
               {etablissements.map((etab) => {
                 const isEtabSelected = selectedEtab?.id === etab.id;
-                const isBoutique = etab.type_activite === 'boutique';
-                const isBar = etab.type_activite === 'bar';
 
                 return (
                   <button
@@ -144,7 +142,7 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
                         : 'bg-[#FBF7EF] text-[#1B4332] border-[#E2D5C3] hover:border-gray-400'
                     }`}
                   >
-                    <span>{isBoutique ? '👗' : isBar ? '🍺' : '🍟'}</span>
+                    <span>👗</span>
                     <span className="truncate max-w-[120px]">{etab.nom}</span>
                   </button>
                 );

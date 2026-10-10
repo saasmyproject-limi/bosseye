@@ -14,9 +14,7 @@ interface ActivityWelcomeModalProps {
 export default function ActivityWelcomeModal({ etablissement, isOpen, onClose }: ActivityWelcomeModalProps) {
   if (!isOpen || !etablissement) return null;
 
-  const isBoutique = etablissement.type_activite === 'boutique';
-  const isBar = etablissement.type_activite === 'bar';
-  const typeLabel = isBoutique ? 'Boutique' : isBar ? 'Bar / Lounge' : 'Snack / Restaurant';
+  const typeLabel = 'Boutique';
 
   const handleStart = () => {
     offlineDB.dismissWelcomeModal(etablissement.id);
@@ -36,7 +34,7 @@ export default function ActivityWelcomeModal({ etablissement, isOpen, onClose }:
         {/* Header Badge */}
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-2xl font-black shadow-lg shrink-0">
-            {isBoutique ? '👗' : isBar ? '🍺' : '🍟'}
+            👗
           </div>
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8A33D]/20 text-[#1B4332] font-bold text-xs mb-1">

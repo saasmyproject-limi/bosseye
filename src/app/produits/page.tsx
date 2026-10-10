@@ -10,10 +10,10 @@ export default function ProduitsRedirect() {
   useEffect(() => {
     try {
       const etab = offlineDB.getEtablissement();
-      const act = etab?.type_activite || 'snack';
+      const act = etab?.type_activite || 'boutique';
       router.replace(`/${act}/produits`);
     } catch (e) {
-      router.replace('/snack/produits');
+      router.replace('/boutique/produits');
     }
   }, [router]);
 

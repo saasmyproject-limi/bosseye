@@ -86,24 +86,17 @@ export function cleanCodeSegment(str?: string, length = 3): string {
 
 // Helper pour déterminer le vocabulaire selon le type d'activité (œko)
 export function getTerminology(type_activite?: TypeActivite) {
-  const isBoutique = type_activite === 'boutique';
-  const isBar = type_activite === 'bar';
-
   return {
     appName: 'œko',
     appTagline: 'L\'œil du patron',
-    itemLabel: isBoutique ? 'Article' : 'Produit / Boisson',
-    itemsLabel: isBoutique ? 'Articles' : 'Boissons',
-    unitLabel: isBoutique ? 'Pièces' : 'Bouteilles',
-    unitSingular: isBoutique ? 'Pièce' : 'Bouteille',
-    stockLabel: isBoutique ? 'Stock d\'articles' : 'Stock de casiers & bouteilles',
-    sellerLabel: isBoutique ? 'Vendeuse / Employée' : isBar ? 'Serveuse' : 'Serveuse / Caissière',
-    salesScreenTitle: isBoutique ? 'Vente' : isBar ? 'Gestion des Tables' : 'Prise de Commande & Caisses',
-    salesScreenDesc: isBoutique
-      ? 'Vente directe au comptoir, gestion des déclinaisons (tailles/couleurs) et suivi des commandes en ligne.'
-      : isBar
-      ? 'Ouverture de table, accumulation de consommations et factures divisibles.'
-      : 'Flux 2 étapes : serveuse transmet à la caisse, la caissière valide et déstocke.',
+    itemLabel: 'Article',
+    itemsLabel: 'Articles',
+    unitLabel: 'Pièces',
+    unitSingular: 'Pièce',
+    stockLabel: 'Stock d\'articles',
+    sellerLabel: 'Vendeuse / Employée',
+    salesScreenTitle: 'Vente',
+    salesScreenDesc: 'Vente directe au comptoir, gestion des déclinaisons (tailles/couleurs) et suivi des commandes en ligne.',
   };
 }
 
@@ -231,11 +224,9 @@ export const offlineDB = {
   },
 
   normalizeEtablissement(e: Etablissement): Etablissement {
-    let act: TypeActivite = e.type_activite || 'snack';
+    let act: TypeActivite = e.type_activite || 'boutique';
     if (!e.type_activite) {
-      if (e.type === 'boutique') act = 'boutique';
-      else if (e.type === 'bar' || e.type === 'lounge') act = 'bar';
-      else act = 'snack';
+      act = 'boutique';
     }
     const tarif = e.tarif_mensuel || TARIFS_ABONNEMENT[act] || 5000;
     return {

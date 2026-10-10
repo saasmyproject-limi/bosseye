@@ -10,10 +10,10 @@ export default function CreditsRedirect() {
   useEffect(() => {
     try {
       const etab = offlineDB.getEtablissement();
-      const act = etab?.type_activite || 'snack';
+      const act = etab?.type_activite || 'boutique';
       router.replace(`/${act}/credits`);
     } catch (e) {
-      router.replace('/snack/credits');
+      router.replace('/boutique/credits');
     }
   }, [router]);
 

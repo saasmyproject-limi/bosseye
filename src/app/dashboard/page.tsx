@@ -10,10 +10,10 @@ export default function DashboardRedirect() {
   useEffect(() => {
     try {
       const etab = offlineDB.getEtablissement();
-      const act = etab?.type_activite || 'snack';
+      const act = etab?.type_activite || 'boutique';
       router.replace(`/${act}/dashboard`);
     } catch (e) {
-      router.replace('/snack/dashboard');
+      router.replace('/boutique/dashboard');
     }
   }, [router]);
 
