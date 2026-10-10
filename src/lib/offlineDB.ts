@@ -926,6 +926,76 @@ export const offlineDB = {
     } catch { return []; }
   },
 
+  // --- COMMANDES EN LIGNE & LIVRAISONS ---
+  getCommandesEnLigne(): CommandeEnLigne[] {
+    try {
+      const etab = this.getEtablissement();
+      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
+      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
+      const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
+      if (!data) {
+        if (isResetZero) return [];
+        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(SEED_COMMANDES_LIGNE));
+        return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
+      }
+      const parsed: CommandeEnLigne[] = JSON.parse(data);
+      return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
+    } catch {
+      return SEED_COMMANDES_LIGNE;
+    }
+  },
+
+  saveCommandesEnLigne(commandes: CommandeEnLigne[]) {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(commandes));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  addCommandeEnLigne(cmd: Omit<CommandeEnLigne, 'id' | 'etablissement_id' | 'created_at'>): CommandeEnLigne {
+    const etab = this.getEtablissement();
+    const all = this.getAllCommandesEnLigneGlobal();
+    const newCmd: CommandeEnLigne = {
+      ...cmd,
+      id: `cmd-liv-${Date.now()}`,
+      etablissement_id: etab.id,
+      created_at: new Date().toISOString(),
+    };
+
+    const updated = [newCmd, ...all];
+    this.saveCommandesEnLigne(updated);
+    return newCmd;
+  },
+
+  updateStatutCommandeEnLigne(id: string, statut: StatutLivraison, livreParNom?: string): CommandeEnLigne | null {
+    const all = this.getAllCommandesEnLigneGlobal();
+    const idx = all.findIndex((c) => c.id === id);
+    if (idx < 0) return null;
+
+    const updated: CommandeEnLigne = {
+      ...all[idx],
+      statut,
+      livre_par_nom: livreParNom || all[idx].livre_par_nom,
+    };
+
+    all[idx] = updated;
+    this.saveCommandesEnLigne(all);
+    return updated;
+  },
+
+  getAllCommandesEnLigneGlobal(): CommandeEnLigne[] {
+    try {
+      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE;
+      const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
+      return data ? JSON.parse(data) : SEED_COMMANDES_LIGNE;
+    } catch {
+      return SEED_COMMANDES_LIGNE;
+    }
+  },
+
   // --- MOUVEMENTS STOCK ---
   getMouvements(): MouvementStock[] {
     try {

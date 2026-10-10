@@ -111,7 +111,7 @@ export default function Sidebar() {
       ? [
           {
             name: 'Commandes À LIVRER',
-            href: '/boutique/ventes?tab=livraisons',
+            href: '/boutique/commandes-livrer',
             icon: Truck,
           },
         ]
