@@ -51,9 +51,9 @@ export default function BoutiqueProduitsPage() {
   // Champs personnalisés libres
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([]);
 
-  // Variantes pour Boutique (Taille / Couleur)
-  const [taillesInput, setTaillesInput] = useState<string>('S, M, L, XL');
-  const [couleursInput, setCouleursInput] = useState<string>('Noir, Blanc, Rouge');
+  // Variantes pour Boutique (Taille / Couleur - Optionnel)
+  const [taillesInput, setTaillesInput] = useState<string>('');
+  const [couleursInput, setCouleursInput] = useState<string>('');
 
   // Modal d'Édition Complète de l'Article
   const [editingProduit, setEditingProduit] = useState<Produit | null>(null);
@@ -91,7 +91,7 @@ export default function BoutiqueProduitsPage() {
     } catch (e) { console.error(e); }
   };
 
-  const isEmployee = currentUser?.role === 'Employé';
+  const isEmployee = ['Employée', 'Employé', 'Vendeuse', 'Serveuse', 'Caissière'].includes(currentUser?.role || '');
 
   const categories = Array.from(new Set(produits.map((p) => p.categorie))).filter(Boolean);
 
@@ -223,6 +223,9 @@ export default function BoutiqueProduitsPage() {
 
     setIsModalOpen(false);
     setNom('');
+    setTaillesInput('');
+    setCouleursInput('');
+    setCustomOkoCode('');
     setCustomFields([]);
     loadData();
   };
@@ -663,6 +666,29 @@ export default function BoutiqueProduitsPage() {
                 </div>
               )}
 
+              {/* Déclinaisons (Tailles & Couleurs - Optionnel) */}
+              <div className="p-3.5 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
+                <label className="block text-xs font-black text-[#1B4332]">
+                  Déclinaisons (Tailles & Couleurs) — <span className="text-gray-500 font-normal">Optionnel (Laisser vide si aucune déclinaison)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Tailles (ex: S, M, L)"
+                    value={taillesInput}
+                    onChange={(e) => setTaillesInput(e.target.value)}
+                    className="bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Couleurs (ex: Noir, Blanc)"
+                    value={couleursInput}
+                    onChange={(e) => setCouleursInput(e.target.value)}
+                    className="bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              </div>
+
               {/* Code Article Structuré (Etiquette & Code-barres OKO) Tout en bas */}
               <div className="p-3.5 bg-[#FBF7EF] rounded-2xl border border-[#E2D5C3] space-y-2">
                 <div className="flex items-center justify-between">
@@ -736,7 +762,7 @@ export default function BoutiqueProduitsPage() {
                   type="submit"
                   className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
                 >
-                  Créer l'Article Boutique
+                  Créer l'Article
                 </button>
               </div>
             </form>
