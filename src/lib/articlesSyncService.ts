@@ -107,7 +107,7 @@ export async function saveArticleToCloud(
       activite_id: activiteId,
       nom: article.nom,
       categorie: article.categorie || 'Général',
-      code_unique: article.code_barres || article.code_interne || `ART-${Date.now().toString().slice(-6)}`,
+      code_unique: article.oko_code || (article as any).code_barres || (article as any).code_interne || `ART-${Date.now().toString().slice(-6)}`,
       prix_vente: article.prix_vente || 0,
       mode_suivi: article.unite === 'unite' ? 'unite' : 'quantite',
       seuil_alerte: article.seuil_alerte || 5,
