@@ -42,6 +42,8 @@ import {
 } from '@/types';
 import { generateReceiptPDF } from '@/lib/pdfGenerator';
 import { syncShopToCloud } from '@/lib/supabaseSync';
+import { recordSaleToCloud, fetchSalesFromCloud } from '@/lib/salesSyncService';
+import { fetchArticlesFromCloud } from '@/lib/articlesSyncService';
 
 export interface CartItem {
   produit: Produit;
@@ -106,14 +108,20 @@ export default function BoutiqueVentesPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
       setCurrentUser(offlineDB.getCurrentUser());
-      setProduits(offlineDB.getProduits());
       setClients(offlineDB.getClients());
       setCommandesLigne(offlineDB.getCommandesEnLigne());
+
+      if (etab?.id) {
+        const { produits: cloudProds } = await fetchArticlesFromCloud(etab.id);
+        setProduits(cloudProds && cloudProds.length > 0 ? cloudProds : offlineDB.getProduits());
+      } else {
+        setProduits(offlineDB.getProduits());
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -236,22 +244,28 @@ export default function BoutiqueVentesPage() {
         dateStr: dateNowStr,
       });
     } else {
-      // 2. Mode Vente Comptoir (Totalement Payée ou avec Dette enregistrée)
       const isPartielOuDette = paymentMode === 'credit' || resteDette > 0;
-
-      offlineDB.createFacture({
-        client_id: targetClientId || undefined,
+      // Enregistrer la vente sur Supabase avec mouvements de stock et journal d'audit
+      recordSaleToCloud({
+        activiteId: etablissement.id,
+        numeroFacture: ticketNo,
+        clientId: targetClientId || undefined,
+        clientNom: clientName,
+        totalHt: cartSousTotal,
+        montantRemise: remiseInput,
+        totalTtc: cartTotalFinal,
+        montantPaye: montantVerse,
+        resteAPayer: resteDette,
+        modePaiement: isPartielOuDette ? 'credit' : paymentMode,
+        vendeurNom: currentUser?.nom || 'Employé',
         lignes: cart.map((item) => ({
-          produit_id: item.produit.id,
-          nom_produit: item.produit.nom,
-          quantite_bouteilles: item.quantite,
-          prix_unitaire: item.prix_unitaire,
-          detail_variante: item.variante ? `${item.variante.taille} / ${item.variante.couleur}` : undefined,
+          articleId: item.produit.id,
+          articleNom: item.produit.nom,
+          codeUnique: item.produit.oko_code,
+          quantite: item.quantite,
+          prixUnitaire: item.prix_unitaire,
+          totalLigne: item.quantite * item.prix_unitaire,
         })),
-        remise: remiseInput,
-        mode_paiement: isPartielOuDette ? 'credit' : (paymentMode as any),
-        montant_paye: montantVerse,
-        transaction_id: ticketNo,
       });
 
       setSuccessReceiptData({
@@ -273,8 +287,9 @@ export default function BoutiqueVentesPage() {
       });
     }
 
-    // Synchronisation en arrière-plan
+    // Synchronisation en arrière-plan et rafraîchissement
     syncShopToCloud(etablissement.id);
+    loadData();
 
     setIsPaymentModalOpen(false);
     setCart([]);
