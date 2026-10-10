@@ -18,6 +18,7 @@ import {
 import { offlineDB } from '@/lib/offlineDB';
 import { TypeActivite, Etablissement } from '@/types';
 import { syncShopToCloud } from '@/lib/supabaseSync';
+import { saveActiviteToCloud } from '@/lib/activitesSyncService';
 
 interface BarSelectorModalProps {
   isOpen: boolean;
@@ -67,7 +68,8 @@ export default function BarSelectorModal({
       tarif_mensuel: selectedTarif,
     });
 
-    // Sauvegarder sur le cloud en arrière-plan
+    // Sauvegarder sur Supabase Cloud (Table activites + Sync Engine)
+    saveActiviteToCloud(newEtab);
     syncShopToCloud(newEtab.id);
 
     if (onSelectSuccess) onSelectSuccess(newEtab);

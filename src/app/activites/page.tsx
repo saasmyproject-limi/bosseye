@@ -8,8 +8,6 @@ import {
   ArrowRight,
   Sparkles,
   ShoppingBag,
-  Beer,
-  Utensils,
   LogOut,
   User,
   ShieldCheck,
@@ -19,13 +17,15 @@ import {
   Store,
   RefreshCw,
   Search,
-  Trash2
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { CompteUtilisateur, Etablissement } from '@/types';
-import { syncShopToCloud, syncUserShopsFromCloud, deleteShopFromCloud } from '@/lib/supabaseSync';
+import { fetchActivitesFromCloud, deleteActiviteFromCloud } from '@/lib/activitesSyncService';
 import GoogleAuthModal from '@/components/GoogleAuthModal';
 import BarSelectorModal from '@/components/BarSelectorModal';
+import OfflineBadge from '@/components/OfflineBadge';
 
 function ActivitesContent() {
   const router = useRouter();
@@ -34,6 +34,8 @@ function ActivitesContent() {
 
   const [compte, setCompte] = useState<CompteUtilisateur | null>(null);
   const [activites, setActivites] = useState<Etablissement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [isGoogleAuthOpen, setIsGoogleAuthOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -42,37 +44,43 @@ function ActivitesContent() {
   }, []);
 
   const loadData = async () => {
+    setIsLoading(true);
+    setServerError(null);
+
     let currentCompte = offlineDB.getCompteActuel();
     if (!currentCompte) {
       setCompte(null);
+      setIsLoading(false);
       setIsGoogleAuthOpen(true);
       return;
     }
     setCompte(currentCompte);
 
-    // Télécharger automatiquement depuis le Cloud (Supabase) les boutiques rattachées à ce compte Gmail
-    if (currentCompte.email) {
-      await syncUserShopsFromCloud(currentCompte.email);
-    }
+    // Charger la liste des activités depuis le Cloud Supabase (source de vérité)
+    const res = await fetchActivitesFromCloud();
+    setIsLoading(false);
 
-    const list = offlineDB.getActivitesDuCompte(currentCompte.id);
-    setActivites(list);
-
-    // N'ouvrir le modal de création que si l'utilisateur n'a aucune boutique disponible
-    if (autoCreate && list.length === 0) {
-      setIsCreateModalOpen(true);
+    if (res.success) {
+      setActivites(res.activites);
+      if (autoCreate && res.activites.length === 0) {
+        setIsCreateModalOpen(true);
+      }
+    } else {
+      setServerError(res.error || 'Impossible de joindre le serveur');
+      // En cas d'erreur serveur, conserver les activités en cache local sans vider artificiellement
+      setActivites(res.activites);
     }
   };
 
   const handleSelectActivite = (etab: Etablissement) => {
     offlineDB.switchEtablissement(etab.id);
-    const act = etab.type_activite || 'snack';
+    const act = etab.type_activite || 'boutique';
     router.push(`/${act}/dashboard`);
   };
 
   const handleDeleteActivite = async (etab: Etablissement) => {
-    if (confirm(`Voulez-vous vraiment supprimer définitivement le commerce "${etab.nom}" ? Cette action effacera cette boutique et son stock du Cloud et du téléphone.`)) {
-      await deleteShopFromCloud(etab.id);
+    if (confirm(`Voulez-vous vraiment supprimer définitivement le commerce "${etab.nom}" ? Cette action effacera cette boutique du Cloud et du téléphone.`)) {
+      await deleteActiviteFromCloud(etab.id);
       loadData();
     }
   };
@@ -95,7 +103,7 @@ function ActivitesContent() {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
           <Clock className="w-3.5 h-3.5" />
-          Essai 7j ({daysLeft}j restants)
+          Essai ({daysLeft}j restants)
         </span>
       );
     }
@@ -129,36 +137,60 @@ function ActivitesContent() {
           </div>
         </div>
 
-        {/* Compte Utilisateur Level 1 */}
-        {compte ? (
-          <div className="flex items-center gap-3 bg-white/10 px-3.5 py-2 rounded-2xl border border-white/20">
-            <div className="w-8 h-8 rounded-full bg-[#E8A33D] text-[#1B4332] font-black flex items-center justify-center text-sm shadow-sm">
-              {compte.nom.charAt(0).toUpperCase()}
+        <div className="flex items-center gap-4">
+          <OfflineBadge />
+
+          {/* Compte Utilisateur */}
+          {compte ? (
+            <div className="flex items-center gap-3 bg-white/10 px-3.5 py-2 rounded-2xl border border-white/20">
+              <div className="w-8 h-8 rounded-full bg-[#E8A33D] text-[#1B4332] font-black flex items-center justify-center text-sm shadow-sm">
+                {compte.nom.charAt(0).toUpperCase()}
+              </div>
+              <div className="hidden sm:block text-left">
+                <div className="text-xs font-bold truncate max-w-[140px]">{compte.nom}</div>
+                <div className="text-[10px] text-gray-300 font-mono truncate max-w-[140px]">{compte.email}</div>
+              </div>
+              <button
+                onClick={handleLogoutGoogle}
+                title="Se déconnecter"
+                className="p-1.5 rounded-xl hover:bg-white/20 text-gray-300 hover:text-white transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-            <div className="hidden sm:block text-left">
-              <div className="text-xs font-bold truncate max-w-[140px]">{compte.nom}</div>
-              <div className="text-[10px] text-gray-300 font-mono truncate max-w-[140px]">{compte.email}</div>
-            </div>
+          ) : (
             <button
-              onClick={handleLogoutGoogle}
-              title="Se déconnecter du compte Google"
-              className="p-1.5 rounded-xl hover:bg-white/20 text-gray-300 hover:text-white transition-colors"
+              onClick={() => setIsGoogleAuthOpen(true)}
+              className="px-4 py-2 rounded-xl bg-[#E8A33D] text-[#1B4332] font-bold text-xs hover:bg-[#d69533] transition-colors cursor-pointer"
             >
-              <LogOut className="w-4 h-4" />
+              Se connecter avec Google
             </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setIsGoogleAuthOpen(true)}
-            className="px-4 py-2 rounded-xl bg-[#E8A33D] text-[#1B4332] font-bold text-xs hover:bg-[#d69533] transition-colors"
-          >
-            Se connecter avec Google
-          </button>
-        )}
+          )}
+        </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-6">
+        {/* Erreur Serveur Injoignable (Bandeau de Sécurité Phase 3) */}
+        {serverError && (
+          <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl text-amber-900 text-xs font-bold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div>
+                <span className="font-extrabold block text-sm">Impossible de joindre le serveur Cloud</span>
+                <span className="font-normal opacity-90">{serverError}. Vos activités en cache local sont affichées.</span>
+              </div>
+            </div>
+            <button
+              onClick={loadData}
+              className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Réessayer</span>
+            </button>
+          </div>
+        )}
+
         {/* Banner Section */}
         <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -190,7 +222,12 @@ function ActivitesContent() {
             </span>
           </div>
 
-          {activites.length === 0 ? (
+          {isLoading ? (
+            <div className="bg-white rounded-3xl p-12 border-2 border-[#E2D5C3] text-center space-y-3">
+              <RefreshCw className="w-8 h-8 text-[#1B4332] animate-spin mx-auto" />
+              <p className="text-xs font-bold text-gray-600">Chargement de vos boutiques depuis Supabase Cloud...</p>
+            </div>
+          ) : activites.length === 0 && !serverError ? (
             <div className="bg-white rounded-3xl p-12 border-2 border-dashed border-[#E2D5C3] text-center space-y-4">
               <div className="w-16 h-16 rounded-3xl bg-[#F3ECE0] text-[#1B4332] flex items-center justify-center mx-auto text-3xl shadow-inner">
                 🏪
@@ -198,12 +235,12 @@ function ActivitesContent() {
               <div>
                 <h4 className="font-serif font-black text-lg text-[#1B4332]">Aucune activité enregistrée</h4>
                 <p className="text-xs text-gray-600 max-w-md mx-auto mt-1">
-                  Créez votre première boutique ou votre premier bar pour démarrer votre essai gratuit de 7 jours.
+                  Créez votre première boutique pour démarrer votre essai gratuit.
                 </p>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className="px-6 py-3 rounded-2xl bg-[#1B4332] text-white font-bold text-xs hover:bg-[#143326] transition-all inline-flex items-center gap-2"
+                className="px-6 py-3 rounded-2xl bg-[#1B4332] text-white font-bold text-xs hover:bg-[#143326] transition-all inline-flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Créer ma première activité</span>
@@ -212,14 +249,8 @@ function ActivitesContent() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {activites.map((etab) => {
-                const isBoutique = etab.type_activite === 'boutique';
-                const isBar = etab.type_activite === 'bar';
-                const icon = isBoutique ? '👗' : isBar ? '🍺' : '🍟';
-                const typeLabel = isBoutique
-                  ? `Boutique (${etab.secteur_boutique || 'Commerce'})`
-                  : isBar
-                  ? 'Bar / Lounge'
-                  : 'Snack / Restaurant';
+                const icon = '👗';
+                const typeLabel = `Boutique (${etab.secteur_boutique || 'Commerce'})`;
 
                 return (
                   <div
