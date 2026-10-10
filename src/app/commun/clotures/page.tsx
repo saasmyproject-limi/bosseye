@@ -19,6 +19,8 @@ import { offlineDB } from '@/lib/offlineDB';
 import { generateCloturePDF } from '@/lib/pdfGenerator';
 import { ClotureJournaliere, ClotureMensuelle, Etablissement, Utilisateur } from '@/types';
 
+import { fetchCloturesFromCloud, saveClotureJournaliereToCloud } from '@/lib/cloturesSyncService';
+
 export default function CloturesPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
@@ -32,23 +34,29 @@ export default function CloturesPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       const etab = offlineDB.getEtablissement();
       const user = offlineDB.getCurrentUser();
       setEtablissement(etab);
       setCurrentUser(user);
 
-      const listJ = offlineDB.getCloturesJournalieres();
-      const listM = offlineDB.getCloturesMensuelles();
-      setCloturesJ(listJ);
-      setCloturesM(listM);
+      if (etab?.id) {
+        const { clotures: cloudClotures } = await fetchCloturesFromCloud(etab.id);
+        setCloturesJ(cloudClotures && cloudClotures.length > 0 ? cloudClotures : offlineDB.getCloturesJournalieres());
+      } else {
+        setCloturesJ(offlineDB.getCloturesJournalieres());
+      }
+      setCloturesM(offlineDB.getCloturesMensuelles());
     } catch (e) { console.error(e); }
   };
 
   const handleCloturerJourneeNow = () => {
     const today = new Date().toISOString().split('T')[0];
     const newCloture = offlineDB.cloturerJournee(today, currentUser?.nom);
+    if (newCloture) {
+      saveClotureJournaliereToCloud(newCloture);
+    }
     setSuccessMsg(`La journée du ${today} a été clôturée et figée avec succès !`);
     setTimeout(() => setSuccessMsg(''), 4000);
     loadData();
