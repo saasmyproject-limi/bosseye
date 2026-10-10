@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import { CreditCard, Search, MessageSquare, Send, CheckCircle2, DollarSign, X } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { Facture, Etablissement } from '@/types';
+import { recordReglementCreditToCloud } from '@/lib/clientsSyncService';
 
 export default function BoutiqueCreditsPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
@@ -63,12 +64,16 @@ export default function BoutiqueCreditsPage() {
 
   const handlePayCredit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFactureForPay) return;
+    if (!selectedFactureForPay || !etablissement) return;
 
-    offlineDB.processRemboursementCredit({
-      facture_id: selectedFactureForPay.id,
-      montant_regle: montantRegleInput,
-      methode: methodePaiement as any,
+    recordReglementCreditToCloud({
+      activiteId: etablissement.id,
+      clientId: selectedFactureForPay.client_id,
+      venteId: selectedFactureForPay.id,
+      montantRegle: montantRegleInput,
+      modeReglement: methodePaiement,
+      auteurNom: 'Employé',
+      notes: `Règlement facture #${selectedFactureForPay.numero_facture}`,
     });
 
     setSelectedFactureForPay(null);

@@ -22,6 +22,7 @@ import {
 import { offlineDB } from '@/lib/offlineDB';
 import { Client, Facture, Reservation, Etablissement } from '@/types';
 import { syncShopToCloud } from '@/lib/supabaseSync';
+import { fetchClientsFromCloud, saveClientToCloud, deleteClientFromCloud } from '@/lib/clientsSyncService';
 
 export default function CommunClientsPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
@@ -42,13 +43,19 @@ export default function CommunClientsPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
-      setClients(offlineDB.getClients());
       setFactures(offlineDB.getFactures());
       setReservations(offlineDB.getReservations());
+
+      if (etab?.id) {
+        const { clients: cloudClients } = await fetchClientsFromCloud(etab.id);
+        setClients(cloudClients && cloudClients.length > 0 ? cloudClients : offlineDB.getClients());
+      } else {
+        setClients(offlineDB.getClients());
+      }
     } catch (e) {
       console.error(e);
     }
@@ -84,16 +91,20 @@ export default function CommunClientsPage() {
     if (!nom.trim()) return;
 
     if (editingClient) {
-      offlineDB.updateClient(editingClient.id, {
+      saveClientToCloud({
+        ...editingClient,
         nom: nom.trim(),
         telephone_whatsapp: phone.trim(),
         sexe,
       });
     } else {
-      offlineDB.addClient({
+      saveClientToCloud({
+        id: '',
+        etablissement_id: etablissement?.id || '',
         nom: nom.trim(),
         telephone_whatsapp: phone.trim(),
         sexe,
+        created_at: new Date().toISOString(),
       });
     }
 
@@ -105,7 +116,7 @@ export default function CommunClientsPage() {
 
   const handleDeleteClient = (id: string) => {
     if (confirm('Voulez-vous vraiment supprimer ce client de votre répertoire ?')) {
-      offlineDB.deleteClient(id);
+      deleteClientFromCloud(id);
       if (etablissement) syncShopToCloud(etablissement.id);
       loadData();
     }
