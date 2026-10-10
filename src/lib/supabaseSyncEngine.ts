@@ -199,19 +199,24 @@ class SupabaseSyncEngine {
           stockMap[m.article_id] = (stockMap[m.article_id] || 0) + (m.quantite || 0);
         });
 
-        const produitsMapped: Produit[] = artData.map((a: any) => ({
-          id: a.id,
-          etablissement_id: a.activite_id,
-          nom: a.nom,
-          categorie: a.categorie || 'Général',
-          code_barres: a.code_unique,
-          code_interne: a.code_unique,
-          prix_vente: Number(a.prix_vente) || 0,
-          prix_achat: 0, // Inaccessible par défaut si rôle employé
-          stock: stockMap[a.id] !== undefined ? stockMap[a.id] : 0,
-          unite: a.mode_suivi === 'unite' ? 'unité' : 'quantité',
-          seuil_alerte: a.seuil_alerte || 5,
-        }));
+        const produitsMapped: Produit[] = artData.map((a: any) => {
+          const currentStock = stockMap[a.id] !== undefined ? stockMap[a.id] : 0;
+          return {
+            id: a.id,
+            etablissement_id: a.activite_id,
+            nom: a.nom,
+            categorie: a.categorie || 'Général',
+            code_barres: a.code_unique,
+            code_interne: a.code_unique,
+            prix_vente: Number(a.prix_vente) || 0,
+            prix_achat: 0, // Inaccessible par défaut si rôle employé
+            stock: currentStock,
+            quantite_totale: currentStock,
+            actif: a.actif !== false,
+            unite: a.mode_suivi === 'unite' ? 'unité' : 'quantité',
+            seuil_alerte: a.seuil_alerte || 5,
+          };
+        });
 
         offlineDB.saveProduits(produitsMapped);
       }
