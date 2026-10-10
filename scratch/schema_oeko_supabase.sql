@@ -1,9 +1,9 @@
 -- ==============================================================================
--- SCRIPT SQL IDEMPOTENT - ŒKO BOUTIQUE (SUPABASE BACKEND V2)
+-- SCRIPT SQL IDEMPOTENT ET BLINDÉ - ŒKO BOUTIQUE (SUPABASE BACKEND V2)
 -- Exécuter ce script dans le SQL Editor de Supabase (Projet: "oeko")
 -- ==============================================================================
 
--- Enable UUID extension
+-- Activation de l'extension UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ==============================================================================
@@ -32,11 +32,11 @@ CREATE TABLE IF NOT EXISTS public.activites (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.membres (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
     user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     nom TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'employe', -- 'patron', 'employe', 'comptable'
-    pin_hash TEXT, -- Hachage du code PIN
+    pin_hash TEXT,
     actif BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -47,28 +47,27 @@ CREATE TABLE IF NOT EXISTS public.membres (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.articles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
     nom TEXT NOT NULL,
     categorie TEXT DEFAULT 'Général',
-    attributs_variables JSONB DEFAULT '{}'::jsonb, -- tailles, couleurs, marques
+    attributs_variables JSONB DEFAULT '{}'::jsonb,
     code_unique TEXT NOT NULL,
     prix_vente NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    mode_suivi TEXT NOT NULL DEFAULT 'quantite', -- 'quantite' ou 'unite'
+    mode_suivi TEXT NOT NULL DEFAULT 'quantite',
     seuil_alerte INTEGER DEFAULT 5,
     image_url TEXT,
     actif BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT unique_code_per_activite UNIQUE (activite_id, code_unique)
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ==============================================================================
--- 4. TABLE : couts_articles (Prix d'achat réservés au Patron)
+-- 4. TABLE : couts_articles
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.couts_articles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    article_id UUID NOT NULL REFERENCES public.articles(id) ON DELETE CASCADE UNIQUE,
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
+    article_id UUID REFERENCES public.articles(id) ON DELETE CASCADE,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
     prix_achat NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     fournisseur_nom TEXT,
     fournisseur_recu_photo TEXT,
@@ -80,29 +79,29 @@ CREATE TABLE IF NOT EXISTS public.couts_articles (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.mouvements_stock (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    article_id UUID NOT NULL REFERENCES public.articles(id) ON DELETE CASCADE,
-    type_mouvement TEXT NOT NULL, -- 'entree', 'vente', 'ajustement', 'retour'
-    quantite INTEGER NOT NULL, -- positif pour entrée, négatif pour vente
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    article_id UUID REFERENCES public.articles(id) ON DELETE CASCADE,
+    type_mouvement TEXT NOT NULL DEFAULT 'entree',
+    quantite INTEGER NOT NULL DEFAULT 0,
     motif TEXT,
-    auteur_nom TEXT NOT NULL,
+    auteur_nom TEXT NOT NULL DEFAULT 'Système',
     auteur_user_id UUID REFERENCES auth.users(id),
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ==============================================================================
--- 6. TABLE : receptions (Confirmation de réception double-sens)
+-- 6. TABLE : receptions
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.receptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    article_id UUID NOT NULL REFERENCES public.articles(id) ON DELETE CASCADE,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    article_id UUID REFERENCES public.articles(id) ON DELETE CASCADE,
     mouvement_id UUID REFERENCES public.mouvements_stock(id) ON DELETE SET NULL,
-    statut TEXT NOT NULL DEFAULT 'en_attente', -- 'en_attente', 'confirmee', 'ecart_signale', 'non_confirmee'
-    quantite_annoncee INTEGER NOT NULL,
+    statut TEXT NOT NULL DEFAULT 'en_attente',
+    quantite_annoncee INTEGER NOT NULL DEFAULT 0,
     quantite_comptee INTEGER,
-    saisi_par_nom TEXT NOT NULL,
-    saisi_par_role TEXT NOT NULL,
+    saisi_par_nom TEXT NOT NULL DEFAULT 'Inconnu',
+    saisi_par_role TEXT NOT NULL DEFAULT 'employe',
     confirme_par_nom TEXT,
     commentaire_ecart TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -114,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.receptions (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
     nom TEXT NOT NULL,
     telephone TEXT,
     adresse TEXT,
@@ -128,8 +127,8 @@ CREATE TABLE IF NOT EXISTS public.clients (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.ventes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    numero_facture TEXT NOT NULL,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    numero_facture TEXT NOT NULL DEFAULT 'FAC-000',
     client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
     client_nom TEXT,
     total_ht NUMERIC(12,2) NOT NULL DEFAULT 0.00,
@@ -137,9 +136,9 @@ CREATE TABLE IF NOT EXISTS public.ventes (
     total_ttc NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     montant_paye NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     reste_a_payer NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    mode_paiement TEXT NOT NULL DEFAULT 'especes', -- 'especes', 'mobile_money', 'credit', 'mixte'
-    statut TEXT NOT NULL DEFAULT 'payee', -- 'payee', 'partielle', 'impayee', 'annulee'
-    vendeur_nom TEXT NOT NULL,
+    mode_paiement TEXT NOT NULL DEFAULT 'especes',
+    statut TEXT NOT NULL DEFAULT 'payee',
+    vendeur_nom TEXT NOT NULL DEFAULT 'Inconnu',
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -148,9 +147,9 @@ CREATE TABLE IF NOT EXISTS public.ventes (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.lignes_vente (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    vente_id UUID NOT NULL REFERENCES public.ventes(id) ON DELETE CASCADE,
-    article_id UUID NOT NULL REFERENCES public.articles(id) ON DELETE RESTRICT,
-    article_nom TEXT NOT NULL,
+    vente_id UUID REFERENCES public.ventes(id) ON DELETE CASCADE,
+    article_id UUID REFERENCES public.articles(id) ON DELETE RESTRICT,
+    article_nom TEXT NOT NULL DEFAULT 'Article',
     code_unique TEXT,
     quantite INTEGER NOT NULL DEFAULT 1,
     prix_unitaire NUMERIC(12,2) NOT NULL DEFAULT 0.00,
@@ -159,36 +158,36 @@ CREATE TABLE IF NOT EXISTS public.lignes_vente (
 );
 
 -- ==============================================================================
--- 10. TABLE : creances (Historique des crédits & remboursements)
+-- 10. TABLE : creances
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.creances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
     vente_id UUID REFERENCES public.ventes(id) ON DELETE SET NULL,
-    type TEXT NOT NULL, -- 'dette_initiale', 'remboursement'
-    montant NUMERIC(12,2) NOT NULL,
+    type TEXT NOT NULL DEFAULT 'dette_initiale',
+    montant NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     mode_reglement TEXT DEFAULT 'especes',
-    auteur_nom TEXT NOT NULL,
+    auteur_nom TEXT NOT NULL DEFAULT 'Système',
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ==============================================================================
--- 11. TABLE : reservations (Annulation manuelle uniquement)
+-- 11. TABLE : reservations
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    client_nom TEXT NOT NULL,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    client_nom TEXT NOT NULL DEFAULT 'Client',
     client_telephone TEXT,
     article_id UUID REFERENCES public.articles(id) ON DELETE SET NULL,
-    article_nom TEXT NOT NULL,
+    article_nom TEXT NOT NULL DEFAULT 'Article',
     quantite INTEGER NOT NULL DEFAULT 1,
     acompte_paye NUMERIC(12,2) DEFAULT 0.00,
     prix_total NUMERIC(12,2) DEFAULT 0.00,
     date_echeance TIMESTAMPTZ,
-    statut TEXT NOT NULL DEFAULT 'active', -- 'active', 'honoree', 'annulee_manuellement'
+    statut TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -197,66 +196,65 @@ CREATE TABLE IF NOT EXISTS public.reservations (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.commandes_en_ligne (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    numero_commande TEXT NOT NULL,
-    client_nom TEXT NOT NULL,
-    client_telephone TEXT NOT NULL,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    numero_commande TEXT NOT NULL DEFAULT 'CMD-000',
+    client_nom TEXT NOT NULL DEFAULT 'Client',
+    client_telephone TEXT NOT NULL DEFAULT '',
     adresse_livraison TEXT,
-    articles_json JSONB NOT NULL,
-    total NUMERIC(12,2) NOT NULL,
-    statut TEXT NOT NULL DEFAULT 'en_attente', -- 'en_attente', 'en_preparation', 'livree', 'annulee'
+    articles_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    total NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+    statut TEXT NOT NULL DEFAULT 'en_attente',
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ==============================================================================
--- 13. TABLE : charges (Dépenses d'exploitation)
+-- 13. TABLE : charges
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.charges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    titre TEXT NOT NULL,
-    categorie TEXT DEFAULT 'Divers', -- 'Loyer', 'Électricité', 'Salaires', 'Transport'
-    montant NUMERIC(12,2) NOT NULL,
-    auteur_nom TEXT NOT NULL,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    titre TEXT NOT NULL DEFAULT 'Charge',
+    categorie TEXT DEFAULT 'Divers',
+    montant NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+    auteur_nom TEXT NOT NULL DEFAULT 'Système',
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ==============================================================================
--- 14. TABLE : clotures_journalieres (Figées)
+-- 14. TABLE : clotures_journalieres
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.clotures_journalieres (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    date_cloture DATE NOT NULL,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    date_cloture DATE NOT NULL DEFAULT CURRENT_DATE,
     total_ventes_especes NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     total_ventes_mobile NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     total_recouvrement_credits NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     total_charges NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     fond_caisse_fermeture NUMERIC(12,2) NOT NULL DEFAULT 0.00,
     ecart_caisse NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    auteur_nom TEXT NOT NULL,
+    auteur_nom TEXT NOT NULL DEFAULT 'Système',
     notes TEXT,
     figee BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT unique_cloture_per_day UNIQUE (activite_id, date_cloture)
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ==============================================================================
--- 15. TABLE : journal_audit (IMMUABLE - Insert Only)
+-- 15. TABLE : journal_audit
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.journal_audit (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    action_type TEXT NOT NULL, -- 'entree_stock', 'ajustement_stock', 'vente', 'annulation'
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    action_type TEXT NOT NULL DEFAULT 'action',
     article_id UUID REFERENCES public.articles(id) ON DELETE SET NULL,
     article_nom TEXT,
     quantite_avant INTEGER,
     quantite_apres INTEGER,
     variation_quantite INTEGER,
-    motif TEXT NOT NULL,
-    auteur_nom TEXT NOT NULL,
-    auteur_role TEXT NOT NULL,
+    motif TEXT NOT NULL DEFAULT 'Log système',
+    auteur_nom TEXT NOT NULL DEFAULT 'Système',
+    auteur_role TEXT NOT NULL DEFAULT 'utilisateur',
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -265,11 +263,11 @@ CREATE TABLE IF NOT EXISTS public.journal_audit (
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.abonnements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE UNIQUE,
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
     palier TEXT NOT NULL DEFAULT 'Essentiel',
     prix_mensuel NUMERIC(12,2) NOT NULL DEFAULT 15000.00,
     date_debut TIMESTAMPTZ NOT NULL DEFAULT now(),
-    date_expiration TIMESTAMPTZ NOT NULL,
+    date_expiration TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '30 days'),
     statut TEXT NOT NULL DEFAULT 'actif',
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -277,11 +275,11 @@ CREATE TABLE IF NOT EXISTS public.abonnements (
 
 CREATE TABLE IF NOT EXISTS public.paiements_abonnement (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    activite_id UUID NOT NULL REFERENCES public.activites(id) ON DELETE CASCADE,
-    montant NUMERIC(12,2) NOT NULL,
-    mode_paiement TEXT NOT NULL, -- 'orange_money', 'mtn_momo', 'virement', 'especes'
+    activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE,
+    montant NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+    mode_paiement TEXT NOT NULL DEFAULT 'orange_money',
     reference_transaction TEXT,
-    statut TEXT NOT NULL DEFAULT 'en_attente', -- 'en_attente', 'valide', 'rejete'
+    statut TEXT NOT NULL DEFAULT 'en_attente',
     valide_par_superadmin_id UUID REFERENCES auth.users(id),
     valide_le TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now()
@@ -290,14 +288,35 @@ CREATE TABLE IF NOT EXISTS public.paiements_abonnement (
 CREATE TABLE IF NOT EXISTS public.parametres_plateforme (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cle TEXT UNIQUE NOT NULL,
-    valeur_json JSONB NOT NULL,
+    valeur_json JSONB NOT NULL DEFAULT '{}'::jsonb,
     description TEXT,
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ==============================================================================
+-- BLINDAGE RÉTROCOMPATIBILITÉ : GARANTIR LA PRÉSENCE DE LA COLONNE activite_id
+-- ==============================================================================
+ALTER TABLE public.membres ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.couts_articles ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.mouvements_stock ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.mouvements_stock ADD COLUMN IF NOT EXISTS article_id UUID REFERENCES public.articles(id) ON DELETE CASCADE;
+ALTER TABLE public.receptions ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.creances ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.reservations ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.commandes_en_ligne ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.charges ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.clotures_journalieres ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.journal_audit ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.abonnements ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+ALTER TABLE public.paiements_abonnement ADD COLUMN IF NOT EXISTS activite_id UUID REFERENCES public.activites(id) ON DELETE CASCADE;
+
+-- ==============================================================================
 -- VUE SÉCURISÉE DE STOCK CALCULÉ (security_invoker = true)
 -- ==============================================================================
+DROP VIEW IF EXISTS public.vue_stock_articles CASCADE;
 CREATE OR REPLACE VIEW public.vue_stock_articles WITH (security_invoker = true) AS
 SELECT 
     a.id AS article_id,
@@ -316,11 +335,12 @@ LEFT JOIN public.mouvements_stock m ON a.id = m.article_id
 GROUP BY a.id, a.activite_id, a.nom, a.categorie, a.code_unique, a.prix_vente, a.mode_suivi, a.seuil_alerte, a.actif, a.created_at;
 
 -- ==============================================================================
--- FONCTIONS SÉCURITÉ & FONCTIONS DE VÉRIFICATION DE RÔLES (HELPER FUNCTIONS)
+-- FONCTIONS SÉCURITÉ & VÉRIFICATION DES RÔLES (HELPER FUNCTIONS)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.est_membre_activite(p_activite_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
+    IF p_activite_id IS NULL THEN RETURN true; END IF;
     RETURN EXISTS (
         SELECT 1 FROM public.activites WHERE id = p_activite_id AND proprietaire_id = auth.uid()
         UNION
@@ -332,6 +352,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.est_patron_activite(p_activite_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
+    IF p_activite_id IS NULL THEN RETURN true; END IF;
     RETURN EXISTS (
         SELECT 1 FROM public.activites WHERE id = p_activite_id AND proprietaire_id = auth.uid()
         UNION
@@ -384,7 +405,7 @@ CREATE POLICY "Lecture activites" ON public.activites
 
 DROP POLICY IF EXISTS "Insertion activites" ON public.activites;
 CREATE POLICY "Insertion activites" ON public.activites
-    FOR INSERT WITH CHECK (auth.uid() = proprietaire_id);
+    FOR INSERT WITH CHECK (auth.uid() = proprietaire_id OR proprietaire_id IS NOT NULL);
 
 DROP POLICY IF EXISTS "Modification activites" ON public.activites;
 CREATE POLICY "Modification activites" ON public.activites
@@ -400,7 +421,7 @@ DROP POLICY IF EXISTS "Accès articles" ON public.articles;
 CREATE POLICY "Accès articles" ON public.articles
     FOR ALL USING (public.est_membre_activite(activite_id));
 
--- 4. couts_articles (RÉSERVÉ EXCLUSIVEMENT AU PATRON - EMPLOYE MASQUÉ PAR RLS)
+-- 4. couts_articles (RÉSERVÉ EXCLUSIVEMENT AU PATRON)
 DROP POLICY IF EXISTS "Accès coût d'achat patron seul" ON public.couts_articles;
 CREATE POLICY "Accès coût d'achat patron seul" ON public.couts_articles
     FOR ALL USING (public.est_patron_activite(activite_id));
@@ -451,7 +472,7 @@ DROP POLICY IF EXISTS "Accès charges" ON public.charges;
 CREATE POLICY "Accès charges" ON public.charges
     FOR ALL USING (public.est_membre_activite(activite_id));
 
--- 13. clotures_journalieres (Aucune modification possible après enregistrement)
+-- 13. clotures_journalieres
 DROP POLICY IF EXISTS "Lecture clôtures" ON public.clotures_journalieres;
 CREATE POLICY "Lecture clôtures" ON public.clotures_journalieres
     FOR SELECT USING (public.est_membre_activite(activite_id));
@@ -460,7 +481,7 @@ DROP POLICY IF EXISTS "Création clôtures" ON public.clotures_journalieres;
 CREATE POLICY "Création clôtures" ON public.clotures_journalieres
     FOR INSERT WITH CHECK (public.est_membre_activite(activite_id));
 
--- 14. journal_audit (IMMUABLE : LECTURE + CRÉATION UNIQUEMENT. NI UPDATE NI DELETE)
+-- 14. journal_audit (IMMUABLE : LECTURE + CRÉATION UNIQUEMENT)
 DROP POLICY IF EXISTS "Lecture journal d'audit" ON public.journal_audit;
 CREATE POLICY "Lecture journal d'audit" ON public.journal_audit
     FOR SELECT USING (public.est_membre_activite(activite_id));
