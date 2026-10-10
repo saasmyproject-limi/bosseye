@@ -54,34 +54,55 @@ export async function generateStockPDF(etablissement: Etablissement, produits: P
 }
 
 export interface ReceiptItem {
-  nom: string;
+  nom?: string;
+  nom_produit?: string;
   quantite: number;
   prix_unitaire: number;
   varianteInfo?: string;
+  total?: number;
 }
 
 export async function generateReceiptPDF(options: {
-  etablissement: Etablissement;
+  etablissement?: Etablissement;
+  etablissementNom?: string;
+  etablissementVille?: string;
+  etablissementQuartier?: string;
+  etablissementTelephone?: string;
   numeroTicket: string;
   client?: Client | { nom: string; telephone?: string };
+  clientNom?: string;
+  clientTelephone?: string;
+  caissiereNom?: string;
+  typeVenteLabel?: string;
+  modePaiementLabel?: string;
   lignes: ReceiptItem[];
   totalGeneral: number;
   remise?: number;
   montantVerse: number;
+  monnaieRendue?: number;
   resteAPayer?: number;
-  typeVente: 'comptoir' | 'livraison' | 'reservation';
+  typeVente?: 'comptoir' | 'livraison' | 'reservation';
   dateStr?: string;
 }) {
   const {
     etablissement,
+    etablissementNom = etablissement?.nom || 'OEKO SHOP',
+    etablissementVille = etablissement?.ville || 'Douala',
+    etablissementQuartier = etablissement?.quartier || '',
+    etablissementTelephone = etablissement?.telephone || etablissement?.telephone_proprio || '',
     numeroTicket,
     client,
+    clientNom = client?.nom,
+    clientTelephone = (client as any)?.telephone || (client as any)?.telephone_whatsapp,
+    caissiereNom,
+    typeVenteLabel,
+    modePaiementLabel,
     lignes,
     totalGeneral,
     remise = 0,
     montantVerse,
     resteAPayer = 0,
-    typeVente,
+    typeVente = 'comptoir',
     dateStr = new Date().toLocaleString('fr-FR'),
   } = options;
 
@@ -98,16 +119,17 @@ export async function generateReceiptPDF(options: {
   // En-tête du ticket
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text(etablissement.nom.toUpperCase(), 40, y, { align: 'center' });
+  doc.text(etablissementNom.toUpperCase(), 40, y, { align: 'center' });
 
   y += 5;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${etablissement.ville} - ${etablissement.adresse}`, 40, y, { align: 'center' });
+  const locationStr = etablissementQuartier ? `${etablissementVille} - ${etablissementQuartier}` : etablissementVille;
+  doc.text(locationStr, 40, y, { align: 'center' });
 
   y += 5;
   doc.setFont('helvetica', 'bold');
-  const titreType = typeVente === 'reservation' ? 'TICKET RÉSERVATION' : typeVente === 'livraison' ? 'BON DE LIVRAISON' : 'REÇU DE VENTE';
+  const titreType = typeVenteLabel || (typeVente === 'reservation' ? 'TICKET RÉSERVATION' : typeVente === 'livraison' ? 'BON DE LIVRAISON' : 'REÇU DE VENTE');
   doc.text(`*** ${titreType} ***`, 40, y, { align: 'center' });
 
   y += 5;
@@ -117,14 +139,25 @@ export async function generateReceiptPDF(options: {
   y += 4;
   doc.text(`Date : ${dateStr}`, margin, y);
 
-  if (client?.nom) {
+  const activeClientNom = clientNom || client?.nom;
+  const activeClientPhone = clientTelephone || (client as any)?.telephone || (client as any)?.telephone_whatsapp;
+  if (activeClientNom) {
     y += 4;
-    doc.text(`Client : ${client.nom}`, margin, y);
-    const tel = (client as any).telephone || (client as any).telephone_whatsapp;
-    if (tel) {
+    doc.text(`Client : ${activeClientNom}`, margin, y);
+    if (activeClientPhone) {
       y += 4;
-      doc.text(`Tél : ${tel}`, margin, y);
+      doc.text(`Tél : ${activeClientPhone}`, margin, y);
     }
+  }
+
+  if (caissiereNom) {
+    y += 4;
+    doc.text(`Pris par : ${caissiereNom}`, margin, y);
+  }
+
+  if (modePaiementLabel) {
+    y += 4;
+    doc.text(`Mode : ${modePaiementLabel}`, margin, y);
   }
 
   y += 4;
@@ -143,8 +176,8 @@ export async function generateReceiptPDF(options: {
   y += 4;
   doc.setFont('helvetica', 'normal');
   lignes.forEach((item) => {
-    const itemTotal = item.quantite * item.prix_unitaire;
-    let label = item.nom;
+    const itemTotal = item.total ?? item.quantite * item.prix_unitaire;
+    let label = item.nom || item.nom_produit || 'Article';
     if (item.varianteInfo) label += ` (${item.varianteInfo})`;
     if (label.length > 22) label = label.substring(0, 20) + '..';
 

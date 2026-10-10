@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'react';
+import { NextRequest, NextResponse } from 'next/server';
 import { offlineDB } from '@/lib/offlineDB';
 
 // Helper de filtrage serveur : Supprime 100% des prix d'achat et marges si l'utilisateur est un Employé
-function stripPurchasePricesForEmployee(data: any, isEmployee: boolean) {
+function stripPurchasePricesForEmployee(data: any, isEmployee: boolean): any {
   if (!isEmployee || !data) return data;
 
   if (Array.isArray(data)) {

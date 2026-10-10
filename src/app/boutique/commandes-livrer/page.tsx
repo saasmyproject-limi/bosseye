@@ -163,10 +163,11 @@ export default function BoutiqueCommandesLivrerPage() {
     loadData();
   };
 
-  const handlePrintDeliveryReceipt = (cmd: CommandeEnLigne) => {
+  const handlePrintDeliveryReceipt = async (cmd: CommandeEnLigne) => {
     if (!etablissement) return;
 
-    generateReceiptPDF({
+    const doc = await generateReceiptPDF({
+      etablissement,
       etablissementNom: etablissement.nom,
       etablissementVille: etablissement.ville || 'Douala',
       etablissementQuartier: etablissement.quartier,
@@ -189,6 +190,10 @@ export default function BoutiqueCommandesLivrerPage() {
       monnaieRendue: 0,
       modePaiementLabel: `Livraison (${cmd.quartier_livraison || 'Akwa'})`,
     });
+
+    if (doc && typeof (doc as any).save === 'function') {
+      (doc as any).save(`Livraison-${cmd.numero_commande}.pdf`);
+    }
   };
 
   // Filtrage des commandes
@@ -453,7 +458,8 @@ export default function BoutiqueCommandesLivrerPage() {
                 </div>
               </div>
             );
-          })}
+          })
+        )}
       </div>
 
       {/* MODAL CRÉATION COMMANDE LIVRAISON */}

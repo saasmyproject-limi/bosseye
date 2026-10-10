@@ -299,6 +299,60 @@ export const SEED_COMMANDES_LIGNE: CommandeEnLigne[] = [
     montant_total: 25000,
     created_at: new Date(NOW - 3600 * 1000 * 3).toISOString(),
   },
+  {
+    id: 'cmd-liv-001',
+    etablissement_id: 'etab-elegance-akwa',
+    numero_commande: 'CMD-2026-0101',
+    client_nom: 'Mme CHANTAL VIP',
+    client_telephone: '237699445566',
+    adresse_livraison: 'Rue des Palmiers, Villa 42',
+    quartier_livraison: 'Bonapriso',
+    date_livraison: 'Aujourd\'hui',
+    heure_livraison: '14:30',
+    statut: 'en_attente_prise_en_charge',
+    lignes: [
+      {
+        produit_id: 'prod-robe-soie',
+        nom_produit: 'Robe Soie d\'Élégance',
+        detail_variante: 'M - Rouge',
+        quantite: 1,
+        prix_unitaire: 35000,
+      },
+      {
+        produit_id: 'prod-sac-cuir',
+        nom_produit: 'Sac à Main Cuir Véritable',
+        detail_variante: 'Noir',
+        quantite: 1,
+        prix_unitaire: 25000,
+      },
+    ],
+    montant_total: 60000,
+    created_at: new Date(NOW - 3600 * 1000 * 2).toISOString(),
+  },
+  {
+    id: 'cmd-liv-002',
+    etablissement_id: 'etab-elegance-akwa',
+    numero_commande: 'CMD-2026-0102',
+    client_nom: 'M. Paul MBIDA',
+    client_telephone: '237677112233',
+    adresse_livraison: 'Immeuble Collège Horizon',
+    quartier_livraison: 'Akwa',
+    date_livraison: 'Aujourd\'hui',
+    heure_livraison: '16:00',
+    statut: 'prise_en_charge_livreur',
+    livre_par_nom: 'Livreur YVES Express',
+    lignes: [
+      {
+        produit_id: 'prod-chemise-homme',
+        nom_produit: 'Chemise Homme Coton Italien',
+        detail_variante: 'XL - Blanc',
+        quantite: 2,
+        prix_unitaire: 18000,
+      },
+    ],
+    montant_total: 36000,
+    created_at: new Date(NOW - 3600 * 1000 * 4).toISOString(),
+  },
 ];
 
 export const SEED_MOUVEMENTS: MouvementStock[] = [
@@ -376,60 +430,3 @@ export const SEED_FACTURES: Facture[] = [
 
 export const SEED_REMBOURSEMENTS: RemboursementCredit[] = [];
 export const SEED_CHARGES: ChargeJournaliere[] = [];
-
-export const SEED_COMMANDES_LIGNE: CommandeEnLigne[] = [
-  {
-    id: 'cmd-liv-001',
-    etablissement_id: 'etab-elegance-akwa',
-    numero_commande: 'CMD-2026-0101',
-    client_nom: 'Mme CHANTAL VIP',
-    client_telephone: '237699445566',
-    adresse_livraison: 'Rue des Palmiers, Villa 42',
-    quartier_livraison: 'Bonapriso',
-    date_livraison: 'Aujourd\'hui',
-    heure_livraison: '14:30',
-    statut: 'en_attente_prise_en_charge',
-    lignes: [
-      {
-        produit_id: 'prod-robe-soie',
-        nom_produit: 'Robe Soie d\'Élégance',
-        detail_variante: 'M - Rouge',
-        quantite: 1,
-        prix_unitaire: 35000,
-      },
-      {
-        produit_id: 'prod-sac-cuir',
-        nom_produit: 'Sac à Main Cuir Véritable',
-        detail_variante: 'Noir',
-        quantite: 1,
-        prix_unitaire: 25000,
-      },
-    ],
-    montant_total: 60000,
-    created_at: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-  },
-  {
-    id: 'cmd-liv-002',
-    etablissement_id: 'etab-elegance-akwa',
-    numero_commande: 'CMD-2026-0102',
-    client_nom: 'M. Paul MBIDA',
-    client_telephone: '237677112233',
-    adresse_livraison: 'Immeuble Collège Horizon',
-    quartier_livraison: 'Akwa',
-    date_livraison: 'Aujourd\'hui',
-    heure_livraison: '16:00',
-    statut: 'prise_en_charge_livreur',
-    livre_par_nom: 'Livreur YVES Express',
-    lignes: [
-      {
-        produit_id: 'prod-chemise-homme',
-        nom_produit: 'Chemise Homme Coton Italien',
-        detail_variante: 'XL - Blanc',
-        quantite: 2,
-        prix_unitaire: 18000,
-      },
-    ],
-    montant_total: 36000,
-    created_at: new Date(Date.now() - 3600 * 1000 * 4).toISOString(),
-  },
-];

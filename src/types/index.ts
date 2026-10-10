@@ -18,7 +18,15 @@ export type MethodePaiement = 'Orange Money' | 'MTN MoMo';
 export type ModePaiementVente = 'cash' | 'orange_money' | 'mtn_momo' | 'credit' | 'mixte';
 export type StatutFacture = 'payee' | 'credit_encours' | 'annulee';
 export type StatutTransaction = 'ouverte' | 'en_attente_caisse' | 'payee' | 'annulee';
-export type StatutLivraison = 'en_attente_paiement' | 'paiement_valide' | 'en_livraison' | 'livree_payee' | 'annulee';
+export type StatutLivraison =
+  | 'en_attente_prise_en_charge'
+  | 'prise_en_charge_livreur'
+  | 'livree'
+  | 'en_attente_paiement'
+  | 'paiement_valide'
+  | 'en_livraison'
+  | 'livree_payee'
+  | 'annulee';
 
 export interface LigneSessionBar {
   id: string;
@@ -125,7 +133,9 @@ export interface Etablissement {
   abrev_boutique?: string; // Abréviation personnalisée du commerce (ex: 'PEP', 'OEK', 'BOU')
   ville: string;
   adresse: string;
+  quartier?: string;
   telephone?: string;
+  telephone_proprio?: string;
   email_patron?: string;
   mot_de_passe_patron?: string;
   plan: 'Basique' | 'Premium';
@@ -204,6 +214,7 @@ export interface Produit {
   prix_achat_casier?: number;
   prix_vente_bouteille?: number;
   prix_achat_unitaire?: number;
+  cout_achat_unitaire_cmp?: number;
   prix_vente_unitaire?: number;
   variantes?: VarianteProduit[]; // Déclinaisons taille/couleur pour boutique
   exemplaires?: ExemplaireArticle[]; // Exemplaires physiques pour suivi à l'unité (IMEI, OKO-code, etc.)
@@ -483,7 +494,8 @@ export type StatutConfirmationStock =
   | 'confirme'
   | 'ecart_signale'
   | 'non_confirme_48h'
-  | 'en_attente_validation_patron';
+  | 'en_attente_validation_patron'
+  | 'conteste';
 
 export interface AuditStockLog {
   id: string;

@@ -640,14 +640,14 @@ export const offlineDB = {
     } catch { return SEED_COMMANDES_LIGNE; }
   },
 
-  addCommandeEnLigne(cmd: Omit<CommandeEnLigne, 'id' | 'etablissement_id' | 'numero_commande' | 'created_at'>): CommandeEnLigne {
+  addCommandeEnLigne(cmd: Omit<CommandeEnLigne, 'id' | 'etablissement_id' | 'numero_commande' | 'created_at'> & { numero_commande?: string }): CommandeEnLigne {
     const etab = this.getEtablissement();
     const numSeq = Math.floor(100 + Math.random() * 900);
     const newCmd: CommandeEnLigne = {
       ...cmd,
       id: `cmd-${Date.now()}`,
       etablissement_id: etab.id,
-      numero_commande: `CMD-2026-${numSeq}`,
+      numero_commande: (cmd as any).numero_commande || `CMD-2026-${numSeq}`,
       created_at: new Date().toISOString(),
     };
     const all = this.getAllCommandesGlobal();
@@ -658,12 +658,16 @@ export const offlineDB = {
     return newCmd;
   },
 
-  updateStatutCommandeEnLigne(commandeId: string, newStatut: StatutLivraison): CommandeEnLigne | null {
+  updateStatutCommandeEnLigne(commandeId: string, newStatut: StatutLivraison, livreParNom?: string): CommandeEnLigne | null {
     const cmds = this.getCommandesEnLigne();
     const cmd = cmds.find((c) => c.id === commandeId);
     if (!cmd) return null;
 
-    const updatedCmd: CommandeEnLigne = { ...cmd, statut: newStatut };
+    const updatedCmd: CommandeEnLigne = {
+      ...cmd,
+      statut: newStatut,
+      livre_par_nom: livreParNom || cmd.livre_par_nom,
+    };
 
     if (newStatut === 'livree_payee' && cmd.statut !== 'livree_payee') {
       const fac = this.createFacture({
@@ -695,6 +699,10 @@ export const offlineDB = {
       const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
       return data ? JSON.parse(data) : SEED_COMMANDES_LIGNE;
     } catch { return SEED_COMMANDES_LIGNE; }
+  },
+
+  getAllCommandesEnLigneGlobal(): CommandeEnLigne[] {
+    return this.getAllCommandesGlobal();
   },
 
   // --- PRODUITS & VARIANTES ---
@@ -983,75 +991,7 @@ export const offlineDB = {
     } catch { return []; }
   },
 
-  // --- COMMANDES EN LIGNE & LIVRAISONS ---
-  getCommandesEnLigne(): CommandeEnLigne[] {
-    try {
-      const etab = this.getEtablissement();
-      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
-      const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(SEED_COMMANDES_LIGNE));
-        return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
-      }
-      const parsed: CommandeEnLigne[] = JSON.parse(data);
-      return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
-    } catch {
-      return SEED_COMMANDES_LIGNE;
-    }
-  },
 
-  saveCommandesEnLigne(commandes: CommandeEnLigne[]) {
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(commandes));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  },
-
-  addCommandeEnLigne(cmd: Omit<CommandeEnLigne, 'id' | 'etablissement_id' | 'created_at'>): CommandeEnLigne {
-    const etab = this.getEtablissement();
-    const all = this.getAllCommandesEnLigneGlobal();
-    const newCmd: CommandeEnLigne = {
-      ...cmd,
-      id: `cmd-liv-${Date.now()}`,
-      etablissement_id: etab.id,
-      created_at: new Date().toISOString(),
-    };
-
-    const updated = [newCmd, ...all];
-    this.saveCommandesEnLigne(updated);
-    return newCmd;
-  },
-
-  updateStatutCommandeEnLigne(id: string, statut: StatutLivraison, livreParNom?: string): CommandeEnLigne | null {
-    const all = this.getAllCommandesEnLigneGlobal();
-    const idx = all.findIndex((c) => c.id === id);
-    if (idx < 0) return null;
-
-    const updated: CommandeEnLigne = {
-      ...all[idx],
-      statut,
-      livre_par_nom: livreParNom || all[idx].livre_par_nom,
-    };
-
-    all[idx] = updated;
-    this.saveCommandesEnLigne(all);
-    return updated;
-  },
-
-  getAllCommandesEnLigneGlobal(): CommandeEnLigne[] {
-    try {
-      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE;
-      const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
-      return data ? JSON.parse(data) : SEED_COMMANDES_LIGNE;
-    } catch {
-      return SEED_COMMANDES_LIGNE;
-    }
-  },
 
   // --- MOUVEMENTS STOCK ---
   getMouvements(): MouvementStock[] {
@@ -2172,7 +2112,7 @@ export const offlineDB = {
     newStatus: StatutLivraison,
     userNom?: string
   ): boolean {
-    const allCmds = this.getAllCommandesGlobal();
+    const allCmds = this.getAllCommandesEnLigneGlobal();
     const cmdIndex = allCmds.findIndex((c) => c.id === commandeId);
     if (cmdIndex < 0) return false;
 
