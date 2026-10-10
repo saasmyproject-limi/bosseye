@@ -14,6 +14,8 @@ import {
 import { offlineDB } from '@/lib/offlineDB';
 import { Reservation, Etablissement, Facture } from '@/types';
 
+import { fetchReservationsFromCloud, solderReservationOnCloud } from '@/lib/reservationsSyncService';
+
 export default function BoutiqueReservationsPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -31,11 +33,16 @@ export default function BoutiqueReservationsPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
-      setReservations(offlineDB.getReservations());
+      if (etab?.id) {
+        const { reservations: cloudRes } = await fetchReservationsFromCloud(etab.id);
+        setReservations(cloudRes && cloudRes.length > 0 ? cloudRes : offlineDB.getReservations());
+      } else {
+        setReservations(offlineDB.getReservations());
+      }
     } catch (e) {
       console.error(e);
     }
@@ -85,6 +92,10 @@ export default function BoutiqueReservationsPage() {
   const handleSolderReservation = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedResForSolder) return;
+
+    if (etablissement) {
+      solderReservationOnCloud(selectedResForSolder.id, etablissement.id);
+    }
 
     const fac = offlineDB.solderReservation(selectedResForSolder.id, {
       montant_regle: montantSolderInput || selectedResForSolder.reste_a_solder,
