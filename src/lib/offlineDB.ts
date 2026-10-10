@@ -701,32 +701,51 @@ export const offlineDB = {
   getProduits(): Produit[] {
     try {
       const etab = this.getEtablissement();
+      const currentUser = this.getCurrentUser();
+      const isEmployee = ['Employée', 'Employé', 'Vendeuse', 'Serveuse', 'Caissière'].includes(currentUser?.role || '');
       const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
-      const data = localStorage.getItem(KEYS.PRODUITS);
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.PRODUITS, JSON.stringify(SEED_PRODUITS));
-        return SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
-      }
-      const parsed: Produit[] = JSON.parse(data);
-      let list = (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
 
-      // Auto-attribution de oko_code structuré (ex: PEP-ROB-ROU-001) sur tout article sans code
-      list = list.map((p, idx) => {
-        if (!p.oko_code) {
-          const mainCouleur = p.variantes?.[0]?.couleur || p.champs_specifiques?.couleur;
+      let rawList: Produit[] = [];
+      if (typeof window === 'undefined') {
+        rawList = SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
+      } else {
+        const data = localStorage.getItem(KEYS.PRODUITS);
+        if (!data) {
+          if (isResetZero) return [];
+          localStorage.setItem(KEYS.PRODUITS, JSON.stringify(SEED_PRODUITS));
+          rawList = SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
+        } else {
+          const parsed: Produit[] = JSON.parse(data);
+          rawList = (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
+        }
+      }
+
+      return rawList.map((p) => {
+        const paMissing = !p.prix_achat_unitaire || p.prix_achat_unitaire === 0 || p.prix_achat_statut === 'prix_achat_a_completer';
+        const paStatut = paMissing ? 'prix_achat_a_completer' : 'complet';
+        let pClean = { ...p, prix_achat_statut: paStatut as 'prix_achat_a_completer' | 'complet' };
+
+        if (!pClean.oko_code) {
+          const mainCouleur = pClean.variantes?.[0]?.couleur || pClean.champs_specifiques?.couleur;
           const generatedCode = this.generateStructuredOkoCode({
-            etabId: p.etablissement_id || etab.id,
-            categorie: p.categorie,
+            etabId: pClean.etablissement_id || etab.id,
+            categorie: pClean.categorie,
             couleur: mainCouleur,
           });
-          return { ...p, oko_code: generatedCode };
+          pClean = { ...pClean, oko_code: generatedCode };
         }
-        return p;
-      });
 
-      return list;
+        if (isEmployee) {
+          pClean = {
+            ...pClean,
+            prix_achat_unitaire: 0,
+            prix_achat_casier: 0,
+            cout_achat_unitaire_cmp: 0,
+          };
+        }
+
+        return pClean;
+      });
     } catch {
       return SEED_PRODUITS;
     }
@@ -768,6 +787,7 @@ export const offlineDB = {
     const etab = this.getEtablissement();
     const currentProds = this.getProduits();
     const user = this.getCurrentUser();
+    const isPatron = ['Patron', 'Patronne', 'Directeur'].includes(user?.role || '');
     const nowIso = new Date().toISOString();
 
     let addedCount = 0;
@@ -781,7 +801,7 @@ export const offlineDB = {
       if (!cleanNom) return;
 
       const qty = Math.max(0, Number(item.quantite) || 1);
-      const pxAchat = Math.max(0, Number(item.prix_achat) || 0);
+      const pxAchat = isPatron ? Math.max(0, Number(item.prix_achat) || 0) : 0;
       const pxVente = Math.max(0, Number(item.prix_vente) || 0);
       const cat = (item.categorie || 'À vérifier').trim();
 
@@ -789,19 +809,28 @@ export const offlineDB = {
         (p) => p && p.nom && p.nom.trim().toLowerCase() === cleanNom.toLowerCase()
       );
 
+      let targetProdId = '';
+      let oldQty = 0;
+
       if (existingIndex >= 0) {
         const p = newProdsList[existingIndex];
-        const oldQty = p.quantite_totale || 0;
+        targetProdId = p.id;
+        oldQty = p.quantite_totale || 0;
         const newQty = oldQty + qty;
+
+        const effectivePA = isPatron && pxAchat > 0 ? pxAchat : (p.prix_achat_unitaire || 0);
+        const paStatut = (!effectivePA || effectivePA === 0) ? 'prix_achat_a_completer' : 'complet';
 
         newProdsList[existingIndex] = {
           ...p,
           quantite_totale: newQty,
           bouteilles_vrac: (p.bouteilles_vrac || 0) + qty,
-          prix_achat_unitaire: pxAchat > 0 ? pxAchat : p.prix_achat_unitaire,
+          prix_achat_unitaire: effectivePA,
           prix_vente_unitaire: pxVente > 0 ? pxVente : p.prix_vente_unitaire,
           prix_vente_bouteille: pxVente > 0 ? pxVente : p.prix_vente_bouteille,
-          prix_achat_casier: pxAchat > 0 ? pxAchat * (p.bouteilles_par_casier || 12) : p.prix_achat_casier,
+          prix_achat_casier: effectivePA * (p.bouteilles_par_casier || 12),
+          prix_achat_statut: paStatut as any,
+          statut_validation_patron: isPatron ? 'valide' : 'en_attente_validation_patron',
         };
         updatedCount++;
 
@@ -812,16 +841,30 @@ export const offlineDB = {
           type_mouvement: 'entree',
           quantite_bouteilles: qty,
           utilisateur_id: user.id,
-          note_motif: `Arrivage / Scan IA (${usageType})`,
+          note_motif: `Arrivage / Scan (${usageType})`,
           sync_status: typeof navigator !== 'undefined' && !navigator.onLine ? 'pending_offline' : 'synced',
           client_timestamp: nowIso,
           created_at: nowIso,
         });
+
+        this.addAuditStockLog({
+          produit_id: p.id,
+          nom_produit: p.nom,
+          type_action: 'entree',
+          quantite_avant: oldQty,
+          quantite_modifiee: qty,
+          quantite_apres: newQty,
+          motif: `Arrivage / Import / Scan IA (${usageType})`,
+          prix_achat_statut: paStatut as any,
+          statut_confirmation: isPatron ? 'non_confirme' : 'en_attente_validation_patron',
+        });
       } else {
-        const newProdId = `prod-${Date.now()}-${idx}`;
+        targetProdId = `prod-${Date.now()}-${idx}`;
         const isBoutique = etab.type_activite === 'boutique';
+        const paStatut = (!pxAchat || pxAchat === 0) ? 'prix_achat_a_completer' : 'complet';
+
         const newProd: Produit = {
-          id: newProdId,
+          id: targetProdId,
           etablissement_id: etab.id,
           nom: cleanNom,
           categorie: cat,
@@ -836,6 +879,8 @@ export const offlineDB = {
           prix_vente_bouteille: pxVente,
           prix_achat_casier: pxAchat * 12,
           cout_achat_unitaire_cmp: pxAchat,
+          prix_achat_statut: paStatut as any,
+          statut_validation_patron: isPatron ? 'valide' : 'en_attente_validation_patron',
           actif: true,
           created_at: nowIso,
         };
@@ -845,7 +890,7 @@ export const offlineDB = {
         newMvtsList.push({
           id: `mvt-${Date.now()}-${idx}`,
           etablissement_id: etab.id,
-          produit_id: newProdId,
+          produit_id: targetProdId,
           type_mouvement: 'entree',
           quantite_bouteilles: qty,
           utilisateur_id: user.id,
@@ -853,6 +898,18 @@ export const offlineDB = {
           sync_status: typeof navigator !== 'undefined' && !navigator.onLine ? 'pending_offline' : 'synced',
           client_timestamp: nowIso,
           created_at: nowIso,
+        });
+
+        this.addAuditStockLog({
+          produit_id: targetProdId,
+          nom_produit: cleanNom,
+          type_action: 'entree',
+          quantite_avant: 0,
+          quantite_modifiee: qty,
+          quantite_apres: qty,
+          motif: `Création & Import / Scan (${usageType})`,
+          prix_achat_statut: paStatut as any,
+          statut_confirmation: isPatron ? 'non_confirme' : 'en_attente_validation_patron',
         });
       }
     });
@@ -2277,8 +2334,25 @@ export const offlineDB = {
   },
 
   // --- MODULE AUDIT IMMUABLE & TRANSPARENCE PREUVE STOCK ---
+  getDeviceInfo(): string {
+    if (typeof window === 'undefined') return 'Appareil Inconnu';
+    const ua = navigator.userAgent;
+    let browser = 'Chrome/Safari';
+    if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Edg')) browser = 'Edge';
+    
+    let os = 'Appareil Web';
+    if (ua.includes('Android')) os = 'Android Mobile';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS Mobile';
+    else if (ua.includes('Windows')) os = 'Windows PC';
+    else if (ua.includes('Mac')) os = 'Mac Desktop';
+    
+    return `${os} (${browser})`;
+  },
+
   getAuditStockLogs(etabIdTarget?: string): AuditStockLog[] {
     try {
+      this.check48hUnconfirmedAuditLogs();
       const etab = etabIdTarget ? { id: etabIdTarget } : this.getEtablissement();
       if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.AUDIT_STOCK_LOGS);
@@ -2286,6 +2360,36 @@ export const offlineDB = {
       return (all || []).filter((l) => l && l.etablissement_id === etab.id);
     } catch {
       return [];
+    }
+  },
+
+  check48hUnconfirmedAuditLogs(): number {
+    try {
+      if (typeof window === 'undefined') return 0;
+      const data = localStorage.getItem(KEYS.AUDIT_STOCK_LOGS);
+      if (!data) return 0;
+      const all: AuditStockLog[] = JSON.parse(data);
+      const now = Date.now();
+      const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+      let updatedCount = 0;
+
+      const updated = all.map((log) => {
+        if (log.statut_confirmation === 'non_confirme') {
+          const createdAtMs = new Date(log.created_at).getTime();
+          if (now - createdAtMs >= FORTY_EIGHT_HOURS_MS) {
+            updatedCount++;
+            return { ...log, statut_confirmation: 'non_confirme_48h' as const };
+          }
+        }
+        return log;
+      });
+
+      if (updatedCount > 0) {
+        localStorage.setItem(KEYS.AUDIT_STOCK_LOGS, JSON.stringify(updated));
+      }
+      return updatedCount;
+    } catch {
+      return 0;
     }
   },
 
@@ -2306,15 +2410,24 @@ export const offlineDB = {
     confirme_par_id?: string;
     confirme_par_nom?: string;
     confirme_le?: string;
+    prix_achat_statut?: 'complet' | 'prix_achat_a_completer';
+    quantite_comptee_employe?: number;
+    commentaire_employe?: string;
   }): AuditStockLog {
     const etab = this.getEtablissement();
     const user = this.getCurrentUser();
     const isPatron = ['Patron', 'Patronne', 'Directeur'].includes(user?.role || '');
+    const userRole = user?.role || 'Patron';
 
-    let statutConf: StatutConfirmationStock = params.statut_confirmation || 'non_confirme';
-    if (params.auto_confirm || (!params.statut_confirmation && !isPatron)) {
-      statutConf = 'confirme';
+    let defaultStatut: StatutConfirmationStock = 'non_confirme';
+    if (!isPatron) {
+      defaultStatut = 'en_attente_validation_patron';
+    } else if (params.auto_confirm) {
+      defaultStatut = 'confirme';
     }
+
+    const statutConf: StatutConfirmationStock = params.statut_confirmation || defaultStatut;
+    const deviceInfo = this.getDeviceInfo();
 
     const newLog: AuditStockLog = {
       id: `audit-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -2327,16 +2440,21 @@ export const offlineDB = {
       quantite_avant: params.quantite_avant,
       quantite_modifiee: params.quantite_modifiee,
       quantite_apres: params.quantite_apres,
-      utilisateur_id: user?.id || 'u-patron',
-      utilisateur_nom: user?.nom || 'Patron / Gérant',
-      utilisateur_role: user?.role || 'Patron',
+      utilisateur_id: user?.id || 'u-user',
+      utilisateur_nom: user?.nom || 'Utilisateur',
+      utilisateur_role: userRole,
+      saisi_par_role: isPatron ? 'Patron' : 'Employe',
       motif: params.motif || 'Mouvement de stock',
       reference_mouvement_id: params.reference_mouvement_id,
       correction_reference_id: params.correction_reference_id,
       statut_confirmation: statutConf,
+      prix_achat_statut: params.prix_achat_statut || (!isPatron ? 'prix_achat_a_completer' : 'complet'),
       confirme_par_id: params.confirme_par_id || (statutConf === 'confirme' ? user?.id : undefined),
       confirme_par_nom: params.confirme_par_nom || (statutConf === 'confirme' ? user?.nom : undefined),
       confirme_le: params.confirme_le || (statutConf === 'confirme' ? new Date().toISOString() : undefined),
+      device_info: deviceInfo,
+      quantite_comptee_employe: params.quantite_comptee_employe,
+      commentaire_employe: params.commentaire_employe,
       created_at: new Date().toISOString(),
     };
 
@@ -2359,7 +2477,8 @@ export const offlineDB = {
     action: StatutConfirmationStock,
     userId?: string,
     userNom?: string,
-    comment?: string
+    comment?: string,
+    quantiteComptee?: number
   ): boolean {
     try {
       if (typeof window === 'undefined') return false;
@@ -2370,6 +2489,7 @@ export const offlineDB = {
       if (idx < 0) return false;
 
       const current = all[idx];
+      const deviceInfo = this.getDeviceInfo();
       all[idx] = {
         ...current,
         statut_confirmation: action,
@@ -2377,9 +2497,131 @@ export const offlineDB = {
         confirme_par_nom: userNom || user?.nom || 'Employé en poste',
         confirme_le: new Date().toISOString(),
         commentaire_employe: comment?.trim() || undefined,
+        quantite_comptee_employe: quantiteComptee !== undefined ? quantiteComptee : current.quantite_comptee_employe,
+        device_info: current.device_info ? `${current.device_info} | Confirmé sur: ${deviceInfo}` : deviceInfo,
       };
 
       localStorage.setItem(KEYS.AUDIT_STOCK_LOGS, JSON.stringify(all));
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  },
+
+  resolveStockDiscrepancy(
+    logId: string,
+    decision: 'accepter_comptage' | 'maintenir_declare',
+    comment: string
+  ): boolean {
+    try {
+      if (typeof window === 'undefined') return false;
+      const user = this.getCurrentUser();
+      const data = localStorage.getItem(KEYS.AUDIT_STOCK_LOGS);
+      const all: AuditStockLog[] = data ? JSON.parse(data) : [];
+      const idx = all.findIndex((l) => l.id === logId);
+      if (idx < 0) return false;
+
+      const currentLog = all[idx];
+      const nowIso = new Date().toISOString();
+
+      if (decision === 'accepter_comptage') {
+        const qtyCounted = currentLog.quantite_comptee_employe ?? currentLog.quantite_apres;
+        const diff = qtyCounted - currentLog.quantite_apres;
+
+        if (diff !== 0) {
+          const prods = this.getProduits();
+          const targetProd = prods.find((p) => p.id === currentLog.produit_id);
+          if (targetProd) {
+            const oldQty = targetProd.quantite_totale || 0;
+            const newQty = Math.max(0, oldQty + diff);
+
+            this.saveProduits(
+              prods.map((p) =>
+                p.id === targetProd.id
+                  ? {
+                      ...p,
+                      quantite_totale: newQty,
+                      bouteilles_vrac: Math.max(0, (p.bouteilles_vrac || 0) + diff),
+                    }
+                  : p
+              )
+            );
+
+            this.addAuditStockLog({
+              produit_id: targetProd.id,
+              nom_produit: targetProd.nom,
+              type_action: diff > 0 ? 'ajustement_hausse' : 'ajustement_baisse',
+              quantite_avant: oldQty,
+              quantite_modifiee: diff,
+              quantite_apres: newQty,
+              motif: `Ajustement suite acceptation comptage employé par Patron: ${comment}`,
+              auto_confirm: true,
+              correction_reference_id: currentLog.id,
+            });
+          }
+        }
+      }
+
+      all[idx] = {
+        ...all[idx],
+        decision_patron_ecart: decision,
+        commentaire_patron_ecart: comment,
+        patron_valide_par_id: user?.id,
+        patron_valide_par_nom: user?.nom,
+        patron_valide_le: nowIso,
+      };
+
+      localStorage.setItem(KEYS.AUDIT_STOCK_LOGS, JSON.stringify(all));
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  },
+
+  validateAndCompletePurchasePrice(produitId: string, prixAchat: number, logId?: string): boolean {
+    try {
+      const user = this.getCurrentUser();
+      const prods = this.getProduits();
+      const targetProd = prods.find((p) => p.id === produitId);
+      if (!targetProd) return false;
+
+      const updatedProds = prods.map((p) =>
+        p.id === produitId
+          ? {
+              ...p,
+              prix_achat_unitaire: prixAchat,
+              prix_achat_casier: prixAchat * (p.bouteilles_par_casier || 12),
+              cout_achat_unitaire_cmp: prixAchat,
+              prix_achat_statut: 'complet' as const,
+              statut_validation_patron: 'valide' as const,
+            }
+          : p
+      );
+      this.saveProduits(updatedProds);
+
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem(KEYS.AUDIT_STOCK_LOGS);
+        const all: AuditStockLog[] = data ? JSON.parse(data) : [];
+        const nowIso = new Date().toISOString();
+
+        const updatedLogs = all.map((log) => {
+          if (log.produit_id === produitId && (log.id === logId || log.statut_confirmation === 'en_attente_validation_patron' || log.prix_achat_statut === 'prix_achat_a_completer')) {
+            return {
+              ...log,
+              prix_achat_statut: 'complet' as const,
+              statut_confirmation: log.statut_confirmation === 'en_attente_validation_patron' ? ('confirme' as const) : log.statut_confirmation,
+              patron_valide_par_id: user?.id,
+              patron_valide_par_nom: user?.nom,
+              patron_valide_le: nowIso,
+            };
+          }
+          return log;
+        });
+
+        localStorage.setItem(KEYS.AUDIT_STOCK_LOGS, JSON.stringify(updatedLogs));
+      }
       return true;
     } catch (e) {
       console.error(e);

@@ -34,10 +34,41 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function sanitizeShopsForRole(shops: any[], isEmployee: boolean) {
+  if (!isEmployee || !shops) return shops;
+
+  const sanitizeObject = (obj: any): any => {
+    if (!obj) return obj;
+    if (Array.isArray(obj)) return obj.map(sanitizeObject);
+    if (typeof obj === 'object') {
+      const clean: Record<string, any> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (
+          k.includes('prix_achat') ||
+          k.includes('cout_achat') ||
+          k.includes('marge') ||
+          k.includes('fournisseur_recu_photo') ||
+          k.includes('valeur_stock_achat')
+        ) {
+          continue;
+        }
+        clean[k] = sanitizeObject(v);
+      }
+      return clean;
+    }
+    return obj;
+  };
+
+  return sanitizeObject(shops);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const email = searchParams.get('email');
+    const roleParam = req.headers.get('x-user-role') || searchParams.get('role') || '';
+    const isEmployee = roleParam === 'Employé' || roleParam === 'employe';
+
     const cleanEmail = (email || '').trim().toLowerCase();
 
     if (!cleanEmail) {
@@ -45,11 +76,13 @@ export async function GET(req: NextRequest) {
     }
 
     const userShopsMap = globalCloudRegistry[cleanEmail] || {};
-    const shopsList = Object.values(userShopsMap);
+    const rawShopsList = Object.values(userShopsMap);
+    const safeShopsList = sanitizeShopsForRole(rawShopsList, isEmployee);
 
     return NextResponse.json({
       success: true,
-      shops: shopsList,
+      roleApplied: isEmployee ? 'Employé (Prix d\'achat censurés)' : 'Patron',
+      shops: safeShopsList,
     });
   } catch (error: any) {
     console.error('Erreur API sync GET:', error);

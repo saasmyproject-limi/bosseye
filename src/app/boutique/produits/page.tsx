@@ -544,7 +544,9 @@ export default function BoutiqueProduitsPage() {
                   <div className="pt-3 border-t border-[#E2D5C3] grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="p-2 rounded-xl bg-[#FBF7EF]">
                       <span className="text-[9px] font-bold text-gray-400 uppercase block">PA Unitaire</span>
-                      <span className="font-black text-[#1B4332]">{pAchat.toLocaleString('fr-FR')} F</span>
+                      <span className="font-black text-[#1B4332]">
+                        {pAchat > 0 ? `${pAchat.toLocaleString('fr-FR')} F` : 'À compléter'}
+                      </span>
                     </div>
                     <div className="p-2 rounded-xl bg-[#FBF7EF]">
                       <span className="text-[9px] font-bold text-gray-400 uppercase block">PV Unitaire</span>
@@ -552,7 +554,11 @@ export default function BoutiqueProduitsPage() {
                     </div>
                     <div className="p-2 rounded-xl bg-[#FBF7EF]">
                       <span className="text-[9px] font-bold text-gray-400 uppercase block">Marge</span>
-                      <span className="font-black text-[#B8442C]">+{margeUnit.toLocaleString('fr-FR')} F</span>
+                      {pAchat > 0 ? (
+                        <span className="font-black text-[#B8442C]">+{margeUnit.toLocaleString('fr-FR')} F</span>
+                      ) : (
+                        <span className="font-bold text-amber-700 text-[10px] block leading-tight">Incomplète (Prix d'achat manquant)</span>
+                      )}
                     </div>
                   </div>
                 )}

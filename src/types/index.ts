@@ -205,9 +205,10 @@ export interface Produit {
   prix_vente_bouteille?: number;
   prix_achat_unitaire?: number;
   prix_vente_unitaire?: number;
-  cout_achat_unitaire_cmp: number;
   variantes?: VarianteProduit[]; // Déclinaisons taille/couleur pour boutique
   exemplaires?: ExemplaireArticle[]; // Exemplaires physiques pour suivi à l'unité (IMEI, OKO-code, etc.)
+  prix_achat_statut?: 'complet' | 'prix_achat_a_completer';
+  statut_validation_patron?: 'valide' | 'en_attente_validation_patron';
   actif: boolean;
   created_at?: string;
 }
@@ -477,7 +478,12 @@ export interface ClotureMensuelle {
 }
 
 // --- MODULE TRANSPARENCE & PREUVE GESTION STOCK BOUTIQUE ---
-export type StatutConfirmationStock = 'non_confirme' | 'confirme' | 'conteste';
+export type StatutConfirmationStock =
+  | 'non_confirme'
+  | 'confirme'
+  | 'ecart_signale'
+  | 'non_confirme_48h'
+  | 'en_attente_validation_patron';
 
 export interface AuditStockLog {
   id: string;
@@ -493,14 +499,23 @@ export interface AuditStockLog {
   utilisateur_id: string;
   utilisateur_nom: string;
   utilisateur_role: string;
+  saisi_par_role?: 'Patron' | 'Employe';
   motif: string; // Ex: "Arrivage fournisseur", "Casse déballage", "Ajustement inventaire"
   reference_mouvement_id?: string;
   correction_reference_id?: string; // Référence immuable si correction d'une ligne précédente
   statut_confirmation: StatutConfirmationStock;
+  prix_achat_statut?: 'complet' | 'prix_achat_a_completer';
   confirme_par_id?: string;
   confirme_par_nom?: string;
   confirme_le?: string;
+  device_info?: string; // Appareil / User-Agent traçable pour la preuve
+  quantite_comptee_employe?: number; // Saisie si écart signalé
   commentaire_employe?: string;
+  patron_valide_par_id?: string;
+  patron_valide_par_nom?: string;
+  patron_valide_le?: string;
+  decision_patron_ecart?: 'accepter_comptage' | 'maintenir_declare';
+  commentaire_patron_ecart?: string;
   created_at: string;
 }
 

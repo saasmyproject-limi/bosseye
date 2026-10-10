@@ -22,9 +22,17 @@ export default function CommunMouvementsPage() {
   const [invNotes, setInvNotes] = useState<Record<string, string>>({});
   const [invComment, setInvComment] = useState('');
 
-  // Modal Contestation Employé
-  const [contestLog, setContestLog] = useState<AuditStockLog | null>(null);
-  const [contestComment, setContestComment] = useState('');
+  // Modals Patron & Employé
+  const [resolutionModalLog, setResolutionModalLog] = useState<AuditStockLog | null>(null);
+  const [resolutionDecision, setResolutionDecision] = useState<'accepter_comptage' | 'maintenir_declare'>('accepter_comptage');
+  const [resolutionComment, setResolutionComment] = useState<string>('');
+
+  const [paModalLog, setPaModalLog] = useState<AuditStockLog | null>(null);
+  const [paValueInput, setPaValueInput] = useState<number>(0);
+
+  const [ecartModalLog, setEcartModalLog] = useState<AuditStockLog | null>(null);
+  const [ecartQtyCounted, setEcartQtyCounted] = useState<number>(0);
+  const [ecartCommentInput, setEcartCommentInput] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -73,22 +81,48 @@ export default function CommunMouvementsPage() {
     loadData();
   };
 
-  const handleOpenContestModal = (log: AuditStockLog) => {
-    setContestLog(log);
-    setContestComment('');
+  const handleOpenSignalEcartModal = (log: AuditStockLog) => {
+    setEcartModalLog(log);
+    setEcartQtyCounted(log.quantite_modifiee || 0);
+    setEcartCommentInput('');
   };
 
-  const handleSubmitContest = (e: React.FormEvent) => {
+  const handleSignalEcartSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contestLog || !currentUser) return;
+    if (!ecartModalLog || !currentUser) return;
     offlineDB.confirmOrContestAuditLog(
-      contestLog.id,
-      'conteste',
+      ecartModalLog.id,
+      'ecart_signale',
       currentUser.id,
       currentUser.nom,
-      contestComment.trim() || 'Quantité comptée non conforme à la livraison'
+      ecartCommentInput.trim() || 'Écart de quantité signalé par l\'employé',
+      ecartQtyCounted
     );
-    setContestLog(null);
+    setEcartModalLog(null);
+    loadData();
+  };
+
+  const handleResolveDiscrepancySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resolutionModalLog || !resolutionComment.trim()) return;
+    offlineDB.resolveStockDiscrepancy(
+      resolutionModalLog.id,
+      resolutionDecision,
+      resolutionComment.trim()
+    );
+    setResolutionModalLog(null);
+    loadData();
+  };
+
+  const handleCompletePaSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paModalLog || paValueInput <= 0) return;
+    offlineDB.validateAndCompletePurchasePrice(
+      paModalLog.produit_id,
+      paValueInput,
+      paModalLog.id
+    );
+    setPaModalLog(null);
     loadData();
   };
 
@@ -365,37 +399,88 @@ export default function CommunMouvementsPage() {
                                 <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                                 <span>Confirmé par {log.confirme_par_nom || 'Employé'}</span>
                               </span>
-                              {log.confirme_le && (
-                                <span className="text-[9px] text-gray-400 font-mono mt-0.5">
-                                  {new Date(log.confirme_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                              {log.device_info && (
+                                <span className="text-[9px] text-gray-400 font-mono mt-0.5" title={log.device_info}>
+                                  📱 {log.device_info.slice(0, 24)}...
                                 </span>
                               )}
                             </div>
-                          ) : log.statut_confirmation === 'conteste' ? (
-                            <div className="flex flex-col items-center">
+                          ) : log.statut_confirmation === 'ecart_signale' || log.statut_confirmation === 'conteste' ? (
+                            <div className="flex flex-col items-center gap-1">
                               <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-800 font-black text-[10px] flex items-center gap-1 border border-red-300">
                                 <AlertTriangle className="w-3 h-3 text-red-600" />
-                                <span>Contesté par {log.confirme_par_nom || 'Employé'}</span>
+                                <span>Écart Signalé (Compté: {log.quantite_comptee_employe ?? log.quantite_apres} pcs)</span>
                               </span>
                               {log.commentaire_employe && (
-                                <span className="text-[10px] text-red-700 italic max-w-xs truncate mt-0.5" title={log.commentaire_employe}>
+                                <span className="text-[10px] text-red-700 italic max-w-xs truncate" title={log.commentaire_employe}>
                                   "{log.commentaire_employe}"
                                 </span>
                               )}
+                              {log.decision_patron_ecart ? (
+                                <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-900 text-[9px] font-bold border border-purple-300">
+                                  {log.decision_patron_ecart === 'accepter_comptage' ? '✅ Comptage accepté par Patron' : '⚠️ Déclaré maintenu par Patron'}
+                                  {log.commentaire_patron_ecart && ` : "${log.commentaire_patron_ecart}"`}
+                                </span>
+                              ) : isPatron ? (
+                                <button
+                                  onClick={() => {
+                                    setResolutionModalLog(log);
+                                    setResolutionDecision('accepter_comptage');
+                                    setResolutionComment('');
+                                  }}
+                                  className="mt-1 py-1 px-2.5 rounded-lg bg-red-700 hover:bg-red-800 text-white font-bold text-[10px] shadow-sm transition-transform active:scale-95"
+                                >
+                                  ⚖️ Résoudre l'écart
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : log.statut_confirmation === 'non_confirme_48h' ? (
+                            <div className="flex flex-col items-center">
+                              <span className="px-2.5 py-1 rounded-full bg-orange-100 text-orange-900 font-black text-[10px] border border-orange-300 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-orange-600" />
+                                <span>Non confirmée après 48h</span>
+                              </span>
+                            </div>
+                          ) : log.statut_confirmation === 'en_attente_validation_patron' ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 font-black text-[10px] border border-purple-300">
+                                ⏳ Attente Patron & Prix d'Achat
+                              </span>
+                              {isPatron && (
+                                <button
+                                  onClick={() => {
+                                    setPaModalLog(log);
+                                    setPaValueInput(0);
+                                  }}
+                                  className="py-1 px-2.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-[10px] shadow-sm"
+                                >
+                                  💰 Valider & Renseigner PA
+                                </button>
+                              )}
                             </div>
                           ) : (
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex flex-col items-center gap-1">
                               <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300">
                                 ⏳ Non confirmée
                               </span>
                               {isEmployee && (
-                                <button
-                                  onClick={() => handleConfirmLog(log.id)}
-                                  className="p-1 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 transition-transform active:scale-95"
-                                  title="Confirmer la réception de ce stock"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleConfirmLog(log.id)}
+                                    className="py-1 px-2 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 text-[10px] font-bold flex items-center gap-1"
+                                    title="Tout est correct"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    <span>Correct</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenSignalEcartModal(log)}
+                                    className="py-1 px-2 rounded-lg bg-red-100 text-red-800 hover:bg-red-200 text-[10px] font-bold border border-red-300"
+                                    title="Signaler un écart"
+                                  >
+                                    Écart
+                                  </button>
+                                </div>
                               )}
                             </div>
                           )}
@@ -706,38 +791,53 @@ export default function CommunMouvementsPage() {
         </div>
       )}
 
-      {/* MODAL CONTESTATION D'AUDIT */}
-      {contestLog && (
+      {/* MODAL SIGNALER UN ÉCART (EMPLOYÉ) */}
+      {ecartModalLog && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <form
-            onSubmit={handleSubmitContest}
+            onSubmit={handleSignalEcartSubmit}
             className="bg-[#F3ECE0] border-2 border-red-400 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4"
           >
             <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
               <h3 className="font-serif font-black text-lg text-red-900 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
-                <span>Contester la Réception dans l'Audit</span>
+                <span>Signaler un Écart de Réception</span>
               </h3>
-              <button type="button" onClick={() => setContestLog(null)} className="text-gray-500 hover:text-black">
+              <button type="button" onClick={() => setEcartModalLog(null)} className="text-gray-500 hover:text-black">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs space-y-1">
-              <p><strong className="text-gray-700">Article :</strong> {contestLog.nom_produit}</p>
-              <p><strong className="text-gray-700">Entrée Patron :</strong> <span className="font-bold text-[#1B4332]">+{contestLog.quantite_modifiee} pcs</span></p>
+              <p><strong className="text-gray-700">Article :</strong> {ecartModalLog.nom_produit}</p>
+              <p><strong className="text-gray-700">Quantité annoncée par le patron :</strong> <span className="font-bold text-[#1B4332]">+{ecartModalLog.quantite_modifiee} pcs</span></p>
+              <p><strong className="text-gray-700">Stock théorique après :</strong> {ecartModalLog.quantite_apres} pcs</p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-[#1B4332] mb-1">
-                Motif de la contestation immuable *
+                Quantité réellement comptée en boutique *
+              </label>
+              <input
+                type="number"
+                required
+                min="0"
+                value={ecartQtyCounted}
+                onChange={(e) => setEcartQtyCounted(Number(e.target.value))}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-black text-[#1B4332]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-1">
+                Commentaire explicatif de l'employé *
               </label>
               <textarea
                 required
                 rows={3}
-                placeholder="Expliquez l'erreur de livraison ou l'article manquant..."
-                value={contestComment}
-                onChange={(e) => setContestComment(e.target.value)}
+                placeholder="ex: 2 pièces manquantes au déballage, carton endommagé..."
+                value={ecartCommentInput}
+                onChange={(e) => setEcartCommentInput(e.target.value)}
                 className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
               />
             </div>
@@ -745,7 +845,7 @@ export default function CommunMouvementsPage() {
             <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setContestLog(null)}
+                onClick={() => setEcartModalLog(null)}
                 className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
               >
                 Annuler
@@ -754,7 +854,164 @@ export default function CommunMouvementsPage() {
                 type="submit"
                 className="flex-1 py-3 px-4 rounded-xl bg-red-700 hover:bg-red-800 text-white font-black text-xs shadow-md"
               >
-                Enregistrer la Contestation
+                Transmettre l'Écart au Patron
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL RÉSOLUTION D'ÉCART (PATRON) */}
+      {resolutionModalLog && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <form
+            onSubmit={handleResolveDiscrepancySubmit}
+            className="bg-[#F3ECE0] border-2 border-purple-400 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+              <h3 className="font-serif font-black text-lg text-purple-950 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-purple-700" />
+                <span>Arbitrage / Résolution d'Écart par le Patron</span>
+              </h3>
+              <button type="button" onClick={() => setResolutionModalLog(null)} className="text-gray-500 hover:text-black">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl text-xs space-y-1">
+              <p><strong className="text-gray-700">Article :</strong> {resolutionModalLog.nom_produit}</p>
+              <p><strong className="text-gray-700">Quantité annoncée :</strong> +{resolutionModalLog.quantite_modifiee} pcs</p>
+              <p><strong className="text-gray-700">Quantité réellement comptée par l'employé :</strong> <span className="font-black text-red-700">{resolutionModalLog.quantite_comptee_employe ?? resolutionModalLog.quantite_apres} pcs</span></p>
+              <p><strong className="text-gray-700">Commentaire employé :</strong> "{resolutionModalLog.commentaire_employe}"</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-2">Décision du Patron *</label>
+              <div className="space-y-2">
+                <label className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer ${
+                  resolutionDecision === 'accepter_comptage'
+                    ? 'bg-purple-100 border-purple-500 text-purple-950 font-bold'
+                    : 'bg-white border-[#E2D5C3] text-gray-700'
+                }`}>
+                  <input
+                    type="radio"
+                    name="decision"
+                    value="accepter_comptage"
+                    checked={resolutionDecision === 'accepter_comptage'}
+                    onChange={() => setResolutionDecision('accepter_comptage')}
+                    className="mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <span className="font-black">1. Accepter le comptage de l'employé (Ligne d'ajustement immuable)</span>
+                    <p className="text-[11px] font-normal opacity-80 mt-0.5">
+                      Le stock sera ajusté à la quantité comptée par l'employé. Une nouvelle ligne d'ajustement immuable sera créée. Rien n'est supprimé.
+                    </p>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer ${
+                  resolutionDecision === 'maintenir_declare'
+                    ? 'bg-amber-100 border-amber-500 text-amber-950 font-bold'
+                    : 'bg-white border-[#E2D5C3] text-gray-700'
+                }`}>
+                  <input
+                    type="radio"
+                    name="decision"
+                    value="maintenir_declare"
+                    checked={resolutionDecision === 'maintenir_declare'}
+                    onChange={() => setResolutionDecision('maintenir_declare')}
+                    className="mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <span className="font-black">2. Maintenir la quantité déclarée à l'origine</span>
+                    <p className="text-[11px] font-normal opacity-80 mt-0.5">
+                      Le stock reste tel quel. Vous devez fournir une justification obligatoire ci-dessous.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-1">
+                Commentaire / Explication de la décision * (Obligatoire)
+              </label>
+              <textarea
+                required
+                rows={3}
+                placeholder="Explication claire du motif de décision..."
+                value={resolutionComment}
+                onChange={(e) => setResolutionComment(e.target.value)}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setResolutionModalLog(null)}
+                className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-3 px-4 rounded-xl bg-purple-900 hover:bg-purple-950 text-white font-black text-xs shadow-md"
+              >
+                Enregistrer la Décision Patron
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL COMPLÉTER PRIX D'ACHAT (PATRON) */}
+      {paModalLog && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <form
+            onSubmit={handleCompletePaSubmit}
+            className="bg-[#F3ECE0] border-2 border-purple-400 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+              <h3 className="font-serif font-black text-lg text-[#1B4332]">Renseigner le Prix d'Achat</h3>
+              <button type="button" onClick={() => setPaModalLog(null)} className="text-gray-500 hover:text-black">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl text-xs space-y-1">
+              <p><strong className="text-gray-700">Article :</strong> {paModalLog.nom_produit}</p>
+              <p><strong className="text-gray-700">Saisi par :</strong> {paModalLog.utilisateur_nom} ({paModalLog.saisi_par_role})</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-1">
+                Prix d'Achat Unitaire (FCFA) *
+              </label>
+              <input
+                type="number"
+                required
+                min="1"
+                placeholder="ex: 12000"
+                value={paValueInput || ''}
+                onChange={(e) => setPaValueInput(Number(e.target.value))}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-black text-[#1B4332]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPaModalLog(null)}
+                className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
+              >
+                Valider & Débloquer Calcul Marges
               </button>
             </div>
           </form>
