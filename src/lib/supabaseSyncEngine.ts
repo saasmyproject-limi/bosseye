@@ -213,7 +213,7 @@ class SupabaseSyncEngine {
             stock: currentStock,
             quantite_totale: currentStock,
             actif: a.actif !== false,
-            unite: a.mode_suivi === 'unite' ? 'unité' : 'quantité',
+            unite: a.mode_suivi === 'unite' ? 'unite' : 'piece',
             seuil_alerte: a.seuil_alerte || 5,
           };
         });
