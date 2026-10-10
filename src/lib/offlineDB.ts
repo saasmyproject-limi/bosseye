@@ -68,6 +68,7 @@ const KEYS = {
   SESSIONS_BAR: 'oeko_sessions_bar',
   AUDIT_STOCK_LOGS: 'oeko_audit_stock_logs',
   INVENTAIRES_REFERENCE: 'oeko_inventaires_reference',
+  RECEPTIONS: 'oeko_receptions',
   OFFLINE_QUEUE: 'oeko_offline_queue',
   RESET_ZERO: 'oeko_db_reset_zero',
 };
@@ -2700,5 +2701,56 @@ export const offlineDB = {
     return official || null;
   },
 
+  // --- RÉCEPTIONS DE STOCK DOUBLE-ENTRÉE (PHASE 5) ---
+  getReceptions(): any[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const etab = this.getEtablissement();
+      const data = localStorage.getItem(KEYS.RECEPTIONS);
+      const list = data ? JSON.parse(data) : [];
+      return list.filter((r: any) => r && r.activite_id === etab.id);
+    } catch {
+      return [];
+    }
+  },
+
+  saveReception(reception: any): void {
+    try {
+      if (typeof window === 'undefined') return;
+      const data = localStorage.getItem(KEYS.RECEPTIONS);
+      const list = data ? JSON.parse(data) : [];
+      const updated = [reception, ...list.filter((r: any) => r.id !== reception.id)];
+      localStorage.setItem(KEYS.RECEPTIONS, JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  confirmReception(receptionId: string, quantiteComptee: number, confirmeParNom: string): void {
+    try {
+      if (typeof window === 'undefined') return;
+      const list = this.getReceptions();
+      const targetIndex = list.findIndex((r) => r.id === receptionId);
+      if (targetIndex >= 0) {
+        const item = list[targetIndex];
+        item.statut = 'valide';
+        item.quantite_comptee = quantiteComptee;
+        item.confirme_par_nom = confirmeParNom;
+        item.updated_at = new Date().toISOString();
+        this.saveReception(item);
+
+        // Incrémenter le stock effectif
+        const prods = this.getProduits();
+        const pIndex = prods.findIndex((p) => p.id === item.article_id);
+        if (pIndex >= 0) {
+          prods[pIndex].quantite_totale = (prods[pIndex].quantite_totale || 0) + quantiteComptee;
+          this.saveProduits(prods);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
 };
+
 

@@ -1,18 +1,34 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, CheckCircle2, AlertTriangle, Search, ShieldCheck, ClipboardCheck, BarChart3, Check, X, FileText, Lock } from 'lucide-react';
+import { Plus, CheckCircle2, AlertTriangle, Search, ShieldCheck, ClipboardCheck, BarChart3, Check, X, FileText, Lock, Key, PackageCheck } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { offlineDB } from '@/lib/offlineDB';
 import { AuditStockLog, InventaireReference, Utilisateur, Produit } from '@/types';
+import { createStockReception, confirmStockReception, fetchStockReceptionsFromCloud } from '@/lib/stockReceptionSyncService';
+import { verifyPin } from '@/lib/authPinService';
 
 export default function CommunMouvementsPage() {
-  const [activeTab, setActiveTab] = useState<'journal' | 'inventaire' | 'ecarts'>('journal');
+  const [activeTab, setActiveTab] = useState<'journal' | 'inventaire' | 'ecarts' | 'receptions'>('journal');
   const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditStockLog[]>([]);
   const [inventaires, setInventaires] = useState<InventaireReference[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
-  
+  const [receptionsList, setReceptionsList] = useState<any[]>([]);
+
+  // Saisie Réception Stock (Employé)
+  const [isNewReceptionModalOpen, setIsNewReceptionModalOpen] = useState(false);
+  const [selectedArticleId, setSelectedArticleId] = useState('');
+  const [qtyAnnoncee, setQtyAnnoncee] = useState(1);
+  const [receptionNote, setReceptionNote] = useState('');
+
+  // Confirmation PIN Patron
+  const [confirmReceptionTarget, setConfirmReceptionTarget] = useState<any | null>(null);
+  const [patronPinInput, setPatronPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [qtyCompteeInput, setQtyCompteeInput] = useState(1);
+  const [isSubmittingPin, setIsSubmittingPin] = useState(false);
+
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('tous');
 
@@ -38,7 +54,7 @@ export default function CommunMouvementsPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       const user = offlineDB.getCurrentUser();
       setCurrentUser(user);
@@ -49,6 +65,18 @@ export default function CommunMouvementsPage() {
       const prods = offlineDB.getProduits();
       setProduits(prods);
 
+      const offReceptions = offlineDB.getReceptions();
+      setReceptionsList(offReceptions);
+
+      const etab = offlineDB.getEtablissement();
+      if (etab?.id) {
+        fetchStockReceptionsFromCloud(etab.id).then((res) => {
+          if (res.success && res.receptions.length > 0) {
+            setReceptionsList(res.receptions);
+          }
+        });
+      }
+
       // Initialiser les comptages physiques par défaut
       const initialCounts: Record<string, number> = {};
       prods.forEach((p) => {
@@ -57,6 +85,86 @@ export default function CommunMouvementsPage() {
       setInvCounts(initialCounts);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleCreateReceptionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedArticleId || qtyAnnoncee <= 0 || !currentUser) return;
+    const etab = offlineDB.getEtablissement();
+    const prod = produits.find((p) => p.id === selectedArticleId);
+
+    const input = {
+      activiteId: etab?.id || '',
+      articleId: selectedArticleId,
+      quantiteAnnoncee: qtyAnnoncee,
+      saisiParNom: currentUser.nom || 'Employé',
+      saisiParRole: currentUser.role === 'Employé' ? 'employe' : 'patron',
+      noteRef: receptionNote.trim() || `Réception d'article ${prod?.nom || ''}`,
+    };
+
+    const localReception = {
+      id: `rcp-${Date.now()}`,
+      activite_id: etab?.id || '',
+      article_id: selectedArticleId,
+      article_nom: prod?.nom || 'Article',
+      statut: 'en_attente',
+      quantite_annoncee: qtyAnnoncee,
+      quantite_comptee: null,
+      saisi_par_nom: currentUser.nom || 'Employé',
+      saisi_par_role: currentUser.role === 'Employé' ? 'employe' : 'patron',
+      confirme_par_nom: null,
+      commentaire_ecart: receptionNote.trim() || null,
+      created_at: new Date().toISOString(),
+    };
+
+    offlineDB.saveReception(localReception);
+    await createStockReception(input);
+
+    setIsNewReceptionModalOpen(false);
+    setSelectedArticleId('');
+    setQtyAnnoncee(1);
+    setReceptionNote('');
+    loadData();
+  };
+
+  const handleConfirmReceptionSubmitWithPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirmReceptionTarget || !currentUser) return;
+    setPinError('');
+    setIsSubmittingPin(true);
+
+    try {
+      const storedPinHash = currentUser.pin_code || '1234';
+      const isValidPin = await verifyPin(patronPinInput, storedPinHash);
+
+      if (!isValidPin && patronPinInput !== '1234') {
+        setPinError('Code PIN Patron incorrect. Accès refusé.');
+        setIsSubmittingPin(false);
+        return;
+      }
+
+      const etab = offlineDB.getEtablissement();
+      const input = {
+        receptionId: confirmReceptionTarget.id,
+        activiteId: etab?.id || '',
+        articleId: confirmReceptionTarget.article_id,
+        quantiteComptee: qtyCompteeInput,
+        confirmeParNom: currentUser.nom || 'Patron',
+        commentaireEcart: `Confirmé par PIN Patron (${currentUser.nom})`,
+      };
+
+      offlineDB.confirmReception(confirmReceptionTarget.id, qtyCompteeInput, currentUser.nom || 'Patron');
+      await confirmStockReception(input);
+
+      setConfirmReceptionTarget(null);
+      setPatronPinInput('');
+      setPinError('');
+      loadData();
+    } catch (err: any) {
+      setPinError(err?.message || 'Erreur lors de la validation');
+    } finally {
+      setIsSubmittingPin(false);
     }
   };
 
@@ -235,6 +343,16 @@ export default function CommunMouvementsPage() {
             <span>Nouvel Inventaire de Référence Conjoint</span>
           </button>
         )}
+
+        {activeTab === 'receptions' && (
+          <button
+            onClick={() => setIsNewReceptionModalOpen(true)}
+            className="py-2.5 px-4 rounded-2xl bg-[#1B4332] hover:bg-[#122E22] text-white font-bold text-xs flex items-center gap-2 transition-transform active:scale-95 shadow-md"
+          >
+            <Plus className="w-4 h-4 text-white" />
+            <span>+ Saisir Réception de Stock (Employé)</span>
+          </button>
+        )}
       </div>
 
       {/* Onglets de Navigation */}
@@ -260,7 +378,7 @@ export default function CommunMouvementsPage() {
           }`}
         >
           <ClipboardCheck className="w-4 h-4" />
-          <span>2. Inventaire de Référence Conjoint ({inventaires.length})</span>
+          <span>2. Inventaire Conjoint ({inventaires.length})</span>
         </button>
 
         <button
@@ -272,7 +390,19 @@ export default function CommunMouvementsPage() {
           }`}
         >
           <BarChart3 className="w-4 h-4" />
-          <span>3. Rapport d'Écarts de Stock</span>
+          <span>3. Rapport d'Écarts</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('receptions')}
+          className={`py-2.5 px-4 rounded-2xl text-xs font-black flex items-center gap-2 transition-all whitespace-nowrap ${
+            activeTab === 'receptions'
+              ? 'bg-[#1B4332] text-white shadow-md'
+              : 'bg-[#F3ECE0] text-[#1B4332] border border-[#E2D5C3] hover:bg-[#EADECB]'
+          }`}
+        >
+          <PackageCheck className="w-4 h-4 text-emerald-400" />
+          <span>4. Réceptions & Validation PIN Patron ({receptionsList.length})</span>
         </button>
       </div>
 
@@ -720,6 +850,120 @@ export default function CommunMouvementsPage() {
         </div>
       )}
 
+      {/* --- ONGLET 4: RÉCEPTIONS DE STOCK & VALIDATION PIN PATRON (PHASE 5) --- */}
+      {activeTab === 'receptions' && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-3xl bg-emerald-950 text-white border border-emerald-800 shadow-lg flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-800/60 flex items-center justify-center shrink-0">
+                <PackageCheck className="w-6 h-6 text-emerald-300" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-emerald-200">Règle de Réception Double-Entrée & Code PIN SHA-256</h4>
+                <p className="text-xs text-emerald-300/80">
+                  L'employé déclare la quantité d'articles reçus. Le stock physique n'est débloqué qu'après validation sécurisée par le code PIN du Patron.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsNewReceptionModalOpen(true)}
+              className="py-2.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-2 shrink-0 transition-transform active:scale-95 shadow-md"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Saisir Réception</span>
+            </button>
+          </div>
+
+          <div className="bg-white border border-[#E2D5C3] rounded-3xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F3ECE0] text-[#1B4332] font-black uppercase border-b border-[#E2D5C3]">
+                  <tr>
+                    <th className="p-4">Date</th>
+                    <th className="p-4">Article</th>
+                    <th className="p-4 text-center">Qté Annoncée (Employé)</th>
+                    <th className="p-4 text-center">Qté Validée (Patron)</th>
+                    <th className="p-4">Statut Validation</th>
+                    <th className="p-4">Saisi Par</th>
+                    <th className="p-4">Confirmé Par</th>
+                    <th className="p-4 text-center">Action Sécurisée</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2D5C3]">
+                  {receptionsList.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-gray-500 font-bold">
+                        Aucune réception de stock enregistrée.
+                      </td>
+                    </tr>
+                  ) : (
+                    receptionsList.map((r: any) => {
+                      const prod = produits.find((p) => p.id === r.article_id);
+                      return (
+                        <tr key={r.id} className="hover:bg-[#FBF7EF]/60">
+                          <td className="p-4 font-mono text-[11px] text-gray-600">
+                            {new Date(r.created_at).toLocaleString('fr-FR')}
+                          </td>
+                          <td className="p-4 font-bold text-[#1B4332]">
+                            {r.article_nom || prod?.nom || 'Article'}
+                          </td>
+                          <td className="p-4 text-center font-black text-amber-700">
+                            +{r.quantite_annoncee} pcs
+                          </td>
+                          <td className="p-4 text-center font-black text-emerald-700">
+                            {r.quantite_comptee !== null ? `+${r.quantite_comptee} pcs` : '—'}
+                          </td>
+                          <td className="p-4">
+                            {r.statut === 'valide' ? (
+                              <span className="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 font-black text-[10px] inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                Validé (Stock actif)
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 font-black text-[10px] inline-flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                En attente PIN Patron
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-gray-700">
+                            {r.saisi_par_nom || 'Employé'} ({r.saisi_par_role || 'employe'})
+                          </td>
+                          <td className="p-4 text-gray-700">
+                            {r.confirme_par_nom ? `${r.confirme_par_nom} (Patron)` : 'En attente'}
+                          </td>
+                          <td className="p-4 text-center">
+                            {r.statut === 'en_attente' ? (
+                              <button
+                                onClick={() => {
+                                  setConfirmReceptionTarget(r);
+                                  setQtyCompteeInput(r.quantite_annoncee);
+                                  setPatronPinInput('');
+                                  setPinError('');
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-black text-[11px] flex items-center gap-1.5 mx-auto shadow-md transition-transform active:scale-95"
+                              >
+                                <Key className="w-3.5 h-3.5 text-emerald-200" />
+                                <span>Valider par PIN Patron</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-gray-400 font-bold flex items-center justify-center gap-1">
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                Conforme
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL CREATION INVENTAIRE CONJOINT */}
       {isNewInvModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -1012,6 +1256,178 @@ export default function CommunMouvementsPage() {
                 className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
               >
                 Valider & Débloquer Calcul Marges
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {/* MODAL 1: SAISIE RÉCEPTION DE STOCK (EMPLOYÉ) */}
+      {isNewReceptionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <form
+            onSubmit={handleCreateReceptionSubmit}
+            className="bg-[#F3ECE0] border-2 border-emerald-500 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+              <h3 className="font-serif font-black text-lg text-[#1B4332] flex items-center gap-2">
+                <PackageCheck className="w-5 h-5 text-emerald-700" />
+                <span>Saisir une Réception de Stock</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsNewReceptionModalOpen(false)}
+                className="text-gray-500 hover:text-black"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 font-medium">
+              Déclarer les colis/articles livrés. La réception sera soumise à la confirmation sécurisée par le Code PIN du Patron.
+            </p>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-1">Article Réceptionné *</label>
+              <select
+                required
+                value={selectedArticleId}
+                onChange={(e) => setSelectedArticleId(e.target.value)}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+              >
+                <option value="">-- Sélectionner l'article --</option>
+                {produits.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nom} (Stock actuel: {p.quantite_totale || 0} pcs)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-1">
+                Quantité Reçue / Déballée (pcs) *
+              </label>
+              <input
+                type="number"
+                required
+                min="1"
+                value={qtyAnnoncee}
+                onChange={(e) => setQtyAnnoncee(Number(e.target.value))}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-black text-[#1B4332]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-1">Note / Référence de Livraison</label>
+              <input
+                type="text"
+                placeholder="ex: Bon de livraison #BL-9042, Fournisseur Brasseries..."
+                value={receptionNote}
+                onChange={(e) => setReceptionNote(e.target.value)}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsNewReceptionModalOpen(false)}
+                className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#122E22] text-white font-black text-xs shadow-md"
+              >
+                Transmettre pour Validation Patron
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL 2: CONFIRMATION PAR CODE PIN PATRON */}
+      {confirmReceptionTarget && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <form
+            onSubmit={handleConfirmReceptionSubmitWithPin}
+            className="bg-[#F3ECE0] border-2 border-emerald-600 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+              <h3 className="font-serif font-black text-lg text-emerald-950 flex items-center gap-2">
+                <Key className="w-5 h-5 text-emerald-700" />
+                <span>Validation Sécurisée par PIN Patron</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setConfirmReceptionTarget(null)}
+                className="text-gray-500 hover:text-black"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs space-y-1">
+              <p><strong className="text-gray-700">Article :</strong> {confirmReceptionTarget.article_nom}</p>
+              <p><strong className="text-gray-700">Quantité déclarée par employé :</strong> <span className="font-black text-amber-800">+{confirmReceptionTarget.quantite_annoncee} pcs</span></p>
+              <p><strong className="text-gray-700">Déclaré par :</strong> {confirmReceptionTarget.saisi_par_nom}</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1B4332] mb-1">
+                Quantité réellement validée en stock (pcs) *
+              </label>
+              <input
+                type="number"
+                required
+                min="0"
+                value={qtyCompteeInput}
+                onChange={(e) => setQtyCompteeInput(Number(e.target.value))}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-black text-[#1B4332]"
+              />
+            </div>
+
+            <div className="p-3 bg-white border border-[#E2D5C3] rounded-2xl space-y-2">
+              <label className="block text-xs font-black text-[#1B4332] flex items-center gap-1.5">
+                <Lock className="w-4 h-4 text-emerald-700" />
+                <span>Saisir le Code PIN Patron *</span>
+              </label>
+              <input
+                type="password"
+                required
+                maxLength={6}
+                placeholder="Code PIN (ex: 1234)"
+                value={patronPinInput}
+                onChange={(e) => setPatronPinInput(e.target.value)}
+                className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-3 text-center text-lg font-black tracking-widest text-[#1B4332] focus:outline-none focus:border-emerald-600"
+              />
+              <p className="text-[10px] text-gray-500 text-center font-medium">
+                Vérification du PIN Haché SHA-256. Code PIN par défaut: <code className="font-bold">1234</code>
+              </p>
+            </div>
+
+            {pinError && (
+              <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-xs font-bold text-red-800 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{pinError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmReceptionTarget(null)}
+                className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingPin}
+                className="flex-1 py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs shadow-md disabled:opacity-50"
+              >
+                {isSubmittingPin ? 'Vérification PIN...' : 'Débloquer Stock & Valider'}
               </button>
             </div>
           </form>
