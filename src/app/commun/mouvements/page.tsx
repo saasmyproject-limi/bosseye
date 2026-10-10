@@ -271,7 +271,7 @@ export default function CommunMouvementsPage() {
 
     return produits.map((p) => {
       // Quantité initiale au moment du dernier inventaire de référence conjoint
-      const invLine = latestOfficialInv.lignes.find((l) => l.produit_id === p.id);
+      const invLine = latestOfficialInv.lignes.find((l: any) => l.produit_id === p.id);
       const stockRefInitial = invLine ? invLine.quantite_physique_comptee : 0;
 
       // Logs postérieurs à cet inventaire

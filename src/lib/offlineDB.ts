@@ -27,9 +27,11 @@ import {
   SessionBar,
   LigneSessionBar,
   CompteUtilisateur,
+  StatutConfirmationStock,
+  ConfigPaiementManuel,
+  DemandePaiementAbonnement,
   AuditStockLog,
   InventaireReference,
-  StatutConfirmationStock,
 } from '@/types';
 import {
   SEED_ETABLISSEMENT,
@@ -71,6 +73,17 @@ const KEYS = {
   RECEPTIONS: 'oeko_receptions',
   OFFLINE_QUEUE: 'oeko_offline_queue',
   RESET_ZERO: 'oeko_db_reset_zero',
+  CONFIG_PAIEMENT_MANUEL: 'oeko_config_paiement_manuel',
+  DEMANDES_PAIEMENT_ABONNEMENT: 'oeko_demandes_paiement_abonnement',
+};
+
+export const DEFAULT_CONFIG_PAIEMENT_MANUEL: ConfigPaiementManuel = {
+  orange_money_numero: '699 00 00 00',
+  orange_money_nom: 'OEKO MANAGEMENT (M. TCHINDA)',
+  mtn_momo_numero: '677 00 00 00',
+  mtn_momo_nom: 'OEKO MANAGEMENT (M. TCHINDA)',
+  virement_wave_info: 'Wave / Express Union / Virement direct disponible',
+  consignes: 'Effectuez le transfert Mobile Money vers un des numéros ci-dessus avec le nom de votre commerce en motif, puis validez avec le bouton "J\'ai envoyé le paiement".',
 };
 
 // Helper pour nettoyer et formater les segments de code (ex: "Pépite d'Or" -> "PEP", "Vêtements" -> "VET")
@@ -2741,6 +2754,164 @@ export const offlineDB = {
     } catch (e) {
       console.error(e);
     }
+  },
+
+  // --- PHASE 7 : ABONNEMENT MANUEL & SUPER-ADMIN ---
+  getConfigPaiementManuel(): ConfigPaiementManuel {
+    try {
+      if (typeof window === 'undefined') return DEFAULT_CONFIG_PAIEMENT_MANUEL;
+      const data = localStorage.getItem(KEYS.CONFIG_PAIEMENT_MANUEL);
+      return data ? { ...DEFAULT_CONFIG_PAIEMENT_MANUEL, ...JSON.parse(data) } : DEFAULT_CONFIG_PAIEMENT_MANUEL;
+    } catch {
+      return DEFAULT_CONFIG_PAIEMENT_MANUEL;
+    }
+  },
+
+  saveConfigPaiementManuel(config: ConfigPaiementManuel): ConfigPaiementManuel {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.CONFIG_PAIEMENT_MANUEL, JSON.stringify(config));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return config;
+  },
+
+  getDemandesPaiementAbonnement(): DemandePaiementAbonnement[] {
+    try {
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.DEMANDES_PAIEMENT_ABONNEMENT);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  submitDemandePaiementAbonnement(params: {
+    etablissement: Etablissement;
+    palier: PalierTarifaire;
+    methode: string;
+    telephone: string;
+    reference: string;
+  }): DemandePaiementAbonnement {
+    const list = this.getDemandesPaiementAbonnement();
+    const newDemande: DemandePaiementAbonnement = {
+      id: `demande-${Date.now()}`,
+      etablissement_id: params.etablissement.id,
+      etablissement_nom: params.etablissement.nom,
+      email_patron: params.etablissement.email_patron,
+      code_palier: params.palier.code_palier,
+      nom_palier: params.palier.nom,
+      montant: params.palier.tarif_mensuel,
+      methode: params.methode,
+      telephone_payeur: params.telephone.trim(),
+      reference_transaction: params.reference.trim(),
+      statut: 'en_attente',
+      created_at: new Date().toISOString(),
+    };
+
+    const updated = [newDemande, ...list];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(KEYS.DEMANDES_PAIEMENT_ABONNEMENT, JSON.stringify(updated));
+    }
+
+    // Passer le statut de l'établissement en 'en_attente_validation'
+    this.updateEtablissement(params.etablissement.id, {
+      statut_abonnement: 'en_attente_validation',
+      tarif_mensuel: params.palier.tarif_mensuel,
+      palier_actuel_id: params.palier.id,
+    });
+
+    return newDemande;
+  },
+
+  confirmPaiementAbonnement(demandeId: string): { success: boolean; etab?: Etablissement; demande?: DemandePaiementAbonnement } {
+    try {
+      const list = this.getDemandesPaiementAbonnement();
+      const dIndex = list.findIndex((d) => d.id === demandeId);
+      if (dIndex < 0) return { success: false };
+
+      const demande = list[dIndex];
+      demande.statut = 'valide';
+      demande.validated_at = new Date().toISOString();
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.DEMANDES_PAIEMENT_ABONNEMENT, JSON.stringify(list));
+      }
+
+      // Prolonger l'établissement d'un mois (+30 jours) et enregistrer le paiement
+      const etabs = this.getEtablissements();
+      const eIndex = etabs.findIndex((e) => e.id === demande.etablissement_id);
+      let updatedEtab: Etablissement | undefined;
+
+      if (eIndex >= 0) {
+        const etab = etabs[eIndex];
+        const currentNextPayment = new Date(etab.date_prochain_paiement || etab.date_fin_essai || Date.now()).getTime();
+        const baseTime = currentNextPayment > Date.now() ? currentNextPayment : Date.now();
+        const newDueDate = new Date(baseTime + 30 * 24 * 3600 * 1000).toISOString();
+
+        updatedEtab = {
+          ...etab,
+          statut_abonnement: 'actif',
+          date_prochain_paiement: newDueDate,
+          date_fin_essai: newDueDate,
+          tarif_mensuel: demande.montant,
+        };
+
+        etabs[eIndex] = updatedEtab;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(etabs));
+        }
+      }
+
+      // Enregistrer la transaction confirmée dans l'historique global des paiements
+      this.processMobileMoneyPayment({
+        plan: demande.code_palier === 'pro' ? 'Premium' : 'Basique',
+        methode: demande.methode as any,
+        telephone_payeur: demande.telephone_payeur,
+        reference_transaction: demande.reference_transaction,
+        montant: demande.montant,
+      });
+
+      return { success: true, etab: updatedEtab, demande };
+    } catch (e) {
+      console.error(e);
+      return { success: false };
+    }
+  },
+
+  rejectPaiementAbonnement(demandeId: string): { success: boolean; demande?: DemandePaiementAbonnement } {
+    try {
+      const list = this.getDemandesPaiementAbonnement();
+      const dIndex = list.findIndex((d) => d.id === demandeId);
+      if (dIndex < 0) return { success: false };
+
+      const demande = list[dIndex];
+      demande.statut = 'rejete';
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.DEMANDES_PAIEMENT_ABONNEMENT, JSON.stringify(list));
+      }
+
+      const etabs = this.getEtablissements();
+      const etab = etabs.find((e) => e.id === demande.etablissement_id);
+      if (etab && etab.statut_abonnement === 'en_attente_validation') {
+        this.updateEtablissement(etab.id, { statut_abonnement: 'expire' });
+      }
+
+      return { success: true, demande };
+    } catch (e) {
+      console.error(e);
+      return { success: false };
+    }
+  },
+
+  blockEtablissement(etabId: string): Etablissement | null {
+    return this.updateEtablissement(etabId, { statut_abonnement: 'bloque' });
+  },
+
+  unblockEtablissement(etabId: string): Etablissement | null {
+    return this.updateEtablissement(etabId, { statut_abonnement: 'actif' });
   },
 };
 

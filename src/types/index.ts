@@ -13,11 +13,39 @@ export type RoleUtilisateur =
 
 export type ModeSuiviStock = 'quantite' | 'unite_serie';
 export type TypeMouvement = 'entree' | 'sortie' | 'casse_perte';
-export type StatutAbonnement = 'essai' | 'actif' | 'en_retard' | 'suspendu' | 'expire';
-export type MethodePaiement = 'Orange Money' | 'MTN MoMo';
+export type StatutAbonnement = 'essai' | 'actif' | 'en_attente_validation' | 'expire' | 'bloque' | 'en_retard' | 'suspendu';
+export type MethodePaiement = 'Orange Money' | 'MTN MoMo' | 'Virement / Wave';
 export type ModePaiementVente = 'cash' | 'orange_money' | 'mtn_momo' | 'credit' | 'mixte';
 export type StatutFacture = 'payee' | 'credit_encours' | 'annulee';
 export type StatutTransaction = 'ouverte' | 'en_attente_caisse' | 'payee' | 'annulee';
+
+export interface ConfigPaiementManuel {
+  orange_money_numero: string;
+  orange_money_nom: string;
+  mtn_momo_numero: string;
+  mtn_momo_nom: string;
+  virement_wave_info?: string;
+  consignes?: string;
+}
+
+export type StatutDemandePaiement = 'en_attente' | 'valide' | 'rejete';
+
+export interface DemandePaiementAbonnement {
+  id: string;
+  etablissement_id: string;
+  etablissement_nom: string;
+  email_patron?: string;
+  code_palier: 'essentiel' | 'standard' | 'pro';
+  nom_palier: string;
+  montant: number;
+  methode: string;
+  telephone_payeur: string;
+  reference_transaction: string;
+  statut: StatutDemandePaiement;
+  created_at: string;
+  validated_at?: string;
+  notes?: string;
+}
 export type StatutLivraison =
   | 'en_attente_prise_en_charge'
   | 'prise_en_charge_livreur'
