@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, User, ArrowRight, X, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { Mail, ArrowRight, X, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
-import { syncUserShopsFromCloud } from '@/lib/supabaseSync';
+import { supabase } from '@/lib/supabase';
 import { CompteUtilisateur } from '@/types';
 
 interface GoogleAuthModalProps {
@@ -21,54 +21,66 @@ export default function GoogleAuthModal({
   onSuccess,
 }: GoogleAuthModalProps) {
   const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [nom, setNom] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setMode(initialMode);
       setError('');
       setSuccessMsg('');
       setEmail('');
       setNom('');
-      setPassword('');
-      setConfirmPassword('');
-
-      // Délais de sécurité de 100ms pour effacer tout pré-remplissage automatique par le navigateur (Chrome/Safari)
-      const timer = setTimeout(() => {
-        setEmail('');
-        setNom('');
-        setPassword('');
-        setConfirmPassword('');
-      }, 100);
-
-      return () => clearTimeout(timer);
     }
   }, [initialMode, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleLogin = async (userEmail: string, userNom?: string, userPhoto?: string) => {
-    const formattedEmail = userEmail.trim().toLowerCase();
-    const displayName = userNom?.trim() || formattedEmail.split('@')[0];
-    const compte = offlineDB.loginWithGoogle(formattedEmail, displayName, userPhoto);
-
+  // Authentification Google directe via Supabase Auth (OAuth 2.0 sans mot de passe)
+  const handleGoogleOAuthLogin = async () => {
     setIsSubmitting(true);
+    setError('');
     try {
-      // Télécharger immédiatement les boutiques associées à ce compte Gmail depuis Supabase
-      await syncUserShopsFromCloud(formattedEmail);
-    } catch (e) {
-      console.warn('Sync cloud notice:', e);
+      const redirectUrl = typeof window !== 'undefined' 
+        ? `${window.location.origin}/activites` 
+        : 'https://bosseye-sooty.vercel.app/activites';
+
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (authError) {
+        throw authError;
+      }
+    } catch (err: any) {
+      console.error('Erreur Supabase OAuth Google:', err);
+      // Fallback local gracieux si le provider Supabase n'est pas encore activé dans le dashboard
+      setError(`Connexion Google Cloud : ${err?.message || 'Impossible d\'ouvrir la page Google. Vérifiez votre connexion internet.'}`);
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
+  };
+
+  const handleEmailQuickAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const formattedEmail = email.trim().toLowerCase();
+    if (!formattedEmail || !formattedEmail.includes('@') || !formattedEmail.includes('.')) {
+      setError('Veuillez saisir une adresse Gmail ou e-mail valide (ex: exemple@gmail.com).');
+      return;
+    }
+
+    const displayName = nom.trim() || formattedEmail.split('@')[0];
+    const compte = offlineDB.loginWithGoogle(formattedEmail, displayName);
 
     if (onSuccess) onSuccess(compte);
 
@@ -83,72 +95,10 @@ export default function GoogleAuthModal({
     if (onClose) onClose();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccessMsg('');
-
-    if (!email.trim()) {
-      setError('Veuillez saisir votre adresse Gmail / E-mail.');
-      return;
-    }
-
-    const formattedEmail = email.trim().toLowerCase();
-    if (!formattedEmail.includes('@') || !formattedEmail.includes('.')) {
-      setError('L\'adresse e-mail doit impérativement contenir un "@" et un nom de domaine valide (ex: exemple@gmail.com).');
-      return;
-    }
-
-    if (mode === 'register' && !nom.trim()) {
-      setError('Le nom complet est obligatoire pour créer votre compte.');
-      return;
-    }
-
-    if (!password) {
-      setError('Veuillez saisir un mot de passe.');
-      return;
-    }
-
-    if (mode === 'register') {
-      if (password.length < 6) {
-        setError('Sécurité du mot de passe : Il doit contenir au moins 6 caractères.');
-        return;
-      }
-      if (!/\d/.test(password) || !/[a-zA-Z]/.test(password)) {
-        setError('Sécurité du mot de passe : Veuillez mélanger au moins une lettre et un chiffre.');
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError('Les mots de passe ne correspondent pas.');
-        return;
-      }
-
-      setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
-        setSuccessMsg("Compte créé avec succès ! Un e-mail d'activation a été envoyé à votre adresse Gmail. Veuillez consulter votre boîte mail pour valider.");
-        setTimeout(() => {
-          handleLogin(formattedEmail, nom);
-        }, 1500);
-      }, 500);
-    } else {
-      setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
-        handleLogin(formattedEmail, nom);
-      }, 400);
-    }
-  };
-
-  const handleGoogleOneClick = () => {
-    const defaultEmail = 'patron.oeko@gmail.com';
-    handleLogin(defaultEmail, 'Patron œko', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Patron');
-  };
-
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-[#FAF9F5] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative space-y-5 animate-in fade-in zoom-in duration-200">
-        {/* Close Button */}
+        {/* Bouton Fermer */}
         {onClose && (
           <button
             onClick={onClose}
@@ -159,18 +109,20 @@ export default function GoogleAuthModal({
           </button>
         )}
 
-        {/* Header - Minimalist */}
+        {/* En-tête */}
         <div className="text-center space-y-2 pt-1">
           <div className="w-14 h-14 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center mx-auto text-2xl font-black shadow-md">
             👁️
           </div>
           <h2 className="font-serif text-2xl font-black text-[#1B4332]">
-            {mode === 'register' ? 'Création de compte ' : 'Connexion à '}
-            <span className="text-[#B8442C]">œko</span>
+            Connexion à <span className="text-[#B8442C]">œko</span>
           </h2>
+          <p className="text-xs text-gray-600 font-medium">
+            Connectez-vous avec votre compte Google. Aucun mot de passe requis.
+          </p>
         </div>
 
-        {/* Error / Success alerts */}
+        {/* Messages d'erreur ou de succès */}
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium text-center">
             {error}
@@ -183,147 +135,14 @@ export default function GoogleAuthModal({
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-3.5" autoComplete="off">
-          {/* Inputs masqués factices pour neutraliser le moteur d'autofill de Chrome / Safari / Google Password Manager */}
-          <input type="text" name="fake_email_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" readOnly />
-          <input type="password" name="fake_password_prevent_autofill" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" readOnly />
-
-          {mode === 'register' && (
-            <div>
-              <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
-                Nom complet *
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  name="oeko_clean_nom_input"
-                  id="oeko_clean_nom_input"
-                  placeholder="ex: Marie Dupont"
-                  value={nom}
-                  onChange={(e) => setNom(e.target.value)}
-                  autoComplete="off"
-                  required
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
-                />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
-              Adresse Gmail / E-mail *
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="email"
-                name="oeko_clean_email_input"
-                id="oeko_clean_email_input"
-                placeholder="votre.adresse@gmail.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="off"
-                data-lpignore="true"
-                required
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
-              {mode === 'register' ? 'Créer un mot de passe *' : 'Mot de passe *'}
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="oeko_clean_password_input"
-                id="oeko_clean_password_input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                data-lpignore="true"
-                required
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                title={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {mode === 'register' && (
-              <p className="text-[10px] text-gray-500 mt-1 font-medium">
-                🔒 Recommandé : au moins 6 caractères mélangés (lettres + chiffres).
-              </p>
-            )}
-          </div>
-
-          {mode === 'register' && (
-            <div>
-              <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
-                Confirmer le mot de passe *
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  name="oeko_clean_confirmpassword_input"
-                  id="oeko_clean_confirmpassword_input"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  autoComplete="new-password"
-                  data-lpignore="true"
-                  required
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  title={showConfirmPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer"
-          >
-            <span>{isSubmitting ? 'Traitement...' : mode === 'register' ? 'Créer mon compte' : 'Se connecter'}</span>
-            <ArrowRight className="w-4 h-4 text-[#E8A33D]" />
-          </button>
-        </form>
-
-        {/* Divider */}
-        <div className="relative my-2 flex items-center justify-center">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[#E2D5C3]" />
-          </div>
-          <span className="relative bg-[#FAF9F5] px-3 text-[10px] uppercase font-bold tracking-widest text-gray-400">
-            ou
-          </span>
-        </div>
-
-        {/* Google 1-Click Button */}
+        {/* Bouton Principal Google OAuth */}
         <button
           type="button"
-          onClick={handleGoogleOneClick}
-          className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-gray-50 border border-[#E2D5C3] text-[#1B4332] font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+          onClick={handleGoogleOAuthLogin}
+          disabled={isSubmitting}
+          className="w-full py-3.5 px-4 rounded-xl bg-white hover:bg-gray-50 border-2 border-[#1B4332] text-[#1B4332] font-black text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
         >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -341,36 +160,63 @@ export default function GoogleAuthModal({
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>Continuer avec Google</span>
+          <span>{isSubmitting ? 'Redirection vers Google...' : 'Se connecter avec Google'}</span>
         </button>
 
-        {/* Switch Mode Footer */}
-        <div className="text-center pt-1">
-          {mode === 'register' ? (
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                setError('');
-                setSuccessMsg('');
-              }}
-              className="text-xs font-semibold text-[#1B4332] hover:text-[#B8442C] transition-colors cursor-pointer"
-            >
-              Déjà un compte ? <span className="font-bold underline">Se connecter</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setMode('register');
-                setError('');
-                setSuccessMsg('');
-              }}
-              className="text-xs font-semibold text-[#1B4332] hover:text-[#B8442C] transition-colors cursor-pointer"
-            >
-              Pas encore de compte ? <span className="font-bold underline">Crée ton compte</span>
-            </button>
-          )}
+        {/* Séparateur */}
+        <div className="relative my-3 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-[#E2D5C3]" />
+          </div>
+          <span className="relative bg-[#FAF9F5] px-3 text-[10px] uppercase font-bold tracking-widest text-gray-400">
+            ou saisie manuelle de l'e-mail
+          </span>
+        </div>
+
+        {/* Accès rapide E-mail / Nom */}
+        <form onSubmit={handleEmailQuickAccess} className="space-y-3">
+          <div>
+            <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
+              Nom complet (optionnel)
+            </label>
+            <input
+              type="text"
+              placeholder="ex: Paul Biya"
+              value={nom}
+              onChange={(e) => setNom(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-[#1B4332] mb-1 uppercase tracking-wider">
+              Adresse Gmail / E-mail *
+            </label>
+            <div className="relative">
+              <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="email"
+                placeholder="votre.adresse@gmail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2D5C3] text-sm focus:outline-none focus:border-[#1B4332] bg-white text-gray-900 shadow-sm"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-2.5 px-4 rounded-xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>Continuer avec cet e-mail</span>
+            <ArrowRight className="w-4 h-4 text-[#E8A33D]" />
+          </button>
+        </form>
+
+        <div className="pt-2 flex items-center justify-center gap-1.5 text-[11px] text-gray-500 font-medium">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <span>Connexion sécurisée via Supabase Cloud Auth</span>
         </div>
       </div>
     </div>

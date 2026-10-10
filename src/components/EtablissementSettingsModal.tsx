@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Building2, X, Check, Sparkles, Store, MapPin, Tag } from 'lucide-react';
 import { offlineDB, cleanCodeSegment } from '@/lib/offlineDB';
 import { Etablissement } from '@/types';
+import DiagnosticPanel from './DiagnosticPanel';
 
 interface EtablissementSettingsModalProps {
   isOpen: boolean;
@@ -200,6 +201,11 @@ export default function EtablissementSettingsModal({
               />
             </div>
           )}
+
+          {/* Écran / Panneau de Diagnostic Supabase (Phase 1) */}
+          <div className="pt-2 border-t border-[#E2D5C3]">
+            <DiagnosticPanel />
+          </div>
 
           <div className="flex items-center gap-2 pt-2">
             <button
