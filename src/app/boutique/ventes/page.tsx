@@ -44,6 +44,7 @@ import { generateReceiptPDF } from '@/lib/pdfGenerator';
 import { syncShopToCloud } from '@/lib/supabaseSync';
 import { recordSaleToCloud, fetchSalesFromCloud } from '@/lib/salesSyncService';
 import { fetchArticlesFromCloud } from '@/lib/articlesSyncService';
+import { saveReservationToCloud, saveCommandeEnLigneToCloud } from '@/lib/reservationsSyncService';
 
 export interface CartItem {
   produit: Produit;
@@ -79,6 +80,7 @@ export default function BoutiqueVentesPage() {
   const [isNewClientMode, setIsNewClientMode] = useState<boolean>(false);
   const [newClientNom, setNewClientNom] = useState<string>('');
   const [newClientPhone, setNewClientPhone] = useState<string>('');
+  const [clientValidationError, setClientValidationError] = useState<string>('');
 
   // Modal Succès & Impression Reçu PDF
   const [successReceiptData, setSuccessReceiptData] = useState<{
@@ -102,13 +104,14 @@ export default function BoutiqueVentesPage() {
   const [newCmdDate, setNewCmdDate] = useState('');
   const [newCmdHeure, setNewCmdHeure] = useState('');
   const [newCmdNotes, setNewCmdNotes] = useState('');
+  const [newCmdStatutPaiement, setNewCmdStatutPaiement] = useState<'a_la_livraison' | 'paye_avance' | 'credit'>('a_la_livraison');
   const [newCmdCart, setNewCmdCart] = useState<CartItem[]>([]);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = () => {
     try {
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
@@ -116,13 +119,25 @@ export default function BoutiqueVentesPage() {
       setClients(offlineDB.getClients());
       setCommandesLigne(offlineDB.getCommandesEnLigne());
 
+      // 1. AFFICHAGE IMMÉDIAT CACHE-FIRST (< 50ms, même hors-ligne)
+      const cachedProds = offlineDB.getProduits();
+      setProduits(cachedProds);
+
+      // 2. RAFRAÎCHISSEMENT DISCRET EN ARRIÈRE-PLAN SANS BLOQUER L'ÉCRAN
       if (etab?.id) {
-        const { produits: cloudProds } = await fetchArticlesFromCloud(etab.id);
-        setProduits(cloudProds && cloudProds.length > 0 ? cloudProds : offlineDB.getProduits());
-      } else {
-        setProduits(offlineDB.getProduits());
+        fetchArticlesFromCloud(etab.id)
+          .then(({ produits: cloudProds }) => {
+            if (cloudProds && cloudProds.length > 0) {
+              setProduits(cloudProds);
+            }
+          })
+          .catch((err) => {
+            console.warn('[Ventes] Background sync articles warning:', err);
+          });
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const filteredProduits = produits.filter((p) => {
@@ -186,25 +201,77 @@ export default function BoutiqueVentesPage() {
   const cartTotalFinal = Math.max(0, cartSousTotal - remiseInput);
 
   // Calcul automatique de la dette ou du reste
-  const verseActuel = montantVerseInput || (paymentMode === 'cash' || paymentMode === 'orange_money' || paymentMode === 'mtn_momo' ? cartTotalFinal : 0);
+  const verseActuel =
+    paymentMode === 'reservation'
+      ? montantVerseInput || 0
+      : paymentMode === 'credit'
+      ? montantVerseInput || 0
+      : montantVerseInput !== 0
+      ? montantVerseInput
+      : paymentMode === 'cash' || paymentMode === 'orange_money' || paymentMode === 'mtn_momo'
+      ? cartTotalFinal
+      : 0;
+
   const calculDetteOuReste = Math.max(0, cartTotalFinal - verseActuel);
 
   const handleFinalizeEncaissement = (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0 || !etablissement) return;
+    setClientValidationError('');
 
     let targetClientId = selectedClientId;
     let clientName = clients.find((c) => c.id === selectedClientId)?.nom || '';
     let clientPhone = clients.find((c) => c.id === selectedClientId)?.telephone_whatsapp || '';
 
+    const isDetteOuCredit = (paymentMode === 'credit' || calculDetteOuReste > 0) && paymentMode !== 'reservation';
+
+    // 1. CONTRÔLE STRICT POUR DETTE AU COMPTOIR : NOM ET NUMÉRO OBLIGATOIRES
+    if (isDetteOuCredit) {
+      if (isNewClientMode) {
+        if (!newClientNom.trim()) {
+          setClientValidationError('Le nom du client est obligatoire pour une vente avec dette ou solde restant dû.');
+          return;
+        }
+        const cleanPhone = newClientPhone.replace(/[^0-9]/g, '');
+        if (!cleanPhone || cleanPhone.length < 8) {
+          setClientValidationError('Un numéro de téléphone / WhatsApp valide (au moins 8 chiffres) est obligatoire pour le suivi de la dette.');
+          return;
+        }
+      } else {
+        if (!selectedClientId) {
+          setClientValidationError('Veuillez sélectionner ou créer un client avec son nom et son numéro pour enregistrer une vente avec dette.');
+          return;
+        }
+        const selCl = clients.find((c) => c.id === selectedClientId);
+        const cleanPhone = (selCl?.telephone_whatsapp || '').replace(/[^0-9]/g, '');
+        if (!cleanPhone || cleanPhone.length < 8) {
+          setClientValidationError(`Le client sélectionné (${selCl?.nom}) n'a pas de numéro de téléphone. Renseignez son numéro pour le suivi de la dette.`);
+          return;
+        }
+      }
+    }
+
+    // 2. ENREGISTREMENT OU RÉUTILISATION CLIENT SANS CRÉATION DE DOUBLON
     if (isNewClientMode && newClientNom.trim()) {
-      const newCl = offlineDB.addClient({
-        nom: newClientNom.trim(),
-        telephone_whatsapp: newClientPhone.trim(),
+      const cleanPhone = newClientPhone.replace(/[^0-9]/g, '');
+      const existingClient = clients.find((c) => {
+        const p = (c.telephone_whatsapp || '').replace(/[^0-9]/g, '');
+        return p && cleanPhone && (p === cleanPhone || (cleanPhone.length >= 8 && p.endsWith(cleanPhone)) || (p.length >= 8 && cleanPhone.endsWith(p)));
       });
-      targetClientId = newCl.id;
-      clientName = newCl.nom;
-      clientPhone = newCl.telephone_whatsapp || '';
+
+      if (existingClient) {
+        targetClientId = existingClient.id;
+        clientName = existingClient.nom;
+        clientPhone = existingClient.telephone_whatsapp || newClientPhone.trim();
+      } else {
+        const newCl = offlineDB.addClient({
+          nom: newClientNom.trim(),
+          telephone_whatsapp: newClientPhone.trim(),
+        });
+        targetClientId = newCl.id;
+        clientName = newCl.nom;
+        clientPhone = newCl.telephone_whatsapp || '';
+      }
     }
 
     const ticketNo = `TK-${Date.now().toString().slice(-6)}`;
@@ -213,8 +280,11 @@ export default function BoutiqueVentesPage() {
     const resteDette = calculDetteOuReste;
 
     if (paymentMode === 'reservation') {
-      // 1. Mode Réservation avec Acompte
-      offlineDB.createReservation({
+      // 3. MODE RÉSERVATION : TOUJOURS ENREGISTRÉ (MÊME AVEC 0 FCFA D'ACOMPTE)
+      const montantAcompte = montantVerseInput || 0;
+      const resteReservation = Math.max(0, cartTotalFinal - montantAcompte);
+
+      const newRes = offlineDB.createReservation({
         client_id: targetClientId || undefined,
         lignes: cart.map((item) => ({
           produit_id: item.produit.id,
@@ -223,8 +293,22 @@ export default function BoutiqueVentesPage() {
           prix_unitaire: item.prix_unitaire,
           detail_variante: item.variante ? `${item.variante.taille} / ${item.variante.couleur}` : undefined,
         })),
-        acompte_paye: montantVerse,
+        acompte_paye: montantAcompte,
       });
+
+      // Synchronisation sur le serveur
+      if (etablissement?.id) {
+        saveReservationToCloud({
+          resId: newRes.id,
+          activiteId: etablissement.id,
+          clientNom: clientName || 'Client Réservation',
+          clientTelephone: clientPhone,
+          articleNom: cart.map((i) => `${i.quantite}x ${i.produit.nom}`).join(', '),
+          quantite: cart.reduce((acc, i) => acc + i.quantite, 0),
+          acomptePaye: montantAcompte,
+          prixTotal: cartTotalFinal,
+        });
+      }
 
       setSuccessReceiptData({
         numeroTicket: ticketNo,
@@ -238,8 +322,8 @@ export default function BoutiqueVentesPage() {
         })),
         totalGeneral: cartTotalFinal,
         remise: remiseInput,
-        montantVerse,
-        resteAPayer: resteDette,
+        montantVerse: montantAcompte,
+        resteAPayer: resteReservation,
         typeVente: 'reservation',
         dateStr: dateNowStr,
       });
@@ -298,6 +382,7 @@ export default function BoutiqueVentesPage() {
     setIsNewClientMode(false);
     setNewClientNom('');
     setNewClientPhone('');
+    setClientValidationError('');
     loadData();
   };
 
@@ -322,16 +407,51 @@ export default function BoutiqueVentesPage() {
 
   const handleCreateDeliveryCommand = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCmdClientNom.trim()) return;
+    if (!newCmdClientNom.trim()) {
+      alert('Veuillez saisir le nom du destinataire de la livraison.');
+      return;
+    }
+    const cleanPhone = newCmdClientPhone.replace(/[^0-9]/g, '');
+    if (!cleanPhone || cleanPhone.length < 8) {
+      alert('Veuillez saisir un numéro de téléphone/WhatsApp valide (au moins 8 chiffres).');
+      return;
+    }
+    if (!newCmdAdresse.trim()) {
+      alert('Veuillez indiquer le lieu ou le quartier de livraison.');
+      return;
+    }
 
     const itemsToDeliver = newCmdCart.length > 0 ? newCmdCart : cart;
-    if (itemsToDeliver.length === 0) return;
+    if (itemsToDeliver.length === 0) {
+      alert('Veuillez ajouter au moins un article à livrer.');
+      return;
+    }
 
     const totalCmd = itemsToDeliver.reduce((acc, item) => acc + item.quantite * item.prix_unitaire, 0);
 
-    const fullAdresse = `${newCmdAdresse.trim()}${newCmdDate ? ` | Date: ${newCmdDate}` : ''}${newCmdHeure ? ` à ${newCmdHeure}` : ''}${newCmdNotes ? ` (${newCmdNotes})` : ''}`;
+    const paymentLabel =
+      newCmdStatutPaiement === 'paye_avance'
+        ? 'Payé d\'avance'
+        : newCmdStatutPaiement === 'credit'
+        ? 'Vente à Crédit / Dette'
+        : 'À payer à la livraison';
 
-    offlineDB.addCommandeEnLigne({
+    const fullAdresse = `${newCmdAdresse.trim()}${newCmdDate ? ` | Date: ${newCmdDate}` : ''}${newCmdHeure ? ` à ${newCmdHeure}` : ''}${newCmdNotes ? ` (${newCmdNotes})` : ''} | Paiement: ${paymentLabel}`;
+
+    // Déstockage immédiat pour bloquer les articles en livraison
+    const user = offlineDB.getCurrentUser();
+    itemsToDeliver.forEach((item) => {
+      offlineDB.addMouvementStock({
+        produit_id: item.produit.id,
+        variante_id: item.variante?.id,
+        type_mouvement: 'sortie',
+        quantite_bouteilles: item.quantite,
+        utilisateur_id: user?.id || 'u-vendeur',
+        note_motif: `Commande Livraison pour ${newCmdClientNom.trim()}`,
+      });
+    });
+
+    const newCmd = offlineDB.addCommandeEnLigne({
       client_nom: newCmdClientNom.trim(),
       client_telephone: newCmdClientPhone.trim(),
       adresse_livraison: fullAdresse,
@@ -348,6 +468,11 @@ export default function BoutiqueVentesPage() {
     });
 
     if (etablissement) syncShopToCloud(etablissement.id);
+    saveCommandeEnLigneToCloud(newCmd);
+
+    // Incrémentation immédiate et synchrone du compteur de l'onglet Livraisons
+    const allUpdatedCmds = offlineDB.getCommandesEnLigne();
+    setCommandesLigne(allUpdatedCmds);
 
     setIsNewDeliveryModalOpen(false);
     setNewCmdClientNom('');
@@ -356,6 +481,7 @@ export default function BoutiqueVentesPage() {
     setNewCmdDate('');
     setNewCmdHeure('');
     setNewCmdNotes('');
+    setNewCmdStatutPaiement('a_la_livraison');
     setNewCmdCart([]);
     setCart([]);
     loadData();
@@ -609,21 +735,38 @@ export default function BoutiqueVentesPage() {
                         <h4 className="font-serif font-black text-base text-[#1B4332]">{cmd.client_nom || 'Client'}</h4>
                         <p className="text-xs text-gray-500 font-bold">📱 {cmd.client_telephone || 'Non indiqué'}</p>
                       </div>
-                      <span
-                        className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
-                          cmd.statut === 'livree_payee'
-                            ? 'bg-emerald-100 text-emerald-900'
+                      <div className="flex flex-col items-end gap-1">
+                        <span
+                          className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                            (cmd.adresse_livraison || '').includes('Payé')
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : (cmd.adresse_livraison || '').includes('Crédit')
+                              ? 'bg-red-100 text-red-800 border border-red-300'
+                              : 'bg-amber-100 text-amber-800 border border-amber-300'
+                          }`}
+                        >
+                          {(cmd.adresse_livraison || '').includes('Payé')
+                            ? '💳 Payé d\'avance'
+                            : (cmd.adresse_livraison || '').includes('Crédit')
+                            ? '⚠️ Crédit / Dette'
+                            : '⏳ Paiement à la livraison'}
+                        </span>
+                        <span
+                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                            cmd.statut === 'livree_payee'
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : cmd.statut === 'en_livraison'
+                              ? 'bg-blue-100 text-blue-900'
+                              : 'bg-amber-100 text-amber-900'
+                          }`}
+                        >
+                          {cmd.statut === 'en_attente_paiement'
+                            ? '📦 À Livrer'
                             : cmd.statut === 'en_livraison'
-                            ? 'bg-blue-100 text-blue-900'
-                            : 'bg-amber-100 text-amber-900'
-                        }`}
-                      >
-                        {cmd.statut === 'en_attente_paiement'
-                          ? '⏳ En Attente'
-                          : cmd.statut === 'en_livraison'
-                          ? '🚚 En Livraison'
-                          : '🎉 Livrée & Payée'}
-                      </span>
+                            ? '🚚 En Livraison'
+                            : '🎉 Livrée & Payée'}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
@@ -651,7 +794,7 @@ export default function BoutiqueVentesPage() {
                         <button
                           onClick={() => {
                             offlineDB.updateStatutCommandeEnLigne(cmd.id, 'en_livraison');
-                            loadData();
+                            setCommandesLigne(offlineDB.getCommandesEnLigne());
                           }}
                           className="w-full py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
                         >
@@ -664,7 +807,7 @@ export default function BoutiqueVentesPage() {
                         <button
                           onClick={() => {
                             offlineDB.updateStatutCommandeEnLigne(cmd.id, 'livree_payee');
-                            loadData();
+                            setCommandesLigne(offlineDB.getCommandesEnLigne());
                           }}
                           className="w-full py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
                         >
@@ -694,10 +837,15 @@ export default function BoutiqueVentesPage() {
               {/* Choix Client */}
               <div className="p-4 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#1B4332]">Nom du Client (Recommandé pour Dette/Réservation)</span>
+                  <span className={`text-xs font-bold ${calculDetteOuReste > 0 || paymentMode === 'credit' ? 'text-red-700 font-black' : 'text-[#1B4332]'}`}>
+                    {calculDetteOuReste > 0 || paymentMode === 'credit' ? '⚠️ Client Obligatoire (Vente avec Dette / Solde restant dû) *' : 'Nom du Client (Recommandé)'}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setIsNewClientMode(!isNewClientMode)}
+                    onClick={() => {
+                      setIsNewClientMode(!isNewClientMode);
+                      setClientValidationError('');
+                    }}
                     className="text-[11px] font-bold text-[#B8442C] underline"
                   >
                     {isNewClientMode ? 'Sélectionner Client Existant' : '+ Nouveau Client'}
@@ -705,29 +853,78 @@ export default function BoutiqueVentesPage() {
                 </div>
 
                 {isNewClientMode ? (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <input
-                      type="text"
-                      placeholder="Nom du Client *"
-                      value={newClientNom}
-                      onChange={(e) => setNewClientNom(e.target.value)}
-                      className="bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
-                    <input
-                      type="text"
-                      placeholder="N° WhatsApp"
-                      value={newClientPhone}
-                      onChange={(e) => setNewClientPhone(e.target.value)}
-                      className="bg-white border border-[#E2D5C3] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
-                    />
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Nom du Client *"
+                        value={newClientNom}
+                        onChange={(e) => {
+                          setNewClientNom(e.target.value);
+                          setClientValidationError('');
+                        }}
+                        className={`bg-white border rounded-xl p-2 text-xs font-bold text-[#1B4332] ${
+                          (calculDetteOuReste > 0 || paymentMode === 'credit') && !newClientNom.trim() ? 'border-red-400 ring-1 ring-red-400' : 'border-[#E2D5C3]'
+                        }`}
+                      />
+                      <input
+                        type="text"
+                        placeholder="N° WhatsApp/Tél *"
+                        value={newClientPhone}
+                        onChange={(e) => {
+                          setNewClientPhone(e.target.value);
+                          setClientValidationError('');
+                        }}
+                        className={`bg-white border rounded-xl p-2 text-xs font-bold text-[#1B4332] ${
+                          (calculDetteOuReste > 0 || paymentMode === 'credit') && newClientPhone.replace(/[^0-9]/g, '').length < 8 ? 'border-red-400 ring-1 ring-red-400' : 'border-[#E2D5C3]'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Suggestion automatique si numéro déjà attribué */}
+                    {(() => {
+                      const cleanPhone = newClientPhone.replace(/[^0-9]/g, '');
+                      const matched = cleanPhone.length >= 8 ? clients.find((c) => {
+                        const p = (c.telephone_whatsapp || '').replace(/[^0-9]/g, '');
+                        return p && (p === cleanPhone || p.endsWith(cleanPhone) || cleanPhone.endsWith(p));
+                      }) : null;
+
+                      if (!matched) return null;
+                      return (
+                        <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs flex items-center justify-between text-emerald-900">
+                          <div>
+                            <p className="font-bold">💡 Ce numéro appartient à : {matched.nom}</p>
+                            <p className="text-[10px] text-gray-500">N° : {matched.telephone_whatsapp}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedClientId(matched.id);
+                              setIsNewClientMode(false);
+                              setNewClientNom('');
+                              setNewClientPhone('');
+                              setClientValidationError('');
+                            }}
+                            className="px-2.5 py-1 bg-[#1B4332] text-white rounded-lg text-[10px] font-bold shadow-sm"
+                          >
+                            Utiliser ce client
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <select
                     value={selectedClientId}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                    onChange={(e) => {
+                      setSelectedClientId(e.target.value);
+                      setClientValidationError('');
+                    }}
+                    className={`w-full bg-white border rounded-xl p-2.5 text-xs font-bold text-[#1B4332] ${
+                      (calculDetteOuReste > 0 || paymentMode === 'credit') && !selectedClientId ? 'border-red-400 ring-1 ring-red-400' : 'border-[#E2D5C3]'
+                    }`}
                   >
-                    <option value="">Client Anonyme (Vente direct au comptoir)</option>
+                    <option value="">{calculDetteOuReste > 0 || paymentMode === 'credit' ? '-- Sélectionner un Client Obligatoire --' : 'Client Anonyme (Vente direct au comptoir)'}</option>
                     {clients.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nom} ({c.telephone_whatsapp || 'Sans tel'})
@@ -753,8 +950,11 @@ export default function BoutiqueVentesPage() {
                       key={m.id}
                       onClick={() => {
                         setPaymentMode(m.id as any);
+                        setClientValidationError('');
                         if (m.id === 'cash' || m.id === 'orange_money' || m.id === 'mtn_momo') {
                           setMontantVerseInput(cartTotalFinal);
+                        } else if (m.id === 'reservation') {
+                          setMontantVerseInput(0);
                         }
                       }}
                       className={`p-3 rounded-2xl border text-xs font-bold text-center transition-all ${
@@ -766,6 +966,20 @@ export default function BoutiqueVentesPage() {
                       {m.label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPaymentModalOpen(false);
+                      setNewCmdCart([...cart]);
+                      setNewCmdClientNom(newClientNom || clients.find((c) => c.id === selectedClientId)?.nom || '');
+                      setNewCmdClientPhone(newClientPhone || clients.find((c) => c.id === selectedClientId)?.telephone_whatsapp || '');
+                      setIsNewDeliveryModalOpen(true);
+                    }}
+                    className="p-3 rounded-2xl border border-dashed border-[#1B4332] bg-emerald-50 text-[#1B4332] hover:bg-emerald-100 text-xs font-bold text-center transition-all flex items-center justify-center gap-1"
+                  >
+                    <Truck className="w-3.5 h-3.5 text-[#B8442C]" />
+                    <span>🚚 Vente à Livrer</span>
+                  </button>
                 </div>
               </div>
 
@@ -791,7 +1005,7 @@ export default function BoutiqueVentesPage() {
                     onFocus={(e) => e.target.select()}
                     value={montantVerseInput || ''}
                     onChange={(e) => setMontantVerseInput(e.target.value === '' ? 0 : Number(e.target.value))}
-                    placeholder={`${cartTotalFinal}`}
+                    placeholder={paymentMode === 'reservation' ? '0' : `${cartTotalFinal}`}
                     className="w-full bg-white border-2 border-[#1B4332] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
                   />
                 </div>
@@ -808,7 +1022,15 @@ export default function BoutiqueVentesPage() {
               {paymentMode === 'reservation' && (
                 <div className="p-3.5 rounded-2xl bg-purple-100 border border-purple-300 text-purple-900 text-xs font-bold space-y-1">
                   <p>🔖 Réservation d'articles activée</p>
-                  <p className="text-[11px] font-normal opacity-90">Cette vente sera enregistrée dans le tableau des Réservations / Mise de côté.</p>
+                  <p className="text-[11px] font-normal opacity-90">Les articles seront immédiatement mis de côté (stock réservé), avec {montantVerseInput || 0} FCFA d'acompte et {Math.max(0, cartTotalFinal - (montantVerseInput || 0)).toLocaleString('fr-FR')} FCFA restant à solder.</p>
+                </div>
+              )}
+
+              {/* Erreur de validation explicite pour la dette */}
+              {clientValidationError && (
+                <div className="p-3 rounded-2xl bg-red-100 border-2 border-red-400 text-red-900 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                  <span>{clientValidationError}</span>
                 </div>
               )}
 
@@ -1017,6 +1239,27 @@ export default function BoutiqueVentesPage() {
                   onChange={(e) => setNewCmdClientPhone(e.target.value)}
                   className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                 />
+                {(() => {
+                  const cleanPhone = newCmdClientPhone.replace(/[^0-9]/g, '');
+                  const matchedClient = cleanPhone.length >= 8 ? clients.find((c) => {
+                    const p = (c.telephone_whatsapp || '').replace(/[^0-9]/g, '');
+                    return p && (p === cleanPhone || p.endsWith(cleanPhone) || cleanPhone.endsWith(p));
+                  }) : null;
+
+                  if (!matchedClient || matchedClient.nom === newCmdClientNom) return null;
+                  return (
+                    <div className="p-2 bg-emerald-50 border border-emerald-300 rounded-xl text-xs flex items-center justify-between text-emerald-900 mt-1">
+                      <span>💡 Client existant trouvé : <strong>{matchedClient.nom}</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => setNewCmdClientNom(matchedClient.nom)}
+                        className="px-2 py-0.5 bg-[#1B4332] text-white rounded text-[10px] font-bold"
+                      >
+                        Utiliser son nom
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -1029,6 +1272,31 @@ export default function BoutiqueVentesPage() {
                   onChange={(e) => setNewCmdAdresse(e.target.value)}
                   className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                 />
+              </div>
+
+              {/* Statut de paiement */}
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Statut du Paiement pour la Livraison *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'a_la_livraison', label: '🟡 À la livraison' },
+                    { id: 'paye_avance', label: '🟢 Payé d\'avance' },
+                    { id: 'credit', label: '🟠 Crédit / Dette' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setNewCmdStatutPaiement(opt.id as any)}
+                      className={`py-2 px-1 text-[11px] font-bold rounded-xl border transition-all text-center ${
+                        newCmdStatutPaiement === opt.id
+                          ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
+                          : 'bg-white text-gray-700 border-[#E2D5C3]'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">

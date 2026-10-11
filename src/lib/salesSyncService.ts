@@ -185,8 +185,15 @@ export async function fetchSalesFromCloud(
       };
     });
 
-    offlineDB.saveFactures(facturesMapped);
-    return { success: true, factures: facturesMapped };
+    // Fusionner avec les factures locales pour ne jamais écraser les ventes hors-ligne
+    const localFactures = offlineDB.getFactures();
+    const facMap = new Map<string, Facture>();
+    localFactures.forEach((f) => facMap.set(f.id, f));
+    facturesMapped.forEach((f) => facMap.set(f.id, f));
+    const mergedFactures = Array.from(facMap.values());
+
+    offlineDB.saveFactures(mergedFactures);
+    return { success: true, factures: mergedFactures };
   } catch (err: any) {
     console.error('[SalesSyncService] Exception fetchSalesFromCloud:', err);
     return {

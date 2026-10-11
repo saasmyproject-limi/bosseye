@@ -85,7 +85,24 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
   const verifyPin = (code: string) => {
     if (!selectedUser || !selectedEtab) return;
 
-    if (selectedUser.pin_code === code.trim() || code.trim() === '1234') {
+    if (selectedUser.doit_definir_pin) {
+      // POINT 6 : L'employé choisit lui-même son nouveau code PIN personnel à sa première connexion
+      const res = offlineDB.defineNewPinForUser(selectedUser.id, code);
+      if (res.success) {
+        offlineDB.switchEtablissement(selectedEtab.id);
+        offlineDB.setCurrentUserById(selectedUser.id);
+        setError('');
+        const updatedUser = offlineDB.getCurrentUser() || selectedUser;
+        onSuccess(updatedUser);
+      } else {
+        setError(res.message || 'Erreur lors de la définition du PIN.');
+        setPin('');
+      }
+      return;
+    }
+
+    const isValid = offlineDB.verifyUserPin(selectedUser, code.trim());
+    if (isValid) {
       offlineDB.switchEtablissement(selectedEtab.id);
       offlineDB.setCurrentUserById(selectedUser.id);
       setError('');
@@ -94,13 +111,6 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
       setError(`Code PIN incorrect pour ${selectedUser.nom}. Réessayez...`);
       setPin('');
     }
-  };
-
-  const handleQuickDemoLogin = (userToLogin: Utilisateur) => {
-    if (!selectedEtab) return;
-    offlineDB.switchEtablissement(selectedEtab.id);
-    offlineDB.setCurrentUserById(userToLogin.id);
-    onSuccess(userToLogin);
   };
 
   return (
@@ -217,6 +227,19 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
           </div>
         )}
 
+        {/* Instructions PIN */}
+        <div className="mb-2">
+          {selectedUser?.doit_definir_pin ? (
+            <span className="inline-block px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-black animate-pulse">
+              ✨ Nouveau PIN requis : Entrez 4 chiffres pour créer votre PIN personnel
+            </span>
+          ) : (
+            <span className="text-xs font-bold text-[#1B4332]">
+              Saisissez votre code PIN personnel (4 chiffres) :
+            </span>
+          )}
+        </div>
+
         {/* 4-Digit Display Dots */}
         <div className="flex justify-center items-center gap-3 mb-3">
           {[0, 1, 2, 3].map((idx) => {
@@ -237,7 +260,7 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
         </div>
 
         {/* Keypad 0-9 & Delete */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="grid grid-cols-3 gap-2 mb-2">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
             <button
               key={num}
@@ -266,16 +289,6 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
             <Delete className="w-5 h-5" />
           </button>
         </div>
-
-        {/* Quick Demo Login Button */}
-        {selectedUser && (
-          <button
-            onClick={() => handleQuickDemoLogin(selectedUser)}
-            className="w-full py-2.5 rounded-2xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs shadow-md transition-transform active:scale-95"
-          >
-            Entrer directement comme {selectedUser.nom} ({selectedUser.role})
-          </button>
-        )}
       </div>
     </div>
   );

@@ -33,15 +33,21 @@ export default function BoutiqueReservationsPage() {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = () => {
     try {
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
+      // 1. Cache-first immédiat (< 50ms)
+      const cached = offlineDB.getReservations();
+      setReservations(cached);
+
+      // 2. Rafraîchissement en arrière-plan sans bloquer
       if (etab?.id) {
-        const { reservations: cloudRes } = await fetchReservationsFromCloud(etab.id);
-        setReservations(cloudRes && cloudRes.length > 0 ? cloudRes : offlineDB.getReservations());
-      } else {
-        setReservations(offlineDB.getReservations());
+        fetchReservationsFromCloud(etab.id).then(({ reservations: cloudRes }) => {
+          if (cloudRes && cloudRes.length > 0) {
+            setReservations(cloudRes);
+          }
+        }).catch((err) => console.warn('[Reservations] Background fetch warning:', err));
       }
     } catch (e) {
       console.error(e);

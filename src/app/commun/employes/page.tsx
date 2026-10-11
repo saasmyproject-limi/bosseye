@@ -19,6 +19,15 @@ export default function CommunEmployesPage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Modal Modification de son propre PIN
+  const [isChangePinOpen, setIsChangePinOpen] = useState(false);
+  const [oldPinInput, setOldPinInput] = useState('');
+  const [newPinInput, setNewPinInput] = useState('');
+  const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [pinChangeError, setPinChangeError] = useState('');
+  const [pinChangeSuccess, setPinChangeSuccess] = useState('');
+  const [infoBanner, setInfoBanner] = useState('');
+
   useEffect(() => {
     loadUsers();
     try {
@@ -79,6 +88,53 @@ export default function CommunEmployesPage() {
     loadUsers();
   };
 
+  const handleResetEmployeePin = (targetUser: Utilisateur) => {
+    if (!confirm(`Voulez-vous réinitialiser le PIN de ${targetUser.nom} ? L'employé devra définir lui-même son nouveau code PIN lors de sa prochaine connexion.`)) {
+      return;
+    }
+    const ok = offlineDB.resetEmployeePin(targetUser.id);
+    if (ok) {
+      setInfoBanner(`Le PIN de ${targetUser.nom} a été réinitialisé. L'employé choisira son nouveau PIN secret à sa prochaine connexion.`);
+      loadUsers();
+      setTimeout(() => setInfoBanner(''), 6000);
+    }
+  };
+
+  const handleChangeOwnPinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinChangeError('');
+    setPinChangeSuccess('');
+    if (!currentUser) return;
+
+    if (!oldPinInput || oldPinInput.length !== 4) {
+      setPinChangeError('Veuillez entrer votre ancien code PIN à 4 chiffres.');
+      return;
+    }
+    if (!newPinInput || newPinInput.length !== 4) {
+      setPinChangeError('Le nouveau code PIN doit comporter exactement 4 chiffres.');
+      return;
+    }
+    if (newPinInput !== confirmPinInput) {
+      setPinChangeError('La confirmation ne correspond pas au nouveau code PIN.');
+      return;
+    }
+
+    const res = offlineDB.changeUserPin(currentUser.id, oldPinInput, newPinInput);
+    if (res.success) {
+      setPinChangeSuccess('Votre code PIN a été mis à jour avec succès !');
+      setOldPinInput('');
+      setNewPinInput('');
+      setConfirmPinInput('');
+      loadUsers();
+      setTimeout(() => {
+        setIsChangePinOpen(false);
+        setPinChangeSuccess('');
+      }, 1500);
+    } else {
+      setPinChangeError(res.message || 'Ancien code PIN incorrect.');
+    }
+  };
+
   return (
     <AppLayout>
         {/* Header */}
@@ -137,14 +193,8 @@ export default function CommunEmployesPage() {
                 <div className="p-3 rounded-2xl bg-[#FBF7EF] border border-[#E2D5C3] text-xs space-y-1">
                   <div className="flex justify-between items-center font-bold text-gray-700">
                     <span>Code PIN d'accès :</span>
-                    <span
-                      className={`font-black px-2 py-0.5 rounded border ${
-                        canAddEmployee || u.id === currentUser?.id
-                          ? 'text-[#1B4332] bg-white border-[#E2D5C3]'
-                          : 'text-gray-500 bg-gray-100 border-gray-300 font-mono'
-                      }`}
-                    >
-                      {canAddEmployee || u.id === currentUser?.id ? `🔑 ${u.pin_code}` : '🔑 •••• (Confidentiel)'}
+                    <span className="font-mono text-xs px-2 py-0.5 rounded border text-gray-600 bg-white border-[#E2D5C3]">
+                      {u.doit_definir_pin ? '⏳ À définir à la connexion' : '🔑 •••• (Masqué)'}
                     </span>
                   </div>
                   {u.telephone && (
@@ -155,18 +205,45 @@ export default function CommunEmployesPage() {
                   )}
                 </div>
 
-                {canAddEmployee && u.id !== currentUser?.id && (
-                  <button
-                    onClick={() => handleToggleStatus(u.id)}
-                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
-                      u.actif
-                        ? 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
-                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                    }`}
-                  >
-                    {u.actif ? 'Désactiver le compte' : 'Réactiver le compte'}
-                  </button>
-                )}
+                <div className="space-y-1.5 pt-1">
+                  {u.id === currentUser?.id && (
+                    <button
+                      onClick={() => {
+                        setOldPinInput('');
+                        setNewPinInput('');
+                        setConfirmPinInput('');
+                        setPinChangeError('');
+                        setPinChangeSuccess('');
+                        setIsChangePinOpen(true);
+                      }}
+                      className="w-full py-2 rounded-xl text-xs font-bold bg-[#1B4332] text-white hover:bg-[#2D6A4F] transition-all shadow-sm"
+                    >
+                      Modifier mon code PIN
+                    </button>
+                  )}
+
+                  {canAddEmployee && u.id !== currentUser?.id && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleResetEmployeePin(u)}
+                        title="L'employé définira son nouveau PIN à sa prochaine connexion"
+                        className="py-2 px-2 rounded-xl text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-all text-center"
+                      >
+                        Réinitialiser PIN
+                      </button>
+                      <button
+                        onClick={() => handleToggleStatus(u.id)}
+                        className={`py-2 px-2 rounded-xl text-[11px] font-bold transition-all text-center ${
+                          u.actif
+                            ? 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                        }`}
+                      >
+                        {u.actif ? 'Désactiver' : 'Réactiver'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -257,6 +334,95 @@ export default function CommunEmployesPage() {
                   className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
                 >
                   Créer le Compte
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Modal Modification de mon propre PIN */}
+        {isChangePinOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <form
+              onSubmit={handleChangeOwnPinSubmit}
+              className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-[#E2D5C3]">
+                <h3 className="font-serif font-black text-xl text-[#1B4332]">Modifier mon code PIN</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsChangePinOpen(false)}
+                  className="text-gray-500 hover:text-black"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {pinChangeError && (
+                <div className="p-3 rounded-xl bg-red-100 text-red-900 text-xs font-bold border border-red-300">
+                  {pinChangeError}
+                </div>
+              )}
+
+              {pinChangeSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-100 text-emerald-900 text-xs font-bold border border-emerald-300">
+                  {pinChangeSuccess}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-[#1B4332] mb-1">Ancien Code PIN (4 chiffres) *</label>
+                <input
+                  type="password"
+                  maxLength={4}
+                  required
+                  placeholder="••••"
+                  value={oldPinInput}
+                  onChange={(e) => setOldPinInput(e.target.value)}
+                  className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332] tracking-widest text-center"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#1B4332] mb-1">Nouveau PIN *</label>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    required
+                    placeholder="••••"
+                    value={newPinInput}
+                    onChange={(e) => setNewPinInput(e.target.value)}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332] tracking-widest text-center"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#1B4332] mb-1">Confirmer *</label>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    required
+                    placeholder="••••"
+                    value={confirmPinInput}
+                    onChange={(e) => setConfirmPinInput(e.target.value)}
+                    className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332] tracking-widest text-center"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChangePinOpen(false)}
+                  className="py-3 px-4 rounded-xl bg-[#FBF7EF] border border-[#E2D5C3] text-gray-600 font-bold text-xs"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 px-4 rounded-xl bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-black text-xs shadow-md"
+                >
+                  Valider le nouveau PIN
                 </button>
               </div>
             </form>

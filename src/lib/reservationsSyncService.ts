@@ -50,8 +50,15 @@ export async function fetchReservationsFromCloud(
       created_at: r.created_at,
     }));
 
-    offlineDB.saveReservations(resMapped);
-    return { success: true, reservations: resMapped };
+    // Fusion résiliente : ne jamais écraser les réservations locales créées hors-ligne
+    const localRes = offlineDB.getReservations();
+    const resMap = new Map<string, Reservation>();
+    localRes.forEach((r) => resMap.set(r.id, r));
+    resMapped.forEach((r) => resMap.set(r.id, r));
+    const mergedReservations = Array.from(resMap.values());
+
+    offlineDB.saveReservations(mergedReservations);
+    return { success: true, reservations: mergedReservations };
   } catch (err: any) {
     console.error('[ReservationsSyncService] Exception fetchReservationsFromCloud:', err);
     return {
@@ -63,6 +70,7 @@ export async function fetchReservationsFromCloud(
 }
 
 export async function saveReservationToCloud(params: {
+  resId?: string;
   activiteId: string;
   clientNom: string;
   clientTelephone?: string;
@@ -73,7 +81,7 @@ export async function saveReservationToCloud(params: {
   prixTotal: number;
 }): Promise<{ success: boolean; resId: string; error?: string }> {
   try {
-    const resId = `res-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const resId = params.resId || `res-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const nowIso = new Date().toISOString();
 
     const resPayload = {

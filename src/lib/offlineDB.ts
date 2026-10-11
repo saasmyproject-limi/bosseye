@@ -46,6 +46,7 @@ import {
   SEED_COMMANDES_LIGNE,
   SEED_CAISSES,
 } from './presetData';
+import { hashPinSync, verifyPinSync } from './authPinService';
 
 const KEYS = {
   ACTIVE_ETAB_ID: 'oeko_active_etab_id',
@@ -354,14 +355,16 @@ export const offlineDB = {
       created_at: nowIso,
     };
 
-    const patronRole = act === 'snack' ? 'Directeur' : 'Patronne';
+    const patronRole = 'Patron';
+    const hashedPin = hashPinSync(params.patronPin || '1234');
 
     const newPatron: Utilisateur = {
       id: `user-patron-${Date.now()}`,
       etablissement_id: newId,
-      nom: params.patronNom || (act === 'snack' ? 'M. Directeur' : 'Mme Patronne'),
+      nom: params.patronNom || 'Patron (Propriétaire)',
       role: patronRole,
-      pin_code: params.patronPin || '1234',
+      pin_code: hashedPin,
+      pin_code_hash: hashedPin,
       telephone: params.telephone,
       email: params.email_patron,
       actif: true,
@@ -554,15 +557,58 @@ export const offlineDB = {
   getUtilisateursByEtablissementId(etabId: string): Utilisateur[] {
     try {
       const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etabId);
-      const data = localStorage.getItem(KEYS.UTILISATEURS);
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
-        return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etabId);
+      let parsed: Utilisateur[] = [];
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem(KEYS.UTILISATEURS);
+        if (!data) {
+          if (isResetZero) return [];
+          localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
+          parsed = SEED_UTILISATEURS;
+        } else {
+          parsed = JSON.parse(data) || [];
+        }
+      } else {
+        parsed = SEED_UTILISATEURS;
       }
-      const parsed: Utilisateur[] = JSON.parse(data);
-      return (parsed || []).filter((u) => u && u.etablissement_id === etabId);
+
+      let etabUsers = (parsed || []).filter((u) => u && u.etablissement_id === etabId);
+
+      // POINT 5: S'assurer que le Patron figure TOUJOURS dans la liste des profils, avec son rôle
+      const hasPatron = etabUsers.some((u) => u && (u.role === 'Patron' || u.role === 'Patronne' || u.role === 'Directeur'));
+      if (!hasPatron && etabId) {
+        const etabs = this.getEtablissements();
+        const currentEtab = etabs.find((e) => e.id === etabId);
+        const compte = this.getCompteActuel();
+        const patronNom = (currentEtab as any)?.nom_patron || (currentEtab as any)?.patronNom || compte?.nom || 'Patron (Propriétaire)';
+        const patronPinHashed = hashPinSync('1234');
+        const patronUser: Utilisateur = {
+          id: `user-patron-${etabId}`,
+          etablissement_id: etabId,
+          nom: patronNom,
+          role: 'Patron',
+          pin_code: patronPinHashed,
+          pin_code_hash: patronPinHashed,
+          actif: true,
+          created_at: new Date().toISOString(),
+        };
+
+        etabUsers = [patronUser, ...etabUsers];
+        if (typeof window !== 'undefined') {
+          const allGlobal = this.getAllUtilisateursGlobal();
+          if (!allGlobal.some((u) => u.id === patronUser.id)) {
+            localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify([patronUser, ...allGlobal]));
+          }
+        }
+      }
+
+      // Trier pour toujours placer le Patron en premier
+      return etabUsers.sort((a, b) => {
+        const isAPatron = a.role === 'Patron' || a.role === 'Patronne' || a.role === 'Directeur';
+        const isBPatron = b.role === 'Patron' || b.role === 'Patronne' || b.role === 'Directeur';
+        if (isAPatron && !isBPatron) return -1;
+        if (!isAPatron && isBPatron) return 1;
+        return 0;
+      });
     } catch {
       return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etabId);
     }
@@ -570,7 +616,7 @@ export const offlineDB = {
 
   loginWithPin(code: string): { success: boolean; user?: Utilisateur; message?: string } {
     const users = this.getUtilisateurs();
-    const match = users.find((u) => u && u.actif && u.pin_code === code.trim());
+    const match = users.find((u) => u && u.actif && verifyPinSync(code, u.pin_code_hash || u.pin_code));
     if (match) {
       this.setCurrentUserById(match.id);
       return { success: true, user: match };
@@ -578,13 +624,90 @@ export const offlineDB = {
     return { success: false, message: 'Code PIN incorrect. Réessayez.' };
   },
 
+  verifyUserPin(user: Utilisateur, rawPin: string): boolean {
+    return verifyPinSync(rawPin, user.pin_code_hash || user.pin_code);
+  },
+
+  resetEmployeePin(userId: string): boolean {
+    try {
+      const allUsers = this.getAllUtilisateursGlobal();
+      const updated = allUsers.map((u) => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            pin_code: '',
+            pin_code_hash: '',
+            doit_definir_pin: true,
+          };
+        }
+        return u;
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(updated));
+      }
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  },
+
+  defineNewPinForUser(userId: string, newPin: string): { success: boolean; message?: string } {
+    try {
+      const clean = newPin.trim();
+      if (!clean || clean.length < 4) {
+        return { success: false, message: 'Le code PIN doit comporter 4 chiffres.' };
+      }
+      const hashed = hashPinSync(clean);
+      const allUsers = this.getAllUtilisateursGlobal();
+      const updated = allUsers.map((u) => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            pin_code: hashed,
+            pin_code_hash: hashed,
+            doit_definir_pin: false,
+          };
+        }
+        return u;
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(updated));
+      }
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, message: 'Erreur lors de la définition du PIN.' };
+    }
+  },
+
+  changeUserPin(userId: string, oldPin: string, newPin: string): { success: boolean; message?: string } {
+    try {
+      const allUsers = this.getAllUtilisateursGlobal();
+      const targetUser = allUsers.find((u) => u.id === userId);
+      if (!targetUser) return { success: false, message: 'Utilisateur introuvable.' };
+
+      if (!verifyPinSync(oldPin, targetUser.pin_code_hash || targetUser.pin_code)) {
+        return { success: false, message: 'Ancien code PIN incorrect.' };
+      }
+
+      return this.defineNewPinForUser(userId, newPin);
+    } catch (e) {
+      console.error(e);
+      return { success: false, message: 'Erreur lors du changement de PIN.' };
+    }
+  },
+
   addUtilisateur(user: Partial<Utilisateur> & { nom: string; role: any; pin_code: string }): Utilisateur {
     const etab = this.getEtablissement();
     const allUsers = this.getAllUtilisateursGlobal();
+    const hashed = hashPinSync(user.pin_code || '1234');
     const newUser: Utilisateur = {
       ...user,
       id: `user-${Date.now()}`,
       etablissement_id: etab.id,
+      pin_code: hashed,
+      pin_code_hash: hashed,
       actif: user.actif ?? true,
       created_at: new Date().toISOString(),
     };

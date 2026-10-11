@@ -8,86 +8,104 @@ export async function fetchArticlesFromCloud(activiteId: string): Promise<{
   produits: Produit[];
   error?: string;
 }> {
+  const localProds = offlineDB.getProduits().filter((p) => !p.etablissement_id || p.etablissement_id === activiteId);
   try {
     if (!activiteId) {
-      return { success: true, produits: offlineDB.getProduits() };
+      return { success: true, produits: localProds };
     }
 
-    // 1. Lire les articles
-    const { data: artData, error: artErr } = await supabase
-      .from('articles')
-      .select('*')
-      .eq('activite_id', activiteId)
-      .eq('actif', true)
-      .order('created_at', { ascending: false });
-
-    if (artErr) throw artErr;
-
-    // 2. Lire les mouvements de stock pour calculer le stock réel
-    const { data: mvtData, error: mvtErr } = await supabase
-      .from('mouvements_stock')
-      .select('article_id, quantite')
-      .eq('activite_id', activiteId);
-
-    if (mvtErr) console.warn('[ArticlesSyncService] Notice mvt fetch:', mvtErr.message);
-
-    // 3. Tenter de lire les coûts d'achat (accessible uniquement si RLS Patron autorise)
-    let coutsMap: Record<string, { prix_achat: number; fournisseur?: string }> = {};
-    try {
-      const { data: coutsData } = await supabase
-        .from('couts_articles')
+    const networkFetch = async (): Promise<{ success: boolean; produits: Produit[]; error?: string }> => {
+      // 1. Lire les articles
+      const { data: artData, error: artErr } = await supabase
+        .from('articles')
         .select('*')
+        .eq('activite_id', activiteId)
+        .eq('actif', true)
+        .order('created_at', { ascending: false });
+
+      if (artErr) throw artErr;
+
+      // 2. Lire les mouvements de stock pour calculer le stock réel
+      const { data: mvtData, error: mvtErr } = await supabase
+        .from('mouvements_stock')
+        .select('article_id, quantite')
         .eq('activite_id', activiteId);
 
-      if (coutsData) {
-        coutsData.forEach((c: any) => {
-          coutsMap[c.article_id] = {
-            prix_achat: Number(c.prix_achat) || 0,
-            fournisseur: c.fournisseur_nom,
-          };
-        });
+      if (mvtErr) console.warn('[ArticlesSyncService] Notice mvt fetch:', mvtErr.message);
+
+      // 3. Tenter de lire les coûts d'achat (accessible uniquement si RLS Patron autorise)
+      let coutsMap: Record<string, { prix_achat: number; fournisseur?: string }> = {};
+      try {
+        const { data: coutsData } = await supabase
+          .from('couts_articles')
+          .select('*')
+          .eq('activite_id', activiteId);
+
+        if (coutsData) {
+          coutsData.forEach((c: any) => {
+            coutsMap[c.article_id] = {
+              prix_achat: Number(c.prix_achat) || 0,
+              fournisseur: c.fournisseur_nom,
+            };
+          });
+        }
+      } catch (e) {
+        // RLS a bloqué l'accès car l'utilisateur est un employé : coutsMap reste vide
       }
-    } catch (e) {
-      // RLS a bloqué l'accès car l'utilisateur est un employé : coutsMap reste vide
-    }
 
-    // 4. Calculer le stock cumulé par article à partir des mouvements
-    const stockMap: Record<string, number> = {};
-    (mvtData || []).forEach((m: any) => {
-      stockMap[m.article_id] = (stockMap[m.article_id] || 0) + (m.quantite || 0);
-    });
+      // 4. Calculer le stock cumulé par article à partir des mouvements
+      const stockMap: Record<string, number> = {};
+      (mvtData || []).forEach((m: any) => {
+        stockMap[m.article_id] = (stockMap[m.article_id] || 0) + (m.quantite || 0);
+      });
 
-    const produitsMapped: Produit[] = (artData || []).map((a: any) => {
-      const calculatedStock = stockMap[a.id] !== undefined ? stockMap[a.id] : 0;
-      const coutInfo = coutsMap[a.id];
+      const existingMap = new Map<string, Produit>();
+      localProds.forEach((p) => existingMap.set(p.id, p));
 
-      return {
-        id: a.id,
-        etablissement_id: a.activite_id,
-        nom: a.nom,
-        categorie: a.categorie || 'Général',
-        code_barres: a.code_unique,
-        code_interne: a.code_unique,
-        prix_vente: Number(a.prix_vente) || 0,
-        prix_achat: coutInfo ? coutInfo.prix_achat : 0, // Masqué pour les employés
-        stock: calculatedStock,
-        quantite_totale: calculatedStock,
-        seuil_alerte: a.seuil_alerte || 5,
-        unite: a.mode_suivi === 'unite' ? 'unite' : 'piece',
-        actif: a.actif !== false,
-        prix_achat_statut: coutInfo && coutInfo.prix_achat > 0 ? 'complet' : 'prix_achat_a_completer',
-      };
-    });
+      const produitsMapped: Produit[] = (artData || []).map((a: any) => {
+        const calculatedStock = stockMap[a.id] !== undefined ? stockMap[a.id] : 0;
+        const coutInfo = coutsMap[a.id];
+        const existing = existingMap.get(a.id);
 
-    // Mettre à jour le cache local
-    offlineDB.saveProduits(produitsMapped);
+        return {
+          ...existing,
+          id: a.id,
+          etablissement_id: a.activite_id,
+          nom: a.nom,
+          categorie: a.categorie || 'Général',
+          code_barres: a.code_unique,
+          code_interne: a.code_unique,
+          oko_code: a.code_unique || existing?.oko_code,
+          prix_vente: Number(a.prix_vente) || 0,
+          prix_vente_unitaire: Number(a.prix_vente) || existing?.prix_vente_unitaire || 0,
+          prix_achat_unitaire: coutInfo ? coutInfo.prix_achat : (existing?.prix_achat_unitaire || 0),
+          stock: calculatedStock,
+          quantite_totale: calculatedStock,
+          seuil_alerte: a.seuil_alerte || 5,
+          unite: a.mode_suivi === 'unite' ? 'unite' : 'piece',
+          actif: a.actif !== false,
+          prix_achat_statut: coutInfo && coutInfo.prix_achat > 0 ? 'complet' : 'prix_achat_a_completer',
+        };
+      });
 
-    return { success: true, produits: produitsMapped };
+      if (produitsMapped.length > 0) {
+        offlineDB.saveProduits(produitsMapped);
+        return { success: true, produits: produitsMapped };
+      }
+      return { success: true, produits: localProds };
+    };
+
+    // Timeout de sécurité de 1.5s max pour ne jamais faire attendre l'utilisateur
+    const timeoutPromise = new Promise<{ success: boolean; produits: Produit[]; error?: string }>((resolve) =>
+      setTimeout(() => resolve({ success: true, produits: localProds, error: 'timeout' }), 1500)
+    );
+
+    return await Promise.race([networkFetch(), timeoutPromise]);
   } catch (err: any) {
     console.error('[ArticlesSyncService] Erreur fetchArticlesFromCloud:', err);
     return {
       success: false,
-      produits: offlineDB.getProduits().filter((p) => !p.etablissement_id || p.etablissement_id === activiteId),
+      produits: localProds,
       error: 'Impossible de joindre le serveur pour charger le stock.',
     };
   }

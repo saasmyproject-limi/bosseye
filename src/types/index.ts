@@ -183,7 +183,9 @@ export interface Utilisateur {
   etablissement_id: string;
   nom: string;
   role: RoleUtilisateur;
-  pin_code: string; // PIN à 4 chiffres (ex: "1234")
+  pin_code: string; // PIN à 4 chiffres (ex: "1234") ou hash
+  pin_code_hash?: string;
+  doit_definir_pin?: boolean; // Si true, l'employé doit choisir son propre PIN à sa prochaine connexion
   telephone?: string;
   email?: string;
   photo_url?: string | null;

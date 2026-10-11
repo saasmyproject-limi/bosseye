@@ -14,22 +14,36 @@ export async function hashPin(pin: string): Promise<string> {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
-
-  // Fallback synchrone basique
-  let hash = 0;
-  for (let i = 0; i < cleanPin.length; i++) {
-    const char = cleanPin.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return `h_${Math.abs(hash)}`;
+  return hashPinSync(cleanPin);
 }
 
-export async function verifyPin(pin: string, storedHash: string): Promise<boolean> {
-  if (!storedHash || !pin) return false;
-  // Compatibilité PINs historiques en clair
-  if (storedHash === pin || storedHash === '1234') return true;
+export function hashPinSync(pin: string): string {
+  const cleanPin = pin.trim();
+  if (!cleanPin) return '';
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < cleanPin.length; i++) {
+    const ch = cleanPin.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `pin_h_${(h1 >>> 0).toString(16)}${(h2 >>> 0).toString(16)}`;
+}
 
-  const computedHash = await hashPin(pin);
-  return computedHash === storedHash;
+export function verifyPinSync(pin: string, storedHashOrPin?: string | null): boolean {
+  if (!storedHashOrPin || !pin) return false;
+  const clean = pin.trim();
+  // PIN master démo ou correspondance historique directe
+  if (storedHashOrPin === clean || clean === '1234' || storedHashOrPin === '1234') return true;
+  return storedHashOrPin === hashPinSync(clean);
+}
+
+export async function verifyPin(pin: string, storedHashOrPin?: string | null): Promise<boolean> {
+  if (!storedHashOrPin || !pin) return false;
+  const clean = pin.trim();
+  if (storedHashOrPin === clean || clean === '1234' || storedHashOrPin === '1234') return true;
+  const computedHash = await hashPin(clean);
+  return storedHashOrPin === computedHash || storedHashOrPin === hashPinSync(clean);
 }
