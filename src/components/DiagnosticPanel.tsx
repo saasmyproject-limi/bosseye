@@ -15,7 +15,7 @@ interface DiagnosticInfo {
 
 export default function DiagnosticPanel() {
   const [info, setInfo] = useState<DiagnosticInfo>({
-    projectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || 'Non configurée (fallback actif)',
+    projectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://efxjaxjslivudhnsbvwm.supabase.co',
     userId: null,
     userEmail: null,
     lastReadResult: { success: false, message: 'Aucun test de lecture effectué' },
@@ -79,7 +79,7 @@ export default function DiagnosticPanel() {
     }
 
     setInfo({
-      projectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || 'Non configurée',
+      projectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://efxjaxjslivudhnsbvwm.supabase.co',
       userId,
       userEmail,
       lastReadResult: readRes,
