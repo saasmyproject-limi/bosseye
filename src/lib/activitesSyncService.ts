@@ -58,16 +58,19 @@ export async function fetchActivitesFromCloud(): Promise<{
       created_at: row.created_at,
     }));
 
-    // Mettre à jour le cache local avec les données réelles du cloud
-    offlineDB.saveEtablissements(mapped);
+    // Mettre à jour le cache local avec les données réelles du cloud SANS jamais écraser avec un tableau vide
+    if (mapped.length > 0) {
+      offlineDB.saveEtablissementsMerge(mapped);
+    }
 
-    return { success: true, activites: mapped };
+    const currentEtabs = offlineDB.getEtablissements();
+    return { success: true, activites: currentEtabs.length > 0 ? currentEtabs : mapped };
   } catch (err: any) {
     console.error('[ActivitesSyncService] Exception fetchActivitesFromCloud:', err);
     return {
       success: false,
       activites: offlineDB.getEtablissements(),
-      error: 'Impossible de joindre le serveur. Vérifiez votre connexion internet.',
+      error: 'Impossible de joindre le serveur. Mode hors-ligne actif.',
     };
   }
 }
@@ -169,7 +172,7 @@ export async function fetchGlobalActivitesForSuperAdmin(): Promise<{
       created_at: row.created_at || new Date().toISOString(),
     }));
 
-    const merged = offlineDB.saveEtablissementsMerge(mapped);
+    const merged = mapped.length > 0 ? offlineDB.saveEtablissementsMerge(mapped) : offlineDB.getEtablissements();
     return {
       success: true,
       activites: merged,

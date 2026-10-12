@@ -174,7 +174,48 @@ export const offlineDB = {
     try {
       if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.COMPTES_LIST);
-      return data ? JSON.parse(data) : [];
+      let list: CompteUtilisateur[] = data ? JSON.parse(data) : [];
+
+      // S'assurer que le compte actif (si connecté) y figure
+      const current = this.getCompteActuel();
+      if (current && !list.some((c) => c && c.email && c.email.toLowerCase() === current.email.toLowerCase())) {
+        list = [current, ...list];
+        localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(list));
+      }
+
+      // Si aucun compte dans la liste, déduire les comptes des patrons des établissements ou injecter le compte démo
+      if (list.length === 0) {
+        const etabs = this.getEtablissements();
+        const foundEmails = new Set<string>();
+        etabs.forEach((et) => {
+          if (et && et.email_patron && !foundEmails.has(et.email_patron.toLowerCase())) {
+            foundEmails.add(et.email_patron.toLowerCase());
+            list.push({
+              id: et.compte_id || `compte-${et.id}`,
+              email: et.email_patron.toLowerCase(),
+              nom: et.nom ? `Propriétaire (${et.nom})` : 'Patron œko',
+              provider: 'google',
+              created_at: et.created_at || new Date().toISOString(),
+            });
+          }
+        });
+
+        if (list.length === 0) {
+          list.push({
+            id: 'compte-google-demo',
+            email: 'patronne.demo@gmail.com',
+            nom: 'Mme Patronne (Compte Démo)',
+            provider: 'google',
+            created_at: new Date().toISOString(),
+          });
+        }
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(list));
+        }
+      }
+
+      return list;
     } catch {
       return [];
     }
@@ -186,7 +227,7 @@ export const offlineDB = {
     const targetEmail = (currentCompte?.email || '').trim().toLowerCase();
 
     const all = this.getEtablissements();
-    if (!targetCompteId && !targetEmail) return [];
+    if (!targetCompteId && !targetEmail) return all;
 
     // Si c'est le compte démo par défaut, renvoyer les établissements de démonstration
     if (targetEmail === 'patronne.demo@gmail.com' || targetCompteId === 'compte-google-demo') {
@@ -194,13 +235,20 @@ export const offlineDB = {
     }
 
     // Filtrer les établissements créés par ce compte utilisateur ou rattachés à son email
-    return all.filter((e) => {
+    const filtered = all.filter((e) => {
       if (!e) return false;
       const etabEmail = (e.email_patron || (e as any).compte_email || '').trim().toLowerCase();
       if (etabEmail && targetEmail && etabEmail === targetEmail) return true;
       if (e.compte_id && targetCompteId && e.compte_id === targetCompteId) return true;
       return false;
     });
+
+    // Si aucune activité n'est spécifiquement filtrée mais qu'il y a des activités locales, les rendre accessibles
+    if (filtered.length === 0 && all.length > 0) {
+      return all;
+    }
+
+    return filtered;
   },
 
   dismissWelcomeModal(etabId: string) {
@@ -211,27 +259,24 @@ export const offlineDB = {
   getEtablissement(): Etablissement {
     try {
       const activeId = typeof window !== 'undefined' ? localStorage.getItem(KEYS.ACTIVE_ETAB_ID) : null;
-      const all = this.getEtablissements();
+      let all = this.getEtablissements();
       if (all.length === 0) {
-        return {
-          id: 'etab-nouveau',
-          nom: 'Nouveau Commerce œko',
-          type: 'boutique',
-          type_activite: 'boutique',
-          ville: 'Douala',
-          adresse: 'Nouveau commerce',
-          plan: 'Premium',
-          statut_abonnement: 'essai',
-          tarif_mensuel: 5000,
-          date_fin_essai: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
-          date_prochain_paiement: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
-        };
+        const defaultEtab = SEED_ETABLISSEMENT;
+        this.saveEtablissements([defaultEtab]);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(KEYS.ACTIVE_ETAB_ID, defaultEtab.id);
+        }
+        return this.normalizeEtablissement(defaultEtab);
       }
       if (activeId) {
         const found = all.find((e) => e && e.id === activeId);
         if (found) return this.normalizeEtablissement(found);
       }
-      return this.normalizeEtablissement(all[0] || SEED_ETABLISSEMENT);
+      const chosen = all[0] || SEED_ETABLISSEMENT;
+      if (typeof window !== 'undefined' && chosen?.id) {
+        localStorage.setItem(KEYS.ACTIVE_ETAB_ID, chosen.id);
+      }
+      return this.normalizeEtablissement(chosen);
     } catch {
       return this.normalizeEtablissement(SEED_ETABLISSEMENT);
     }
@@ -252,16 +297,25 @@ export const offlineDB = {
 
   getEtablissements(): Etablissement[] {
     try {
-      if (typeof window === 'undefined') return [];
+      if (typeof window === 'undefined') return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+      const isResetZero = localStorage.getItem(KEYS.RESET_ZERO) === 'true';
       const data = localStorage.getItem(KEYS.ETABLISSEMENTS);
 
       if (!data) {
-        return [];
+        if (isResetZero) return [];
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
+        return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
       }
+
       const parsed: Etablissement[] = JSON.parse(data);
+      if ((!parsed || parsed.length === 0) && !isResetZero) {
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
+        return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+      }
+
       return (parsed || []).map((e) => this.normalizeEtablissement(e));
     } catch {
-      return [];
+      return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
     }
   },
 
@@ -304,12 +358,30 @@ export const offlineDB = {
   updateEtablissement(id: string, updates: Partial<Etablissement>): Etablissement | null {
     const etabs = this.getEtablissements();
     const existing = etabs.find((e) => e.id === id);
-    if (!existing) return null;
-    const updated = { ...existing, ...updates };
-    const all = etabs.map((e) => (e.id === id ? updated : e));
+    let updated: Etablissement;
+    let all: Etablissement[];
+
+    if (existing) {
+      updated = this.normalizeEtablissement({ ...existing, ...updates });
+      all = etabs.map((e) => (e.id === id ? updated : e));
+    } else {
+      const fallback = SEED_ETABLISSEMENT;
+      updated = this.normalizeEtablissement({
+        ...fallback,
+        id,
+        nom: updates.nom || 'Commerce œko',
+        ...updates,
+      });
+      all = [updated, ...etabs];
+    }
+
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(all));
+        const activeId = localStorage.getItem(KEYS.ACTIVE_ETAB_ID);
+        if (!activeId || activeId === id) {
+          localStorage.setItem(KEYS.ACTIVE_ETAB_ID, id);
+        }
       }
     } catch (e) {
       console.error(e);

@@ -31,16 +31,19 @@ import {
   Download,
   MessageSquare,
   HelpCircle,
+  Trash2,
+  User,
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
-import { fetchGlobalActivitesForSuperAdmin } from '@/lib/activitesSyncService';
+import { fetchGlobalActivitesForSuperAdmin, saveActiviteToCloud, deleteActiviteFromCloud } from '@/lib/activitesSyncService';
 import {
   Etablissement,
   Paiement,
   PalierTarifaire,
   StatutAbonnement,
   ConfigPaiementManuel,
-  DemandePaiementAbonnement
+  DemandePaiementAbonnement,
+  CompteUtilisateur,
 } from '@/types';
 
 export default function SuperAdminDashboardPage() {
@@ -51,8 +54,9 @@ export default function SuperAdminDashboardPage() {
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'activites' | 'demandes' | 'config'>('activites');
+  const [activeTab, setActiveTab] = useState<'activites' | 'comptes' | 'demandes' | 'config'>('activites');
   const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
+  const [comptes, setComptes] = useState<CompteUtilisateur[]>([]);
   const [paiements, setPaiements] = useState<Paiement[]>([]);
   const [demandes, setDemandes] = useState<DemandePaiementAbonnement[]>([]);
   const [paliers, setPaliers] = useState<PalierTarifaire[]>([]);
@@ -61,6 +65,17 @@ export default function SuperAdminDashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('tous');
   const [successMsg, setSuccessMsg] = useState<string>('');
+
+  // Modal Création directe d'Activité / Commerce
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newNom, setNewNom] = useState('');
+  const [newVille, setNewVille] = useState('Douala');
+  const [newAdresse, setNewAdresse] = useState('');
+  const [newPatronNom, setNewPatronNom] = useState('');
+  const [newPatronEmail, setNewPatronEmail] = useState('');
+  const [newPatronPhone, setNewPatronPhone] = useState('');
+  const [newPalierTarif, setNewPalierTarif] = useState<number>(5000);
+  const [newStatutAbonnement, setNewStatutAbonnement] = useState<'essai' | 'actif'>('essai');
 
   // Modal Prolongation d'essai
   const [selectedEtabForAction, setSelectedEtabForAction] = useState<Etablissement | null>(null);
@@ -74,8 +89,13 @@ export default function SuperAdminDashboardPage() {
 
   const loadAdminData = () => {
     try {
-      const etabs = offlineDB.getEtablissements();
+      let etabs = offlineDB.getEtablissements();
+      if (etabs.length === 0) {
+        offlineDB.restoreDemoSeedData();
+        etabs = offlineDB.getEtablissements();
+      }
       setEtablissements(etabs);
+      setComptes(offlineDB.getComptesGlobal());
       setPaliers(offlineDB.getPaliersTarifaires());
       setConfigManuel(offlineDB.getConfigPaiementManuel());
       setDemandes(offlineDB.getDemandesPaiementAbonnement());
@@ -197,6 +217,64 @@ export default function SuperAdminDashboardPage() {
   ).length;
   const countPro = etablissements.filter((e) => (e.tarif_mensuel || 5000) > 5000).length;
   const blockedCount = etablissements.filter((e) => e.statut_abonnement === 'bloque').length;
+
+  const handleCreateActivityDirectly = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNom.trim()) return;
+
+    const created = offlineDB.createEtablissement({
+      nom: newNom.trim(),
+      type_activite: 'boutique',
+      secteur_boutique: 'Commerce général',
+      ville: newVille,
+      adresse: newAdresse.trim() || 'Commerce principal',
+      patronNom: newPatronNom.trim() || 'Patron (Propriétaire)',
+      telephone: newPatronPhone.trim() || undefined,
+      email_patron: newPatronEmail.trim().toLowerCase() || undefined,
+      patronPin: '1234',
+      tarif_mensuel: newPalierTarif,
+    });
+
+    if (newStatutAbonnement === 'actif') {
+      const dueDate = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+      offlineDB.updateEtablissement(created.id, {
+        statut_abonnement: 'actif',
+        date_fin_essai: dueDate,
+        date_prochain_paiement: dueDate,
+      });
+    }
+
+    saveActiviteToCloud(created);
+
+    setSuccessMsg(`Activité "${created.nom}" créée avec succès et disponible immédiatement pour vos manipulations !`);
+    setTimeout(() => setSuccessMsg(''), 5000);
+    setShowCreateModal(false);
+    setNewNom('');
+    setNewAdresse('');
+    setNewPatronNom('');
+    setNewPatronEmail('');
+    setNewPatronPhone('');
+    loadAdminData();
+  };
+
+  const handleDeleteEtab = (etab: Etablissement) => {
+    if (confirm(`Voulez-vous vraiment supprimer le commerce "${etab.nom}" ? Cette action est irréversible.`)) {
+      offlineDB.deleteEtablissement(etab.id);
+      deleteActiviteFromCloud(etab.id);
+      setSuccessMsg(`Le commerce "${etab.nom}" a été supprimé.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+      loadAdminData();
+    }
+  };
+
+  const handleRestoreDemo = () => {
+    if (confirm("Voulez-vous charger/restaurer les commerces de test (Boutique Élégance Akwa & Yaoundé) ?")) {
+      offlineDB.restoreDemoSeedData();
+      loadAdminData();
+      setSuccessMsg("Commerces de démonstration restaurés avec succès !");
+      setTimeout(() => setSuccessMsg(''), 4000);
+    }
+  };
 
   const handleInspectShop = (etab: Etablissement) => {
     offlineDB.switchEtablissement(etab.id);
@@ -368,6 +446,26 @@ export default function SuperAdminDashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Bouton Créer Commerce Directement */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="py-2.5 px-3.5 rounded-xl bg-[#E8A33D] hover:bg-[#D4932D] text-[#1B4332] font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            title="Créer une nouvelle activité ou boutique pour vos tests et manipulations"
+          >
+            <Plus className="w-4 h-4 text-[#1B4332]" />
+            <span>Créer Commerce</span>
+          </button>
+
+          {/* Bouton Recharger Commerces Démo */}
+          <button
+            onClick={handleRestoreDemo}
+            className="py-2.5 px-3.5 rounded-xl bg-white hover:bg-[#FAF9F5] text-[#1B4332] border border-[#E2D5C3] font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            title="Recharger les boutiques de test d'origine (Akwa & Yaoundé)"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-[#B8442C]" />
+            <span>Recharger Démo</span>
+          </button>
+
           {/* Bouton Synchro Cloud Supabase */}
           <button
             onClick={handleSyncCloudSuperAdmin}
@@ -443,32 +541,32 @@ export default function SuperAdminDashboardPage() {
         </div>
 
         <div className="p-5 rounded-3xl bg-white border border-[#E2D5C3] shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center text-2xl font-bold">
+            👤
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Comptes Utilisateurs</p>
+            <p className="font-serif font-black text-xl text-purple-900">
+              {comptes.length} <span className="text-xs text-gray-500">propriétaires</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-white border border-[#E2D5C3] shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center text-2xl font-bold">
             ⏳
           </div>
           <div>
             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Paiements en Attente</p>
             <p className="font-serif font-black text-xl text-amber-900">
-              {pendingDemandes.length} <span className="text-xs text-gray-500">à vérifier</span>
-            </p>
-          </div>
-        </div>
-
-        <div className="p-5 rounded-3xl bg-white border border-[#E2D5C3] shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-800 flex items-center justify-center text-2xl font-bold">
-            🔒
-          </div>
-          <div>
-            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Commerces Bloqués</p>
-            <p className="font-serif font-black text-xl text-red-600">
-              {blockedCount} <span className="text-xs text-gray-500">bloqués</span>
+              {pendingDemandes.length} <span className="text-xs text-gray-500">à valider</span>
             </p>
           </div>
         </div>
       </div>
 
       {/* TABS NAVIGATION */}
-      <div className="flex items-center gap-2 border-b border-[#E2D5C3] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E2D5C3] pb-2">
         <button
           onClick={() => setActiveTab('activites')}
           className={`py-2.5 px-5 rounded-2xl font-black text-xs transition-all cursor-pointer ${
@@ -478,6 +576,17 @@ export default function SuperAdminDashboardPage() {
           }`}
         >
           🏢 Liste des Activités & Statuts ({etablissements.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('comptes')}
+          className={`py-2.5 px-5 rounded-2xl font-black text-xs transition-all cursor-pointer ${
+            activeTab === 'comptes'
+              ? 'bg-[#1B4332] text-white shadow-md'
+              : 'bg-white text-[#1B4332] border border-[#E2D5C3]'
+          }`}
+        >
+          👤 Comptes Utilisateurs & Patrons ({comptes.length})
         </button>
 
         <button
@@ -687,6 +796,156 @@ export default function SuperAdminDashboardPage() {
                         >
                           +Jours
                         </button>
+
+                        {/* Supprimer le commerce (test & manipulation) */}
+                        <button
+                          onClick={() => handleDeleteEtab(etab)}
+                          title="Supprimer ce commerce (nettoyage / test)"
+                          className="px-2 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {filteredEtabs.length === 0 && (
+            <div className="p-8 text-center bg-[#FBF7EF] rounded-2xl border border-dashed border-[#E2D5C3] space-y-3">
+              <div className="text-3xl">🏢</div>
+              <h3 className="font-serif font-black text-base text-[#1B4332]">Aucun commerce affiché</h3>
+              <p className="text-xs text-gray-600 max-w-md mx-auto">
+                {searchQuery || statusFilter !== 'tous'
+                  ? "Aucun commerce ne correspond à vos filtres actuels."
+                  : "Créez votre première boutique de test pour vos manipulations, ou rechargez les données de démonstration."}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4 text-[#E8A33D]" />
+                  <span>Créer un Commerce</span>
+                </button>
+                <button
+                  onClick={handleRestoreDemo}
+                  className="px-4 py-2 bg-white hover:bg-gray-100 text-[#1B4332] border border-[#E2D5C3] rounded-xl text-xs font-black shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-4 h-4 text-[#B8442C]" />
+                  <span>Recharger Boutiques Démo</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB COMPTES: LISTE DES COMPTES UTILISATEURS & PATRONS */}
+      {activeTab === 'comptes' && (
+        <div className="bg-white border border-[#E2D5C3] rounded-3xl p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h2 className="font-serif font-black text-lg text-[#1B4332]">
+                Comptes Utilisateurs & Propriétaires ({comptes.length})
+              </h2>
+              <p className="text-xs text-gray-600 font-medium">
+                Visualisez chaque compte utilisateur, son email et l'ensemble de ses boutiques associées.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="py-2 px-3.5 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#E8A33D]" />
+              <span>Créer Commerce</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-[#E2D5C3]">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#FBF7EF] border-b border-[#E2D5C3] text-[11px] font-black text-[#1B4332] uppercase">
+                <tr>
+                  <th className="p-3">Utilisateur / Patron</th>
+                  <th className="p-3">Email du Compte</th>
+                  <th className="p-3">Date d'inscription</th>
+                  <th className="p-3">Commerces Rattachés</th>
+                  <th className="p-3 text-center">Action Directe</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2D5C3]">
+                {comptes.map((c) => {
+                  const userEtabs = etablissements.filter((e) => {
+                    if (e.compte_id && e.compte_id === c.id) return true;
+                    if (e.email_patron && e.email_patron.toLowerCase() === c.email.toLowerCase()) return true;
+                    return false;
+                  });
+
+                  return (
+                    <tr key={c.id} className="hover:bg-[#FBF7EF]/50">
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-[#1B4332] text-[#E8A33D] flex items-center justify-center font-bold text-xs shrink-0">
+                            {c.nom ? c.nom.charAt(0).toUpperCase() : 'U'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-[#1B4332]">{c.nom}</p>
+                            <p className="text-[10px] text-gray-500 font-mono">ID: {c.id}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-3">
+                        <span className="font-mono text-xs font-bold text-[#1B4332]">{c.email}</span>
+                      </td>
+
+                      <td className="p-3 text-gray-600 font-medium">
+                        {c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : 'Récent'}
+                      </td>
+
+                      <td className="p-3">
+                        {userEtabs.length === 0 ? (
+                          <span className="text-gray-400 italic text-[11px]">Aucun commerce rattaché</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {userEtabs.map((ue) => (
+                              <span
+                                key={ue.id}
+                                className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200 text-[11px] font-bold inline-flex items-center gap-1"
+                              >
+                                <span>👗</span>
+                                <span>{ue.nom}</span>
+                                <span className="text-[10px] text-emerald-700">({ue.ville})</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-3 text-center">
+                        {userEtabs.length > 0 ? (
+                          <button
+                            onClick={() => handleInspectShop(userEtabs[0])}
+                            className="px-2.5 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-[#E8A33D]" />
+                            <span>Inspecter {userEtabs[0].nom}</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setNewPatronEmail(c.email);
+                              setNewPatronNom(c.nom);
+                              setShowCreateModal(true);
+                            }}
+                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Ajouter Boutique</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -697,7 +956,7 @@ export default function SuperAdminDashboardPage() {
         </div>
       )}
 
-      {/* TAB 2: DEMANDES DE PAIEMENT MANUEL & HISTORIQUE */}
+      {/* TAB 3: DEMANDES DE PAIEMENT MANUEL & HISTORIQUE */}
       {activeTab === 'demandes' && (
         <div className="space-y-6">
           {/* Section 1: Demandes en Attente de Confirmation */}
@@ -1152,6 +1411,154 @@ export default function SuperAdminDashboardPage() {
             >
               Compris, fermer le guide ➔
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Création d'Activité / Boutique Directe */}
+      {showCreateModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowCreateModal(false); }}
+        >
+          <div className="bg-[#FAF9F5] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 w-full max-w-lg shadow-2xl relative space-y-4 my-auto max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute top-5 right-5 text-gray-500 hover:text-black p-2 rounded-xl bg-white border border-[#E2D5C3] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-2xl font-black shadow-md">
+                🏢
+              </div>
+              <div>
+                <h3 className="font-serif font-black text-xl text-[#1B4332]">Créer un Commerce / Activité</h3>
+                <p className="text-xs text-gray-600 font-bold">Ajout immédiat pour manipulations et tests Super-Admin</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateActivityDirectly} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Commerce *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ex: Boutique Élégance Bonapriso"
+                  value={newNom}
+                  onChange={(e) => setNewNom(e.target.value)}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Ville *</label>
+                  <select
+                    value={newVille}
+                    onChange={(e) => setNewVille(e.target.value)}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  >
+                    <option value="Douala">Douala</option>
+                    <option value="Yaoundé">Yaoundé</option>
+                    <option value="Bafoussam">Bafoussam</option>
+                    <option value="Garoua">Garoua</option>
+                    <option value="Kribi">Kribi</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Adresse / Quartier</label>
+                  <input
+                    type="text"
+                    placeholder="ex: Rue des Palmiers"
+                    value={newAdresse}
+                    onChange={(e) => setNewAdresse(e.target.value)}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Patron</label>
+                  <input
+                    type="text"
+                    placeholder="ex: M. TCHINDA"
+                    value={newPatronNom}
+                    onChange={(e) => setNewPatronNom(e.target.value)}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Téléphone WhatsApp</label>
+                  <input
+                    type="text"
+                    placeholder="ex: 699001122"
+                    value={newPatronPhone}
+                    onChange={(e) => setNewPatronPhone(e.target.value)}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#1B4332] block mb-1">Email du Compte Patron</label>
+                <input
+                  type="email"
+                  placeholder="ex: patron@gmail.com"
+                  value={newPatronEmail}
+                  onChange={(e) => setNewPatronEmail(e.target.value)}
+                  className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Palier Tarifaire</label>
+                  <select
+                    value={newPalierTarif}
+                    onChange={(e) => setNewPalierTarif(Number(e.target.value))}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  >
+                    <option value={3000}>Essentiel (3 000 FCFA)</option>
+                    <option value={5000}>Standard (5 000 FCFA)</option>
+                    <option value={10000}>Pro (10 000 FCFA)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1B4332] block mb-1">Statut Initial</label>
+                  <select
+                    value={newStatutAbonnement}
+                    onChange={(e) => setNewStatutAbonnement(e.target.value as 'essai' | 'actif')}
+                    className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
+                  >
+                    <option value="essai">Essai gratuit (7 jours)</option>
+                    <option value="actif">Actif (+30 jours)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-black shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4 text-[#E8A33D]" />
+                  <span>Enregistrer & Créer</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Building2, X, Check, Sparkles, Store, MapPin, Tag, ArrowLeft } from 'lucide-react';
 import { offlineDB, cleanCodeSegment } from '@/lib/offlineDB';
 import { Etablissement } from '@/types';
+import { saveActiviteToCloud } from '@/lib/activitesSyncService';
 import DiagnosticPanel from './DiagnosticPanel';
 
 interface EtablissementSettingsModalProps {
@@ -54,13 +55,17 @@ export default function EtablissementSettingsModal({
     e.preventDefault();
     if (!nom.trim()) return;
 
-    offlineDB.updateEtablissement(etablissement.id, {
+    const updated = offlineDB.updateEtablissement(etablissement.id, {
       nom: nom.trim(),
       abrev_boutique: abrevBoutique.trim().toUpperCase() || cleanCodeSegment(nom.trim(), 3),
       ville,
       adresse: adresse.trim(),
       secteur_boutique: etablissement.type_activite === 'boutique' ? secteurBoutique.trim() : undefined,
     });
+
+    if (updated) {
+      saveActiviteToCloud(updated);
+    }
 
     setSavedSuccess(true);
     setTimeout(() => {
