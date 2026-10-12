@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Building2, X, Check, Sparkles, Store, MapPin, Tag } from 'lucide-react';
+import { Building2, X, Check, Sparkles, Store, MapPin, Tag, ArrowLeft } from 'lucide-react';
 import { offlineDB, cleanCodeSegment } from '@/lib/offlineDB';
 import { Etablissement } from '@/types';
 import DiagnosticPanel from './DiagnosticPanel';
@@ -24,6 +24,16 @@ export default function EtablissementSettingsModal({
   const [adresse, setAdresse] = useState('');
   const [secteurBoutique, setSecteurBoutique] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -62,25 +72,45 @@ export default function EtablissementSettingsModal({
   const isBoutique = etablissement.type_activite === 'boutique';
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl p-6 w-full max-w-lg shadow-2xl relative space-y-4">
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 text-gray-500 hover:text-black p-1 rounded-xl bg-[#FBF7EF]"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div 
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-[#F3ECE0] border-2 border-[#E2D5C3] rounded-3xl w-full max-w-xl shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+        {/* En-tête fixe avec bouton retour et fermeture */}
+        <div className="p-4 sm:p-5 border-b border-[#E2D5C3] bg-[#EFE6D8] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white text-[#1B4332] font-bold text-xs flex items-center gap-1.5 border border-[#E2D5C3] shadow-sm transition-all cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-[#1B4332]" />
+              <span>Retour</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">⚙️</span>
+              <div>
+                <h2 className="font-serif font-black text-base sm:text-lg text-[#1B4332] leading-tight">
+                  Paramètres du Commerce
+                </h2>
+                <p className="text-[11px] text-gray-600 font-bold hidden sm:block">
+                  Profil, codes-barres & diagnostic
+                </p>
+              </div>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-xl font-black shadow-md">
-            ⚙️
-          </div>
-          <div>
-            <h2 className="font-serif font-black text-xl text-[#1B4332]">Paramètres du Commerce</h2>
-            <p className="text-xs text-gray-600 font-bold">
-              Profil du commerce, abréviation codes-barres & secteur IA
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-500 hover:text-black p-2 rounded-xl bg-white/80 hover:bg-white border border-[#E2D5C3] shadow-sm transition-all cursor-pointer"
+            title="Fermer la fenêtre (Échap)"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {savedSuccess && (
@@ -90,7 +120,7 @@ export default function EtablissementSettingsModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="etablissement-form" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
               <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Commerce *</label>
@@ -206,24 +236,27 @@ export default function EtablissementSettingsModal({
           <div className="pt-2 border-t border-[#E2D5C3]">
             <DiagnosticPanel />
           </div>
-
-          <div className="flex items-center gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3.5 rounded-2xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-3.5 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2"
-            >
-              <Check className="w-4 h-4 text-white" />
-              <span>Enregistrer les modifications</span>
-            </button>
-          </div>
         </form>
+
+        {/* Pied de page fixe avec boutons Annuler et Enregistrer toujours visibles */}
+        <div className="p-3 sm:p-4 border-t border-[#E2D5C3] bg-[#EFE6D8] flex items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-3 rounded-2xl bg-white hover:bg-gray-100 text-gray-800 font-bold text-xs border border-[#E2D5C3] shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Fermer / Retour</span>
+          </button>
+          <button
+            type="submit"
+            form="etablissement-form"
+            className="flex-1 py-3 rounded-2xl bg-[#B8442C] hover:bg-[#9C3823] text-white font-black text-xs shadow-glow-brique flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <Check className="w-4 h-4 text-white" />
+            <span>Enregistrer</span>
+          </button>
+        </div>
       </div>
     </div>
   );
