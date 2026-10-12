@@ -280,6 +280,27 @@ export const offlineDB = {
     }
   },
 
+  saveEtablissementsMerge(remoteEtabs: Etablissement[]): Etablissement[] {
+    try {
+      const current = this.getEtablissements();
+      const map = new Map<string, Etablissement>();
+      current.forEach((e) => {
+        if (e && e.id) map.set(e.id, e);
+      });
+      remoteEtabs.forEach((re) => {
+        if (!re || !re.id) return;
+        const existing = map.get(re.id);
+        map.set(re.id, existing ? { ...existing, ...re } : this.normalizeEtablissement(re));
+      });
+      const merged = Array.from(map.values());
+      this.saveEtablissements(merged);
+      return merged;
+    } catch (e) {
+      console.error(e);
+      return this.getEtablissements();
+    }
+  },
+
   updateEtablissement(id: string, updates: Partial<Etablissement>): Etablissement | null {
     const etabs = this.getEtablissements();
     const existing = etabs.find((e) => e.id === id);

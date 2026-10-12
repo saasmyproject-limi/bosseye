@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ShieldCheck,
   Building2,
@@ -25,9 +26,14 @@ import {
   CreditCard,
   Check,
   X,
-  FileText
+  FileText,
+  Eye,
+  Download,
+  MessageSquare,
+  HelpCircle,
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
+import { fetchGlobalActivitesForSuperAdmin } from '@/lib/activitesSyncService';
 import {
   Etablissement,
   Paiement,
@@ -38,9 +44,12 @@ import {
 } from '@/types';
 
 export default function SuperAdminDashboardPage() {
+  const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [authError, setAuthError] = useState('');
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'activites' | 'demandes' | 'config'>('activites');
   const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
@@ -189,12 +198,105 @@ export default function SuperAdminDashboardPage() {
   const countPro = etablissements.filter((e) => (e.tarif_mensuel || 5000) > 5000).length;
   const blockedCount = etablissements.filter((e) => e.statut_abonnement === 'bloque').length;
 
+  const handleInspectShop = (etab: Etablissement) => {
+    offlineDB.switchEtablissement(etab.id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('oeko_superadmin_inspect_active', 'true');
+      localStorage.setItem('oeko_superadmin_inspect_name', etab.nom);
+    }
+    router.push('/boutique/dashboard');
+  };
+
+  const handleSyncCloudSuperAdmin = async () => {
+    setIsSyncingCloud(true);
+    try {
+      const res = await fetchGlobalActivitesForSuperAdmin();
+      if (res.success) {
+        setEtablissements(res.activites);
+        setSuccessMsg(`Synchronisation Cloud réussie : ${res.activites.length} activités disponibles en direct !`);
+      } else {
+        setSuccessMsg(`Mode local actif (${res.activites.length} activités). ${res.error || ''}`);
+      }
+    } catch (e: any) {
+      setSuccessMsg(`Erreur synchro cloud: ${e?.message || e}`);
+    } finally {
+      setIsSyncingCloud(false);
+      setTimeout(() => setSuccessMsg(''), 5000);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (etablissements.length === 0) {
+      alert('Aucune activité à exporter.');
+      return;
+    }
+    const headers = [
+      'ID',
+      'Nom_Commerce',
+      'Patron_Email',
+      'Telephone',
+      'Ville',
+      'Adresse',
+      'Secteur_Activite',
+      'Statut_Abonnement',
+      'Tarif_Mensuel_FCFA',
+      'Date_Creation',
+      'Date_Echeance_Abonnement',
+    ];
+
+    const rows = etablissements.map((e) => [
+      `"${e.id}"`,
+      `"${(e.nom || '').replace(/"/g, '""')}"`,
+      `"${(e.email_patron || '').replace(/"/g, '""')}"`,
+      `"${(e.telephone || '').replace(/"/g, '""')}"`,
+      `"${(e.ville || '').replace(/"/g, '""')}"`,
+      `"${(e.adresse || '').replace(/"/g, '""')}"`,
+      `"${(e.secteur_boutique || '').replace(/"/g, '""')}"`,
+      `"${e.statut_abonnement || 'essai'}"`,
+      `"${e.tarif_mensuel || 5000}"`,
+      `"${e.created_at ? new Date(e.created_at).toLocaleDateString('fr-FR') : ''}"`,
+      `"${e.date_prochain_paiement || e.date_fin_essai ? new Date(e.date_prochain_paiement || e.date_fin_essai || '').toLocaleDateString('fr-FR') : ''}"`,
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `oeko_commerces_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setSuccessMsg('Fichier CSV exporté avec succès ! Compatible avec Microsoft Excel.');
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleWhatsAppReminder = (etab: Etablissement) => {
+    const rawPhone = (etab.telephone || '').replace(/[^0-9]/g, '');
+    if (!rawPhone) {
+      alert(`Aucun numéro de téléphone renseigné pour le commerce "${etab.nom}".`);
+      return;
+    }
+    const cleanPhone = rawPhone.length === 9 ? `237${rawPhone}` : rawPhone;
+    const dueDate = etab.date_prochain_paiement || etab.date_fin_essai;
+    const dateFormatted = dueDate ? new Date(dueDate).toLocaleDateString('fr-FR') : 'bientôt';
+    const msg = encodeURIComponent(
+      `Bonjour ${etab.nom}, c'est l'administration centrale Œko (L'œil du patron). Votre abonnement Œko arrive à échéance le ${dateFormatted}. Pour renouveler votre compte sans interruption, vous pouvez effectuer votre transfert Orange Money ou MTN MoMo. N'hésitez pas si vous avez la moindre question !`
+    );
+    window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+  };
+
   const filteredEtabs = etablissements.filter((e) => {
     const matchSearch =
       e.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (e.secteur_boutique || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       e.ville.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchStatus = statusFilter === 'tous' || e.statut_abonnement === statusFilter;
+    let matchStatus = statusFilter === 'tous' || e.statut_abonnement === statusFilter;
+    if (statusFilter === 'expirant_bientot') {
+      const daysLeft = offlineDB.getTrialDaysRemaining(e);
+      matchStatus = daysLeft <= 3 && e.statut_abonnement !== 'bloque';
+    }
     return matchSearch && matchStatus;
   });
 
@@ -265,12 +367,46 @@ export default function SuperAdminDashboardPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsAuthenticated(false)}
-          className="py-2.5 px-4 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs self-start sm:self-auto cursor-pointer"
-        >
-          Déconnexion
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Bouton Synchro Cloud Supabase */}
+          <button
+            onClick={handleSyncCloudSuperAdmin}
+            disabled={isSyncingCloud}
+            className="py-2.5 px-3.5 rounded-xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            title="Charger en direct toutes les boutiques créées dans Supabase (Multi-appareils)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[#E8A33D] ${isSyncingCloud ? 'animate-spin' : ''}`} />
+            <span>{isSyncingCloud ? 'Synchro en cours...' : 'Synchro Cloud Supabase'}</span>
+          </button>
+
+          {/* Bouton Export CSV */}
+          <button
+            onClick={handleExportCSV}
+            className="py-2.5 px-3.5 rounded-xl bg-white hover:bg-[#FAF9F5] text-[#1B4332] border border-[#E2D5C3] font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            title="Télécharger la liste complète des commerces en fichier CSV compatible Excel"
+          >
+            <Download className="w-3.5 h-3.5 text-[#B8442C]" />
+            <span>Exporter CSV</span>
+          </button>
+
+          {/* Bouton Guide Connexion */}
+          <button
+            onClick={() => setShowGuideModal(true)}
+            className="py-2.5 px-3 rounded-xl bg-white hover:bg-[#FAF9F5] text-[#1B4332] border border-[#E2D5C3] font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            title="Étapes pour se connecter en tant que Super-Admin"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-[#E8A33D]" />
+            <span>Guide d'accès</span>
+          </button>
+
+          {/* Déconnexion */}
+          <button
+            onClick={() => setIsAuthenticated(false)}
+            className="py-2.5 px-4 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs cursor-pointer"
+          >
+            Déconnexion
+          </button>
+        </div>
       </div>
 
       {successMsg && (
@@ -401,6 +537,7 @@ export default function SuperAdminDashboardPage() {
                 className="bg-[#FBF7EF] border border-[#E2D5C3] rounded-2xl px-3 py-2 text-xs font-bold text-[#1B4332]"
               >
                 <option value="tous">Tous les statuts</option>
+                <option value="expirant_bientot">🚨 Expirations proches (≤ 3j)</option>
                 <option value="essai">En essai</option>
                 <option value="actif">Actif à jour</option>
                 <option value="en_attente_validation">En attente de validation</option>
@@ -489,6 +626,28 @@ export default function SuperAdminDashboardPage() {
                       </td>
 
                       <td className="p-3 text-center space-x-1.5 whitespace-nowrap">
+                        {/* Bouton Mode Inspection / Caméléon */}
+                        <button
+                          onClick={() => handleInspectShop(etab)}
+                          title="Naviguer dans la boutique exactement comme son patron pour support & diagnostic"
+                          className="px-2.5 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-[#E8A33D]" />
+                          <span>Inspecter</span>
+                        </button>
+
+                        {/* Bouton Rappel WhatsApp */}
+                        {etab.telephone && (
+                          <button
+                            onClick={() => handleWhatsAppReminder(etab)}
+                            title="Envoyer un rappel de renouvellement d'abonnement au patron par WhatsApp"
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>WhatsApp</span>
+                          </button>
+                        )}
+
                         {/* Bouton Confirmer le paiement reçu (+30j) */}
                         <button
                           onClick={() => handleConfirmPaiementDirect(etab)}
@@ -496,7 +655,7 @@ export default function SuperAdminDashboardPage() {
                           className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Confirmer Paiement (+30j)</span>
+                          <span>Confirmer (+30j)</span>
                         </button>
 
                         {/* Bouton Bloquer / Débloquer */}
@@ -523,6 +682,7 @@ export default function SuperAdminDashboardPage() {
                         {/* Prolonger l'essai */}
                         <button
                           onClick={() => setSelectedEtabForAction(etab)}
+                          title="Prolonger manuellement l'essai gratuit de ce commerce"
                           className="px-2 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
                         >
                           +Jours
@@ -890,12 +1050,107 @@ export default function SuperAdminDashboardPage() {
                 </div>
               </div>
             </div>
-
             <button
               onClick={() => setSelectedEtabForAction(null)}
               className="w-full py-2.5 rounded-xl bg-gray-200 text-gray-800 font-bold text-xs cursor-pointer"
             >
               Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Guide d'Accès Super-Admin */}
+      {showGuideModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowGuideModal(false); }}
+        >
+          <div className="bg-[#FAF9F5] border-2 border-[#E2D5C3] rounded-3xl p-6 sm:p-8 w-full max-w-xl shadow-2xl relative space-y-5 my-auto max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowGuideModal(false)}
+              className="absolute top-5 right-5 text-gray-500 hover:text-black p-2 rounded-xl bg-white border border-[#E2D5C3] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#1B4332] text-[#E8A33D] flex items-center justify-center text-2xl font-black shadow-md">
+                🛡️
+              </div>
+              <div>
+                <h3 className="font-serif font-black text-xl text-[#1B4332]">Guide d'Accès Super-Admin œko</h3>
+                <p className="text-xs text-gray-600 font-bold">Votre tour de contrôle centralisée</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] space-y-2">
+                <p className="font-bold text-[#1B4332] text-sm flex items-center gap-2">
+                  <span>1.</span>
+                  <span>Comment vous connecter ?</span>
+                </p>
+                <p className="text-gray-700">
+                  Ouvrez votre navigateur sur l'adresse dédiée :{' '}
+                  <code className="bg-emerald-100 text-[#1B4332] px-2 py-0.5 rounded font-mono font-bold">
+                    /super-admin
+                  </code>
+                </p>
+                <p className="text-gray-700">
+                  Saisissez votre mot de passe maître confidentiel :{' '}
+                  <code className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-mono font-bold">
+                    oeko2026
+                  </code>
+                </p>
+              </div>
+
+              <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] space-y-2">
+                <p className="font-bold text-[#1B4332] text-sm flex items-center gap-2">
+                  <span>2.</span>
+                  <span>Validation des paiements manuels Mobile Money</span>
+                </p>
+                <p className="text-gray-700">
+                  Lorsque le patron clique sur "J'ai envoyé le paiement" après son transfert, sa demande apparaît dans{' '}
+                  <strong>💸 Demandes de Paiement</strong>.
+                </p>
+                <p className="text-gray-700">
+                  Vérifiez la réception sur votre téléphone, puis cliquez sur{' '}
+                  <strong className="text-emerald-800">"Confirmer le paiement reçu (+30j)"</strong>. L'accès de la boutique est instantanément prolongé d'un mois.
+                </p>
+              </div>
+
+              <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] space-y-2">
+                <p className="font-bold text-[#1B4332] text-sm flex items-center gap-2">
+                  <span>3.</span>
+                  <span>Mode Inspection / Caméléon (Support)</span>
+                </p>
+                <p className="text-gray-700">
+                  Cliquez sur <strong>"👁️ Inspecter"</strong> en face d'une boutique pour entrer dans son interface exactement comme son patron, sans lui demander son code PIN.
+                </p>
+                <p className="text-gray-700">
+                  Un bandeau orange en haut de l'écran vous permettra de revenir au Super-Admin en 1 clic dès votre diagnostic terminé.
+                </p>
+              </div>
+
+              <div className="p-4 bg-white rounded-2xl border border-[#E2D5C3] space-y-2">
+                <p className="font-bold text-[#1B4332] text-sm flex items-center gap-2">
+                  <span>4.</span>
+                  <span>Synchro Cloud & Sauvegardes</span>
+                </p>
+                <p className="text-gray-700">
+                  - Cliquez sur <strong>"Synchro Cloud Supabase"</strong> pour charger toutes les boutiques créées sur d'autres téléphones ou ordinateurs.
+                </p>
+                <p className="text-gray-700">
+                  - Cliquez sur <strong>"Exporter CSV"</strong> pour télécharger votre registre client au format Excel.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowGuideModal(false)}
+              className="w-full py-3 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-black text-xs cursor-pointer shadow-md transition-all"
+            >
+              Compris, fermer le guide ➔
             </button>
           </div>
         </div>

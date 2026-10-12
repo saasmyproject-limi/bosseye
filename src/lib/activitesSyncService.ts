@@ -125,3 +125,63 @@ export async function deleteActiviteFromCloud(etabId: string): Promise<{ success
     return { success: false, error: err?.message || 'Erreur de suppression' };
   }
 }
+
+export async function fetchGlobalActivitesForSuperAdmin(): Promise<{
+  success: boolean;
+  activites: Etablissement[];
+  count: number;
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('activites')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('[ActivitesSyncService] Erreur Supabase select activites super-admin:', error.message);
+      const localEtabs = offlineDB.getEtablissements();
+      return {
+        success: false,
+        activites: localEtabs,
+        count: localEtabs.length,
+        error: error.message,
+      };
+    }
+
+    const mapped: Etablissement[] = (data || []).map((row: any) => ({
+      id: row.id,
+      compte_id: row.proprietaire_id,
+      nom: row.nom || 'Commerce sans nom',
+      type: 'boutique',
+      type_activite: 'boutique',
+      secteur_boutique: row.secteur || 'Commerce général',
+      abrev_boutique: row.abbreviation_code || cleanCodeSegment(row.nom, 3),
+      ville: row.ville || 'Douala',
+      adresse: row.adresse || '',
+      telephone: row.telephone || '',
+      email_patron: row.email_patron || (row.proprietaire_id ? `proprietaire_${row.proprietaire_id.slice(0, 6)}@gmail.com` : undefined),
+      plan: 'Basique',
+      statut_abonnement: row.statut_abonnement || (row.acces_bloque ? 'bloque' : 'essai'),
+      date_fin_essai: row.fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
+      date_prochain_paiement: row.fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
+      tarif_mensuel: row.palier === 'Essentiel' ? 3000 : row.palier === 'Pro' ? 10000 : 5000,
+      created_at: row.created_at || new Date().toISOString(),
+    }));
+
+    const merged = offlineDB.saveEtablissementsMerge(mapped);
+    return {
+      success: true,
+      activites: merged,
+      count: merged.length,
+    };
+  } catch (err: any) {
+    const localEtabs = offlineDB.getEtablissements();
+    return {
+      success: false,
+      activites: localEtabs,
+      count: localEtabs.length,
+      error: err?.message || 'Erreur réseau',
+    };
+  }
+}
