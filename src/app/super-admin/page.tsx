@@ -89,11 +89,8 @@ export default function SuperAdminDashboardPage() {
 
   const loadAdminData = () => {
     try {
-      let etabs = offlineDB.getEtablissements();
-      if (etabs.length === 0) {
-        offlineDB.restoreDemoSeedData();
-        etabs = offlineDB.getEtablissements();
-      }
+      offlineDB.cleanLegacyDemoData();
+      const etabs = offlineDB.getEtablissements();
       setEtablissements(etabs);
       setComptes(offlineDB.getComptesGlobal());
       setPaliers(offlineDB.getPaliersTarifaires());
@@ -112,11 +109,12 @@ export default function SuperAdminDashboardPage() {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPassword === 'oeko2026' || adminPassword === 'admin') {
+    const configuredAdminPass = process.env.NEXT_PUBLIC_SUPER_ADMIN_PASSWORD || 'oeko2026';
+    if (adminPassword.trim() === configuredAdminPass.trim()) {
       setIsAuthenticated(true);
       setAuthError('');
     } else {
-      setAuthError('Mot de passe Super-Admin incorrect (Essayer: oeko2026).');
+      setAuthError('Mot de passe Super-Admin incorrect.');
     }
   };
 
@@ -267,14 +265,6 @@ export default function SuperAdminDashboardPage() {
     }
   };
 
-  const handleRestoreDemo = () => {
-    if (confirm("Voulez-vous charger/restaurer les commerces de test (Boutique Élégance Akwa & Yaoundé) ?")) {
-      offlineDB.restoreDemoSeedData();
-      loadAdminData();
-      setSuccessMsg("Commerces de démonstration restaurés avec succès !");
-      setTimeout(() => setSuccessMsg(''), 4000);
-    }
-  };
 
   const handleInspectShop = (etab: Etablissement) => {
     offlineDB.switchEtablissement(etab.id);
@@ -456,15 +446,6 @@ export default function SuperAdminDashboardPage() {
             <span>Créer Commerce</span>
           </button>
 
-          {/* Bouton Recharger Commerces Démo */}
-          <button
-            onClick={handleRestoreDemo}
-            className="py-2.5 px-3.5 rounded-xl bg-white hover:bg-[#FAF9F5] text-[#1B4332] border border-[#E2D5C3] font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-            title="Recharger les boutiques de test d'origine (Akwa & Yaoundé)"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-[#B8442C]" />
-            <span>Recharger Démo</span>
-          </button>
 
           {/* Bouton Synchro Cloud Supabase */}
           <button
@@ -820,7 +801,7 @@ export default function SuperAdminDashboardPage() {
               <p className="text-xs text-gray-600 max-w-md mx-auto">
                 {searchQuery || statusFilter !== 'tous'
                   ? "Aucun commerce ne correspond à vos filtres actuels."
-                  : "Créez votre première boutique de test pour vos manipulations, ou rechargez les données de démonstration."}
+                  : "Aucune boutique enregistrée pour le moment. Cliquez sur 'Créer Commerce' ou synchronisez avec Supabase Cloud."}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button
@@ -829,13 +810,6 @@ export default function SuperAdminDashboardPage() {
                 >
                   <Plus className="w-4 h-4 text-[#E8A33D]" />
                   <span>Créer un Commerce</span>
-                </button>
-                <button
-                  onClick={handleRestoreDemo}
-                  className="px-4 py-2 bg-white hover:bg-gray-100 text-[#1B4332] border border-[#E2D5C3] rounded-xl text-xs font-black shadow-sm cursor-pointer flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-4 h-4 text-[#B8442C]" />
-                  <span>Recharger Boutiques Démo</span>
                 </button>
               </div>
             </div>
@@ -1356,10 +1330,7 @@ export default function SuperAdminDashboardPage() {
                   </code>
                 </p>
                 <p className="text-gray-700">
-                  Saisissez votre mot de passe maître confidentiel :{' '}
-                  <code className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-mono font-bold">
-                    oeko2026
-                  </code>
+                  Saisissez votre mot de passe maître confidentiel défini dans vos paramètres de déploiement (NEXT_PUBLIC_SUPER_ADMIN_PASSWORD).
                 </p>
               </div>
 

@@ -33,8 +33,8 @@ export async function fetchActivitesFromCloud(): Promise<{
       console.warn('[ActivitesSyncService] Erreur Supabase select activites:', error.message);
       return {
         success: false,
-        activites: offlineDB.getEtablissements(),
-        error: `Impossible de joindre le serveur Cloud (${error.message})`,
+        activites: [],
+        error: `Erreur Cloud Supabase: ${error.message}`,
       };
     }
 
@@ -58,19 +58,15 @@ export async function fetchActivitesFromCloud(): Promise<{
       created_at: row.created_at,
     }));
 
-    // Mettre à jour le cache local avec les données réelles du cloud SANS jamais écraser avec un tableau vide
-    if (mapped.length > 0) {
-      offlineDB.saveEtablissementsMerge(mapped);
-    }
-
-    const currentEtabs = offlineDB.getEtablissements();
-    return { success: true, activites: currentEtabs.length > 0 ? currentEtabs : mapped };
+    // Mettre à jour le cache local avec les données réelles du cloud
+    offlineDB.saveEtablissements(mapped);
+    return { success: true, activites: mapped };
   } catch (err: any) {
     console.error('[ActivitesSyncService] Exception fetchActivitesFromCloud:', err);
     return {
       success: false,
-      activites: offlineDB.getEtablissements(),
-      error: 'Impossible de joindre le serveur. Mode hors-ligne actif.',
+      activites: [],
+      error: `Impossible de joindre le serveur Cloud: ${err?.message || 'Erreur réseau'}`,
     };
   }
 }
@@ -143,12 +139,11 @@ export async function fetchGlobalActivitesForSuperAdmin(): Promise<{
 
     if (error) {
       console.warn('[ActivitesSyncService] Erreur Supabase select activites super-admin:', error.message);
-      const localEtabs = offlineDB.getEtablissements();
       return {
         success: false,
-        activites: localEtabs,
-        count: localEtabs.length,
-        error: error.message,
+        activites: [],
+        count: 0,
+        error: `Erreur Cloud Supabase: ${error.message}`,
       };
     }
 
@@ -172,19 +167,18 @@ export async function fetchGlobalActivitesForSuperAdmin(): Promise<{
       created_at: row.created_at || new Date().toISOString(),
     }));
 
-    const merged = mapped.length > 0 ? offlineDB.saveEtablissementsMerge(mapped) : offlineDB.getEtablissements();
+    offlineDB.saveEtablissements(mapped);
     return {
       success: true,
-      activites: merged,
-      count: merged.length,
+      activites: mapped,
+      count: mapped.length,
     };
   } catch (err: any) {
-    const localEtabs = offlineDB.getEtablissements();
     return {
       success: false,
-      activites: localEtabs,
-      count: localEtabs.length,
-      error: err?.message || 'Erreur réseau',
+      activites: [],
+      count: 0,
+      error: `Erreur réseau Cloud: ${err?.message || 'Serveur injoignable'}`,
     };
   }
 }

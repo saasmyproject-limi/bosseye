@@ -87,45 +87,34 @@ export default function Sidebar() {
     setIsSelectorModalOpen(true);
   };
 
-  const handleRestoreDemoData = () => {
-    offlineDB.restoreDemoSeedData();
-    setShowClearConfirm(false);
-    loadInfo();
-    router.refresh();
-  };
-
-  const act = etablissement?.type_activite || 'boutique';
+  const act = 'boutique';
 
   const navItems = [
     {
       name: 'Tableau de Bord',
-      href: `/${act}/dashboard`,
+      href: '/boutique/dashboard',
       icon: LayoutDashboard,
     },
     {
-      name: term.salesScreenTitle,
-      href: `/${act}/ventes`,
-      icon: etablissement?.type_activite === 'boutique' ? ShoppingBag : LayoutDashboard,
+      name: 'Caisse & Vente',
+      href: '/boutique/ventes',
+      icon: ShoppingBag,
     },
-    ...(etablissement?.type_activite === 'boutique' || !etablissement?.type_activite
-      ? [
-          {
-            name: 'Commandes À LIVRER',
-            href: '/boutique/commandes-livrer',
-            icon: Truck,
-          },
-        ]
-      : []),
     {
-      name: term.stockLabel,
-      href: `/${act}/produits`,
+      name: 'Commandes À LIVRER',
+      href: '/boutique/commandes-livrer',
+      icon: Truck,
+    },
+    {
+      name: 'Rayons & Articles',
+      href: '/boutique/produits',
       icon: Package,
       badge: lowStockCount > 0 ? `${lowStockCount} bas` : null,
       badgeColor: 'bg-amber-600',
     },
     {
       name: 'Argent à Récupérer',
-      href: `/${act}/credits`,
+      href: '/boutique/credits',
       icon: CreditCard,
       badge: pendingCreditsCount > 0 ? `${pendingCreditsCount}` : null,
       badgeColor: 'bg-[#B8442C]',
@@ -135,15 +124,11 @@ export default function Sidebar() {
       href: '/commun/clients',
       icon: Users,
     },
-    ...(etablissement?.type_activite === 'boutique' || !etablissement?.type_activite
-      ? [
-          {
-            name: 'Réservations / Mise de Côté',
-            href: '/boutique/reservations',
-            icon: Bookmark,
-          },
-        ]
-      : []),
+    {
+      name: 'Réservations / Mise de Côté',
+      href: '/boutique/reservations',
+      icon: Bookmark,
+    },
     ...(!isEmployeBoutique
       ? [
           {
@@ -362,13 +347,6 @@ export default function Sidebar() {
                 Confirmer & Vider la Base ➔
               </button>
 
-              <button
-                onClick={handleRestoreDemoData}
-                className="w-full py-3.5 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4 text-[#E8A33D]" />
-                <span>Recharger les Données Démo</span>
-              </button>
 
               <button
                 onClick={() => {

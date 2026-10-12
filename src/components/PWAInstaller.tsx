@@ -14,6 +14,9 @@ export default function PWAInstaller() {
   const [syncToast, setSyncToast] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
 
   useEffect(() => {
+    // Nettoyage immédiat au démarrage de toutes les anciennes données de démo
+    offlineDB.cleanLegacyDemoData();
+
     let registrationRef: ServiceWorkerRegistration | null = null;
 
     // Fonction de vérification silencieuse de nouvelle version du Service Worker

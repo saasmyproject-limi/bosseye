@@ -33,19 +33,31 @@ import {
   AuditStockLog,
   InventaireReference,
 } from '@/types';
-import {
-  SEED_ETABLISSEMENT,
-  SEED_ETABLISSEMENTS_LIST,
-  SEED_UTILISATEURS,
-  SEED_PRODUITS,
-  SEED_MOUVEMENTS,
-  SEED_CLIENTS,
-  SEED_FACTURES,
-  SEED_REMBOURSEMENTS,
-  SEED_CHARGES,
-  SEED_COMMANDES_LIGNE,
-  SEED_CAISSES,
-} from './presetData';
+const BLANK_ETABLISSEMENT: Etablissement = {
+  id: '',
+  nom: 'Boutique',
+  type_activite: 'boutique',
+  secteur_boutique: 'Commerce général',
+  ville: 'Douala',
+  adresse: '',
+  telephone: '',
+  devise: 'FCFA',
+  plan: 'Basique',
+  statut_abonnement: 'essai',
+  date_fin_essai: new Date(Date.now() + 14 * 86400000).toISOString(),
+  date_prochain_paiement: new Date(Date.now() + 14 * 86400000).toISOString(),
+  tarif_mensuel: 5000,
+  created_at: new Date().toISOString(),
+  show_welcome_modal: false,
+};
+
+const BLANK_USER: Utilisateur = {
+  id: '',
+  etablissement_id: '',
+  nom: 'Utilisateur',
+  role: 'Patron',
+  actif: true,
+};
 import { hashPinSync, verifyPinSync } from './authPinService';
 
 const KEYS = {
@@ -200,17 +212,7 @@ export const offlineDB = {
           }
         });
 
-        if (list.length === 0) {
-          list.push({
-            id: 'compte-google-demo',
-            email: 'patronne.demo@gmail.com',
-            nom: 'Mme Patronne (Compte Démo)',
-            provider: 'google',
-            created_at: new Date().toISOString(),
-          });
-        }
-
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && list.length > 0) {
           localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(list));
         }
       }
@@ -229,11 +231,6 @@ export const offlineDB = {
     const all = this.getEtablissements();
     if (!targetCompteId && !targetEmail) return all;
 
-    // Si c'est le compte démo par défaut, renvoyer les établissements de démonstration
-    if (targetEmail === 'patronne.demo@gmail.com' || targetCompteId === 'compte-google-demo') {
-      return all;
-    }
-
     // Filtrer les établissements créés par ce compte utilisateur ou rattachés à son email
     const filtered = all.filter((e) => {
       if (!e) return false;
@@ -242,11 +239,6 @@ export const offlineDB = {
       if (e.compte_id && targetCompteId && e.compte_id === targetCompteId) return true;
       return false;
     });
-
-    // Si aucune activité n'est spécifiquement filtrée mais qu'il y a des activités locales, les rendre accessibles
-    if (filtered.length === 0 && all.length > 0) {
-      return all;
-    }
 
     return filtered;
   },
@@ -261,28 +253,24 @@ export const offlineDB = {
       const activeId = typeof window !== 'undefined' ? localStorage.getItem(KEYS.ACTIVE_ETAB_ID) : null;
       let all = this.getEtablissements();
       if (all.length === 0) {
-        const defaultEtab = SEED_ETABLISSEMENT;
-        this.saveEtablissements([defaultEtab]);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(KEYS.ACTIVE_ETAB_ID, defaultEtab.id);
-        }
-        return this.normalizeEtablissement(defaultEtab);
+        return BLANK_ETABLISSEMENT;
       }
       if (activeId) {
         const found = all.find((e) => e && e.id === activeId);
         if (found) return this.normalizeEtablissement(found);
       }
-      const chosen = all[0] || SEED_ETABLISSEMENT;
+      const chosen = all[0] || BLANK_ETABLISSEMENT;
       if (typeof window !== 'undefined' && chosen?.id) {
         localStorage.setItem(KEYS.ACTIVE_ETAB_ID, chosen.id);
       }
       return this.normalizeEtablissement(chosen);
     } catch {
-      return this.normalizeEtablissement(SEED_ETABLISSEMENT);
+      return BLANK_ETABLISSEMENT;
     }
   },
 
   normalizeEtablissement(e: Etablissement): Etablissement {
+    if (!e) return BLANK_ETABLISSEMENT;
     let act: TypeActivite = e.type_activite || 'boutique';
     if (!e.type_activite) {
       act = 'boutique';
@@ -297,25 +285,13 @@ export const offlineDB = {
 
   getEtablissements(): Etablissement[] {
     try {
-      if (typeof window === 'undefined') return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
-      const isResetZero = localStorage.getItem(KEYS.RESET_ZERO) === 'true';
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.ETABLISSEMENTS);
-
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
-        return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
-      }
-
+      if (!data) return [];
       const parsed: Etablissement[] = JSON.parse(data);
-      if ((!parsed || parsed.length === 0) && !isResetZero) {
-        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
-        return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
-      }
-
       return (parsed || []).map((e) => this.normalizeEtablissement(e));
     } catch {
-      return SEED_ETABLISSEMENTS_LIST.map((e) => this.normalizeEtablissement(e));
+      return [];
     }
   },
 
@@ -365,7 +341,7 @@ export const offlineDB = {
       updated = this.normalizeEtablissement({ ...existing, ...updates });
       all = etabs.map((e) => (e.id === id ? updated : e));
     } else {
-      const fallback = SEED_ETABLISSEMENT;
+      const fallback = BLANK_ETABLISSEMENT;
       updated = this.normalizeEtablissement({
         ...fallback,
         id,
@@ -522,24 +498,153 @@ export const offlineDB = {
       if (typeof window !== 'undefined') localStorage.setItem(KEYS.CLIENTS, JSON.stringify(data));
     } catch (e) { console.error(e); }
   },
-  restoreDemoSeedData() {
+  cleanLegacyDemoData(): { cleaned: boolean; removedCount: number } {
+    if (typeof window === 'undefined') return { cleaned: false, removedCount: 0 };
     try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(KEYS.RESET_ZERO);
-        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(SEED_ETABLISSEMENTS_LIST));
-        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
-        localStorage.setItem(KEYS.PRODUITS, JSON.stringify(SEED_PRODUITS));
-        localStorage.setItem(KEYS.FACTURES, JSON.stringify(SEED_FACTURES));
-        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(SEED_COMMANDES_LIGNE));
-        localStorage.setItem(KEYS.CLIENTS, JSON.stringify(SEED_CLIENTS));
-        localStorage.setItem(KEYS.CAISSES, JSON.stringify(SEED_CAISSES));
-        localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(SEED_MOUVEMENTS));
-        localStorage.setItem(KEYS.CHARGES, JSON.stringify(SEED_CHARGES));
-        localStorage.setItem(KEYS.REMBOURSEMENTS, JSON.stringify(SEED_REMBOURSEMENTS));
-        localStorage.setItem(KEYS.ACTIVE_ETAB_ID, SEED_ETABLISSEMENT.id);
-        localStorage.setItem(KEYS.CURRENT_USER_ID, SEED_UTILISATEURS[0].id);
+      const DEMO_ETAB_IDS = ['etab-elegance-akwa', 'etab-eleganza-yaounde', 'etab-capitole-douala'];
+      const DEMO_EMAILS = ['patronne.demo@gmail.com', 'gerante.demo@gmail.com'];
+      const DEMO_USER_IDS = ['user-patron-defaut', 'user-gerante-akwa', 'user-vendeuse-akwa', 'user-patron-yaounde', 'user-vendeuse-yaounde'];
+      const DEMO_COMPTE_IDS = ['compte-google-demo'];
+
+      let removedCount = 0;
+
+      // 1. Établissements
+      const rawEtabs = localStorage.getItem(KEYS.ETABLISSEMENTS);
+      if (rawEtabs) {
+        const etabs: Etablissement[] = JSON.parse(rawEtabs);
+        const filtered = (etabs || []).filter((e) => e && !DEMO_ETAB_IDS.includes(e.id) && !DEMO_EMAILS.includes(e.email_patron || ''));
+        if (filtered.length !== etabs.length) {
+          removedCount += (etabs.length - filtered.length);
+          localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(filtered));
+        }
       }
-    } catch (e) { console.error(e); }
+
+      // 2. Comptes
+      const rawComptes = localStorage.getItem(KEYS.COMPTES_LIST);
+      if (rawComptes) {
+        const comptes: CompteUtilisateur[] = JSON.parse(rawComptes);
+        const filtered = (comptes || []).filter((c) => c && !DEMO_COMPTE_IDS.includes(c.id) && !DEMO_EMAILS.includes(c.email || ''));
+        if (filtered.length !== comptes.length) {
+          removedCount += (comptes.length - filtered.length);
+          localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(filtered));
+        }
+      }
+
+      // 3. Compte Actuel
+      const rawActuel = localStorage.getItem(KEYS.COMPTE_ACTUEL);
+      if (rawActuel) {
+        const actuel = JSON.parse(rawActuel);
+        if (actuel && (DEMO_COMPTE_IDS.includes(actuel.id) || DEMO_EMAILS.includes(actuel.email || ''))) {
+          localStorage.removeItem(KEYS.COMPTE_ACTUEL);
+          removedCount++;
+        }
+      }
+
+      // 4. Utilisateurs
+      const rawUsers = localStorage.getItem(KEYS.UTILISATEURS);
+      if (rawUsers) {
+        const users: Utilisateur[] = JSON.parse(rawUsers);
+        const filtered = (users || []).filter((u) => u && !DEMO_USER_IDS.includes(u.id) && !DEMO_ETAB_IDS.includes(u.etablissement_id));
+        if (filtered.length !== users.length) {
+          removedCount += (users.length - filtered.length);
+          localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(filtered));
+        }
+      }
+
+      // 5. Produits
+      const rawProds = localStorage.getItem(KEYS.PRODUITS);
+      if (rawProds) {
+        const prods: Produit[] = JSON.parse(rawProds);
+        const filtered = (prods || []).filter((p) => p && !DEMO_ETAB_IDS.includes(p.etablissement_id));
+        if (filtered.length !== prods.length) {
+          removedCount += (prods.length - filtered.length);
+          localStorage.setItem(KEYS.PRODUITS, JSON.stringify(filtered));
+        }
+      }
+
+      // 6. Factures
+      const rawFacs = localStorage.getItem(KEYS.FACTURES);
+      if (rawFacs) {
+        const facs: Facture[] = JSON.parse(rawFacs);
+        const filtered = (facs || []).filter((f) => f && !DEMO_ETAB_IDS.includes(f.etablissement_id));
+        if (filtered.length !== facs.length) {
+          removedCount += (facs.length - filtered.length);
+          localStorage.setItem(KEYS.FACTURES, JSON.stringify(filtered));
+        }
+      }
+
+      // 7. Mouvements Stock
+      const rawMvts = localStorage.getItem(KEYS.MOUVEMENTS);
+      if (rawMvts) {
+        const mvts: MouvementStock[] = JSON.parse(rawMvts);
+        const filtered = (mvts || []).filter((m) => m && !DEMO_ETAB_IDS.includes(m.etablissement_id));
+        if (filtered.length !== mvts.length) {
+          removedCount += (mvts.length - filtered.length);
+          localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(filtered));
+        }
+      }
+
+      // 8. Clients
+      const rawClients = localStorage.getItem(KEYS.CLIENTS);
+      if (rawClients) {
+        const clients: Client[] = JSON.parse(rawClients);
+        const filtered = (clients || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+        if (filtered.length !== clients.length) {
+          removedCount += (clients.length - filtered.length);
+          localStorage.setItem(KEYS.CLIENTS, JSON.stringify(filtered));
+        }
+      }
+
+      // 9. Charges
+      const rawCharges = localStorage.getItem(KEYS.CHARGES);
+      if (rawCharges) {
+        const charges: ChargeJournaliere[] = JSON.parse(rawCharges);
+        const filtered = (charges || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+        if (filtered.length !== charges.length) {
+          removedCount += (charges.length - filtered.length);
+          localStorage.setItem(KEYS.CHARGES, JSON.stringify(filtered));
+        }
+      }
+
+      // 10. Commandes en Ligne
+      const rawCmds = localStorage.getItem(KEYS.COMMANDES_LIGNE);
+      if (rawCmds) {
+        const cmds: CommandeEnLigne[] = JSON.parse(rawCmds);
+        const filtered = (cmds || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+        if (filtered.length !== cmds.length) {
+          removedCount += (cmds.length - filtered.length);
+          localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(filtered));
+        }
+      }
+
+      // 11. Caisses
+      const rawCaisses = localStorage.getItem(KEYS.CAISSES);
+      if (rawCaisses) {
+        const caisses: Caisse[] = JSON.parse(rawCaisses);
+        const filtered = (caisses || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+        if (filtered.length !== caisses.length) {
+          removedCount += (caisses.length - filtered.length);
+          localStorage.setItem(KEYS.CAISSES, JSON.stringify(filtered));
+        }
+      }
+
+      // 12. Active Etab ID & Current User ID
+      const activeEtabId = localStorage.getItem(KEYS.ACTIVE_ETAB_ID);
+      if (activeEtabId && DEMO_ETAB_IDS.includes(activeEtabId)) {
+        localStorage.removeItem(KEYS.ACTIVE_ETAB_ID);
+        removedCount++;
+      }
+      const currentUserId = localStorage.getItem(KEYS.CURRENT_USER_ID);
+      if (currentUserId && DEMO_USER_IDS.includes(currentUserId)) {
+        localStorage.removeItem(KEYS.CURRENT_USER_ID);
+        removedCount++;
+      }
+
+      return { cleaned: removedCount > 0, removedCount };
+    } catch (e) {
+      console.error('[offlineDB] Erreur cleanLegacyDemoData:', e);
+      return { cleaned: false, removedCount: 0 };
+    }
   },
 
   isTrialExpired(etab: Etablissement): boolean {
@@ -608,16 +713,9 @@ export const offlineDB = {
         const found = users.find((u) => u && u.id === currentId);
         if (found) return found;
       }
-      return users[0] || {
-        id: 'user-patron-defaut',
-        etablissement_id: 'etab-nouveau',
-        nom: 'Mme Patronne',
-        role: 'Patronne',
-        pin_code: '1234',
-        actif: true,
-      };
+      return users[0] || BLANK_USER;
     } catch {
-      return SEED_UTILISATEURS[0];
+      return BLANK_USER;
     }
   },
 
@@ -632,37 +730,22 @@ export const offlineDB = {
   getUtilisateurs(): Utilisateur[] {
     try {
       const etab = this.getEtablissement();
-      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etab.id);
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.UTILISATEURS);
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
-        return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etab.id);
-      }
+      if (!data) return [];
       const parsed: Utilisateur[] = JSON.parse(data);
       return (parsed || []).filter((u) => u && u.etablissement_id === etab.id);
     } catch {
-      return SEED_UTILISATEURS;
+      return [];
     }
   },
 
   getUtilisateursByEtablissementId(etabId: string): Utilisateur[] {
     try {
-      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      let parsed: Utilisateur[] = [];
-      if (typeof window !== 'undefined') {
-        const data = localStorage.getItem(KEYS.UTILISATEURS);
-        if (!data) {
-          if (isResetZero) return [];
-          localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(SEED_UTILISATEURS));
-          parsed = SEED_UTILISATEURS;
-        } else {
-          parsed = JSON.parse(data) || [];
-        }
-      } else {
-        parsed = SEED_UTILISATEURS;
-      }
+      if (typeof window === 'undefined') return [];
+      const data = localStorage.getItem(KEYS.UTILISATEURS);
+      if (!data) return [];
+      const parsed: Utilisateur[] = JSON.parse(data) || [];
 
       let etabUsers = (parsed || []).filter((u) => u && u.etablissement_id === etabId);
 
@@ -703,7 +786,7 @@ export const offlineDB = {
         return 0;
       });
     } catch {
-      return SEED_UTILISATEURS.filter((u) => u && u.etablissement_id === etabId);
+      return [];
     }
   },
 
@@ -813,10 +896,10 @@ export const offlineDB = {
 
   getAllUtilisateursGlobal(): Utilisateur[] {
     try {
-      if (typeof window === 'undefined') return SEED_UTILISATEURS;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.UTILISATEURS);
-      return data ? JSON.parse(data) : SEED_UTILISATEURS;
-    } catch { return SEED_UTILISATEURS; }
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
   },
 
   toggleUtilisateurStatus(id: string) {
@@ -831,34 +914,24 @@ export const offlineDB = {
   getCaisses(): Caisse[] {
     try {
       const etab = this.getEtablissement();
-      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_CAISSES.filter((c) => c && c.etablissement_id === etab.id);
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.CAISSES);
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.CAISSES, JSON.stringify(SEED_CAISSES));
-        return SEED_CAISSES.filter((c) => c && c.etablissement_id === etab.id);
-      }
+      if (!data) return [];
       const parsed: Caisse[] = JSON.parse(data);
       return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
-    } catch { return SEED_CAISSES; }
+    } catch { return []; }
   },
 
   // --- COMMANDES EN LIGNE & LIVRAISONS (BOUTIQUE) ---
   getCommandesEnLigne(): CommandeEnLigne[] {
     try {
       const etab = this.getEtablissement();
-      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(SEED_COMMANDES_LIGNE));
-        return SEED_COMMANDES_LIGNE.filter((c) => c && c.etablissement_id === etab.id);
-      }
+      if (!data) return [];
       const parsed: CommandeEnLigne[] = JSON.parse(data);
       return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
-    } catch { return SEED_COMMANDES_LIGNE; }
+    } catch { return []; }
   },
 
   addCommandeEnLigne(cmd: Omit<CommandeEnLigne, 'id' | 'etablissement_id' | 'numero_commande' | 'created_at'> & { numero_commande?: string }): CommandeEnLigne {
@@ -916,10 +989,10 @@ export const offlineDB = {
 
   getAllCommandesGlobal(): CommandeEnLigne[] {
     try {
-      if (typeof window === 'undefined') return SEED_COMMANDES_LIGNE;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.COMMANDES_LIGNE);
-      return data ? JSON.parse(data) : SEED_COMMANDES_LIGNE;
-    } catch { return SEED_COMMANDES_LIGNE; }
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
   },
 
   getAllCommandesEnLigneGlobal(): CommandeEnLigne[] {
@@ -936,17 +1009,12 @@ export const offlineDB = {
 
       let rawList: Produit[] = [];
       if (typeof window === 'undefined') {
-        rawList = SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
+        return [];
       } else {
         const data = localStorage.getItem(KEYS.PRODUITS);
-        if (!data) {
-          if (isResetZero) return [];
-          localStorage.setItem(KEYS.PRODUITS, JSON.stringify(SEED_PRODUITS));
-          rawList = SEED_PRODUITS.filter((p) => p && p.etablissement_id === etab.id);
-        } else {
-          const parsed: Produit[] = JSON.parse(data);
-          rawList = (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
-        }
+        if (!data) return [];
+        const parsed: Produit[] = JSON.parse(data);
+        rawList = (parsed || []).filter((p) => p && p.etablissement_id === etab.id);
       }
 
       return rawList.map((p) => {
@@ -976,7 +1044,7 @@ export const offlineDB = {
         return pClean;
       });
     } catch {
-      return SEED_PRODUITS;
+      return [];
     }
   },
 
@@ -1162,10 +1230,10 @@ export const offlineDB = {
 
   getAllProduitsGlobal(): Produit[] {
     try {
-      if (typeof window === 'undefined') return SEED_PRODUITS;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.PRODUITS);
-      return data ? JSON.parse(data) : SEED_PRODUITS;
-    } catch { return SEED_PRODUITS; }
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
   },
 
   getLowStockProducts(): Produit[] {
@@ -1221,10 +1289,10 @@ export const offlineDB = {
       const users = this.getAllUtilisateursGlobal();
       const prods = this.getAllProduitsGlobal();
       const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_MOUVEMENTS.filter((m) => m && m.etablissement_id === etab.id);
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.MOUVEMENTS);
-      if (!data && isResetZero) return [];
-      const list: MouvementStock[] = data ? JSON.parse(data) : SEED_MOUVEMENTS;
+      if (!data) return [];
+      const list: MouvementStock[] = JSON.parse(data);
 
       return (list || [])
         .filter((m) => m && m.etablissement_id === etab.id)
@@ -1234,7 +1302,7 @@ export const offlineDB = {
           produit: prods.find((p) => p && p.id === m.produit_id),
         }));
     } catch {
-      return SEED_MOUVEMENTS;
+      return [];
     }
   },
 
@@ -1300,27 +1368,22 @@ export const offlineDB = {
 
   getAllMouvementsGlobal(): MouvementStock[] {
     try {
-      if (typeof window === 'undefined') return SEED_MOUVEMENTS;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.MOUVEMENTS);
-      return data ? JSON.parse(data) : SEED_MOUVEMENTS;
-    } catch { return SEED_MOUVEMENTS; }
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
   },
 
   // --- CLIENTS ---
   getClients(): Client[] {
     try {
       const etab = this.getEtablissement();
-      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_CLIENTS.filter((c) => c && c.etablissement_id === etab.id);
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.CLIENTS);
-      if (!data) {
-        if (isResetZero) return [];
-        localStorage.setItem(KEYS.CLIENTS, JSON.stringify(SEED_CLIENTS));
-        return SEED_CLIENTS.filter((c) => c && c.etablissement_id === etab.id);
-      }
+      if (!data) return [];
       const parsed: Client[] = JSON.parse(data);
       return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
-    } catch { return SEED_CLIENTS; }
+    } catch { return []; }
   },
 
   addClient(c: Omit<Client, 'id' | 'etablissement_id' | 'created_at'>): Client {
@@ -1363,10 +1426,10 @@ export const offlineDB = {
 
   getAllClientsGlobal(): Client[] {
     try {
-      if (typeof window === 'undefined') return SEED_CLIENTS;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.CLIENTS);
-      return data ? JSON.parse(data) : SEED_CLIENTS;
-    } catch { return SEED_CLIENTS; }
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
   },
 
   // --- FACTURES ---
@@ -1376,14 +1439,10 @@ export const offlineDB = {
       const users = this.getAllUtilisateursGlobal();
       const clients = this.getAllClientsGlobal();
       const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') {
-        let raw = SEED_FACTURES.filter((f) => f && f.etablissement_id === etab.id);
-        if (limit && limit > 0) raw = raw.slice(-limit);
-        return raw;
-      }
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.FACTURES);
-      if (!data && isResetZero) return [];
-      const allFacs: Facture[] = data ? JSON.parse(data) : SEED_FACTURES;
+      if (!data) return [];
+      const allFacs: Facture[] = JSON.parse(data);
 
       let filtered = allFacs.filter((f) => f && f.etablissement_id === etab.id);
       if (limit && limit > 0) {
@@ -1407,11 +1466,11 @@ export const offlineDB = {
 
   getRemboursementsGlobal(): RemboursementCredit[] {
     try {
-      if (typeof window === 'undefined') return SEED_REMBOURSEMENTS;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.REMBOURSEMENTS);
-      return data ? JSON.parse(data) : SEED_REMBOURSEMENTS;
+      return data ? JSON.parse(data) : [];
     } catch {
-      return SEED_REMBOURSEMENTS;
+      return [];
     }
   },
 
@@ -1536,10 +1595,10 @@ export const offlineDB = {
 
   getAllFacturesGlobal(): Facture[] {
     try {
-      if (typeof window === 'undefined') return SEED_FACTURES;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.FACTURES);
-      return data ? JSON.parse(data) : SEED_FACTURES;
-    } catch { return SEED_FACTURES; }
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
   },
 
   recordWhatsAppRelance(factureId: string) {
@@ -1599,7 +1658,7 @@ export const offlineDB = {
       if (typeof window !== 'undefined') {
         localStorage.setItem(KEYS.FACTURES, JSON.stringify(updatedFacs));
         const rembsData = localStorage.getItem(KEYS.REMBOURSEMENTS);
-        const rembsList: RemboursementCredit[] = rembsData ? JSON.parse(rembsData) : SEED_REMBOURSEMENTS;
+        const rembsList: RemboursementCredit[] = rembsData ? JSON.parse(rembsData) : [];
         localStorage.setItem(KEYS.REMBOURSEMENTS, JSON.stringify([newRemb, ...rembsList]));
       }
     } catch (e) { console.error(e); }
@@ -1662,16 +1721,12 @@ export const offlineDB = {
   getCharges(): ChargeJournaliere[] {
     try {
       const etab = this.getEtablissement();
-      const isResetZero = typeof window !== 'undefined' && localStorage.getItem(KEYS.RESET_ZERO) === 'true';
-      if (typeof window === 'undefined') return SEED_CHARGES.filter((c) => c && c.etablissement_id === etab.id);
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.CHARGES);
-      if (!data) {
-        if (isResetZero) return [];
-        return SEED_CHARGES.filter((c) => c && c.etablissement_id === etab.id);
-      }
+      if (!data) return [];
       const parsed: ChargeJournaliere[] = JSON.parse(data);
       return (parsed || []).filter((c) => c && c.etablissement_id === etab.id);
-    } catch { return SEED_CHARGES; }
+    } catch { return []; }
   },
 
   addChargeJournaliere(arg1: string | { motif: string; montant: number }, arg2?: number): ChargeJournaliere {
@@ -1705,10 +1760,10 @@ export const offlineDB = {
 
   getAllChargesGlobal(): ChargeJournaliere[] {
     try {
-      if (typeof window === 'undefined') return SEED_CHARGES;
+      if (typeof window === 'undefined') return [];
       const data = localStorage.getItem(KEYS.CHARGES);
-      return data ? JSON.parse(data) : SEED_CHARGES;
-    } catch { return SEED_CHARGES; }
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
   },
 
   // --- RÉSERVATIONS & MISES DE CÔTÉ ---
