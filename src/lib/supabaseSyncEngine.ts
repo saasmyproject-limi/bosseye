@@ -116,21 +116,78 @@ class SupabaseSyncEngine {
 
     for (const item of queue) {
       try {
+        let targetTable = item.table;
+        let payload = { ...item.payload };
+
+        if (targetTable === 'articles') targetTable = 'produits';
+        if (targetTable === 'commandes_en_ligne') targetTable = 'livraisons';
+        if (targetTable === 'creances') targetTable = 'dettes';
+
+        // Sanitiser les colonnes selon le schéma de tables Supabase
+        if (targetTable === 'produits') {
+          if (!payload.etablissement_id && payload.activite_id) payload.etablissement_id = payload.activite_id;
+          if (!payload.activite_id && payload.etablissement_id) payload.activite_id = payload.etablissement_id;
+        } else if (targetTable === 'mouvements_stock') {
+          if (!payload.etablissement_id && payload.activite_id) payload.etablissement_id = payload.activite_id;
+          if (!payload.activite_id && payload.etablissement_id) payload.activite_id = payload.etablissement_id;
+          if (!payload.produit_id && payload.article_id) payload.produit_id = payload.article_id;
+          if (!payload.article_id && payload.produit_id) payload.article_id = payload.produit_id;
+        } else if (targetTable === 'ventes') {
+          if (!payload.etablissement_id && payload.activite_id) payload.etablissement_id = payload.activite_id;
+          if (!payload.activite_id && payload.etablissement_id) payload.activite_id = payload.etablissement_id;
+          if (!payload.numero_ticket && payload.numero_facture) payload.numero_ticket = payload.numero_facture;
+          if (payload.montant_total === undefined && payload.total_ttc !== undefined) payload.montant_total = payload.total_ttc;
+          if (payload.statut === 'credit_encours') {
+            payload.statut = (payload.montant_paye && payload.montant_paye > 0) ? 'partielle' : 'impayee';
+          }
+        } else if (targetTable === 'lignes_vente') {
+          if (payload.total === undefined && payload.total_ligne !== undefined) payload.total = payload.total_ligne;
+          if (!payload.etablissement_id && payload.activite_id) payload.etablissement_id = payload.activite_id;
+        } else if (targetTable === 'dettes') {
+          if (!payload.etablissement_id && payload.activite_id) payload.etablissement_id = payload.activite_id;
+          if (!payload.statut) payload.statut = 'en_cours';
+        } else if (targetTable === 'paiements') {
+          if (!payload.etablissement_id && payload.activite_id) payload.etablissement_id = payload.activite_id;
+          const m = (payload.methode || '').toLowerCase();
+          if (m.includes('orange') || m.includes('om')) payload.methode = 'Orange Money';
+          else if (m.includes('mtn') || m.includes('momo')) payload.methode = 'MTN MoMo';
+          else if (m.includes('carte')) payload.methode = 'Carte';
+          else if (m.includes('vir')) payload.methode = 'Virement';
+          else payload.methode = 'Especes';
+        } else if (targetTable === 'journal_audit') {
+          const raw = payload;
+          payload = {
+            id: raw.id,
+            etablissement_id: raw.etablissement_id || raw.activite_id,
+            action: raw.action || raw.action_type || 'audit',
+            details: raw.details || {
+              article_id: raw.article_id,
+              variation_quantite: raw.variation_quantite,
+              quantite_avant: raw.quantite_avant,
+              quantite_apres: raw.quantite_apres,
+              motif: raw.motif,
+              auteur_nom: raw.auteur_nom,
+              auteur_role: raw.auteur_role,
+            },
+            created_at: raw.created_at || new Date().toISOString(),
+          };
+        }
+
         let err = null;
         if (item.action === 'insert' || item.action === 'upsert') {
-          const { error } = await supabase.from(item.table).upsert(item.payload);
+          const { error } = await supabase.from(targetTable).upsert(payload);
           err = error;
         } else if (item.action === 'update') {
-          const { error } = await supabase.from(item.table).update(item.payload).eq('id', item.payload.id);
+          const { error } = await supabase.from(targetTable).update(payload).eq('id', payload.id);
           err = error;
         } else if (item.action === 'delete') {
-          const { error } = await supabase.from(item.table).delete().eq('id', item.payload.id);
+          const { error } = await supabase.from(targetTable).delete().eq('id', payload.id);
           err = error;
         }
 
         if (err) {
-          console.warn(`[SyncEngine] Erreur sync item ${item.table}:${item.id}`, err.message);
-          this.lastErrorStatus = `Table ${item.table} : ${err.message}`;
+          console.warn(`[SyncEngine] Erreur sync item ${targetTable}:${item.id}`, err.message);
+          this.lastErrorStatus = `Table ${targetTable} : ${err.message}`;
           remainingQueue.push(item);
         }
       } catch (err: any) {

@@ -696,7 +696,7 @@ export const offlineDB = {
     const ref = params.reference || params.reference_transaction || '';
 
     const newPaiement: Paiement = {
-      id: `pay-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       montant: params.montant || etab.tarif_mensuel || 5000,
       methode: params.methode,
@@ -892,7 +892,7 @@ export const offlineDB = {
     const hashed = hashPinSync(user.pin_code || '1234');
     const newUser: Utilisateur = {
       ...user,
-      id: `user-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       pin_code: hashed,
       pin_code_hash: hashed,
@@ -951,7 +951,7 @@ export const offlineDB = {
     const numSeq = Math.floor(100 + Math.random() * 900);
     const newCmd: CommandeEnLigne = {
       ...cmd,
-      id: `cmd-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       numero_commande: (cmd as any).numero_commande || `CMD-2026-${numSeq}`,
       created_at: new Date().toISOString(),
@@ -1144,7 +1144,7 @@ export const offlineDB = {
         updatedCount++;
 
         newMvtsList.push({
-          id: `mvt-${Date.now()}-${idx}`,
+          id: generateUUID(),
           etablissement_id: etab.id,
           produit_id: p.id,
           type_mouvement: 'entree',
@@ -1168,7 +1168,7 @@ export const offlineDB = {
           statut_confirmation: isPatron ? 'non_confirme' : 'en_attente_validation_patron',
         });
       } else {
-        targetProdId = `prod-${Date.now()}-${idx}`;
+        targetProdId = generateUUID();
         const isBoutique = etab.type_activite === 'boutique';
         const paStatut = (!pxAchat || pxAchat === 0) ? 'prix_achat_a_completer' : 'complet';
 
@@ -1197,7 +1197,7 @@ export const offlineDB = {
         addedCount++;
 
         newMvtsList.push({
-          id: `mvt-${Date.now()}-${idx}`,
+          id: generateUUID(),
           etablissement_id: etab.id,
           produit_id: targetProdId,
           type_mouvement: 'entree',
@@ -1323,7 +1323,7 @@ export const offlineDB = {
     const nowIso = new Date().toISOString();
     const newMvt: MouvementStock = {
       ...mvt,
-      id: `mvt-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       sync_status: typeof navigator !== 'undefined' && !navigator.onLine ? 'pending_offline' : 'synced',
       client_timestamp: nowIso,
@@ -1402,7 +1402,7 @@ export const offlineDB = {
     const etab = this.getEtablissement();
     const newClient: Client = {
       ...c,
-      id: `client-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       telephone_whatsapp: (c.telephone_whatsapp || '').replace(/[^0-9]/g, ''),
       total_dette_actuelle: 0,
@@ -1545,7 +1545,7 @@ export const offlineDB = {
       }
 
       return {
-        id: `lig-${Date.now()}-${index}`,
+        id: generateUUID(),
         facture_id: '',
         produit_id: l.produit_id,
         variante_id: l.variante_id,
@@ -1572,7 +1572,7 @@ export const offlineDB = {
 
     const numSeq = Math.floor(1000 + Math.random() * 9000);
     const newFac: Facture = {
-      id: `fac-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       numero_facture: `FAC-2026-${numSeq}`,
       transaction_id: params.transaction_id,
@@ -1643,7 +1643,7 @@ export const offlineDB = {
     const amount = params.montant ?? params.montant_regle ?? 0;
 
     const newRemb: RemboursementCredit = {
-      id: `remb-${Date.now()}`,
+      id: generateUUID(),
       facture_id: params.facture_id,
       etablissement_id: etab.id,
       montant_regle: amount,
@@ -1848,7 +1848,7 @@ export const offlineDB = {
       }
 
       return {
-        id: `lig-res-${Date.now()}-${index}`,
+        id: generateUUID(),
         produit_id: l.produit_id,
         variante_id: l.variante_id,
         nom_produit: pName,
@@ -1863,7 +1863,7 @@ export const offlineDB = {
     const resteASolder = Math.max(0, totalVal - (params.acompte_paye || 0));
 
     const newRes: Reservation = {
-      id: `res-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       numero_reservation: `RES-2026-${numSeq}`,
       client_id: params.client_id,
@@ -2665,7 +2665,7 @@ export const offlineDB = {
     const deviceInfo = this.getDeviceInfo();
 
     const newLog: AuditStockLog = {
-      id: `audit-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: generateUUID(),
       etablissement_id: etab.id,
       produit_id: params.produit_id,
       nom_produit: params.nom_produit,

@@ -86,19 +86,19 @@ export default function CommunClientsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSaveClient = (e: React.FormEvent) => {
+  const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nom.trim()) return;
 
     if (editingClient) {
-      saveClientToCloud({
+      await saveClientToCloud({
         ...editingClient,
         nom: nom.trim(),
         telephone_whatsapp: phone.trim(),
         sexe,
       });
     } else {
-      saveClientToCloud({
+      await saveClientToCloud({
         id: '',
         etablissement_id: etablissement?.id || '',
         nom: nom.trim(),
@@ -114,9 +114,9 @@ export default function CommunClientsPage() {
     loadData();
   };
 
-  const handleDeleteClient = (id: string) => {
+  const handleDeleteClient = async (id: string) => {
     if (confirm('Voulez-vous vraiment supprimer ce client de votre répertoire ?')) {
-      deleteClientFromCloud(id);
+      await deleteClientFromCloud(id);
       if (etablissement) syncShopToCloud(etablissement.id);
       loadData();
     }

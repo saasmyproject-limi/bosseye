@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { CreditCard, Search, MessageSquare, Send, CheckCircle2, DollarSign, X } from 'lucide-react';
+import { CreditCard, Search, MessageSquare, Send, CheckCircle2, DollarSign, X, RefreshCw } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { Facture, Etablissement } from '@/types';
 import { recordReglementCreditToCloud } from '@/lib/clientsSyncService';
+import { fetchSalesFromCloud } from '@/lib/salesSyncService';
+import { supabase } from '@/lib/supabase';
 
 export default function BoutiqueCreditsPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
@@ -17,19 +19,41 @@ export default function BoutiqueCreditsPage() {
   const [montantRegleInput, setMontantRegleInput] = useState<number>(0);
   const [methodePaiement, setMethodePaiement] = useState<'cash' | 'orange_money' | 'mtn_momo'>('cash');
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string>('');
+
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
+      setIsRefreshing(true);
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
-      const factures = offlineDB.getFactures();
-      const credits = factures.filter((f) => f && f.statut === 'credit_encours' && (f.montant_restant || 0) > 0);
-      setFacturesCredit(credits);
+
+      // 1. Charger depuis le cache local immédiatement
+      const localFacs = offlineDB.getFactures();
+      const localCredits = localFacs.filter((f) => f && f.statut === 'credit_encours' && (f.montant_restant || 0) > 0);
+      setFacturesCredit(localCredits);
+
+      // 2. Synchroniser avec Supabase Cloud (ventes & dettes)
+      if (etab?.id) {
+        try {
+          const salesRes = await fetchSalesFromCloud(etab.id);
+          if (salesRes.success) {
+            const updatedCredits = salesRes.factures.filter((f) => f && f.statut === 'credit_encours' && (f.montant_restant || 0) > 0);
+            setFacturesCredit(updatedCredits);
+            setSyncStatusMsg(`Synchro Cloud OK (${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})`);
+          }
+        } catch (err) {
+          console.warn('[BoutiqueCredits] Cloud sync notice:', err);
+        }
+      }
+      setIsRefreshing(false);
     } catch (e) {
       console.error(e);
+      setIsRefreshing(false);
     }
   };
 
@@ -62,11 +86,11 @@ export default function BoutiqueCreditsPage() {
     window.open(url, '_blank');
   };
 
-  const handlePayCredit = (e: React.FormEvent) => {
+  const handlePayCredit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFactureForPay || !etablissement) return;
 
-    recordReglementCreditToCloud({
+    await recordReglementCreditToCloud({
       activiteId: etablissement.id,
       clientId: selectedFactureForPay.client_id,
       venteId: selectedFactureForPay.id,
@@ -78,7 +102,7 @@ export default function BoutiqueCreditsPage() {
 
     setSelectedFactureForPay(null);
     setMontantRegleInput(0);
-    loadData();
+    await loadData();
   };
 
   return (
@@ -98,15 +122,26 @@ export default function BoutiqueCreditsPage() {
             </p>
           </div>
 
-          <div className="relative max-w-xs w-full">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-            <input
-              type="text"
-              placeholder="Rechercher client ou N°..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-9 pr-4 py-2.5 text-xs font-bold text-[#1B4332] shadow-inner"
-            />
+          <div className="flex items-center gap-2 max-w-xs w-full">
+            <button
+              onClick={() => loadData()}
+              disabled={isRefreshing}
+              className="p-2.5 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] transition-all cursor-pointer disabled:opacity-50 shrink-0"
+              title="Actualiser les créances depuis le Cloud"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                placeholder="Rechercher client ou N°..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#F3ECE0] border border-[#E2D5C3] rounded-2xl pl-9 pr-4 py-2.5 text-xs font-bold text-[#1B4332] shadow-inner"
+              />
+            </div>
           </div>
         </div>
 

@@ -26,7 +26,8 @@ import {
   Calendar,
   AlertCircle,
   FileText,
-  Camera
+  Camera,
+  RefreshCw
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import {
@@ -44,6 +45,7 @@ import { generateReceiptPDF } from '@/lib/pdfGenerator';
 import { syncShopToCloud } from '@/lib/supabaseSync';
 import { recordSaleToCloud, fetchSalesFromCloud } from '@/lib/salesSyncService';
 import { fetchArticlesFromCloud } from '@/lib/articlesSyncService';
+import { saveClientToCloud } from '@/lib/clientsSyncService';
 import { saveReservationToCloud, saveCommandeEnLigneToCloud } from '@/lib/reservationsSyncService';
 
 export interface CartItem {
@@ -61,6 +63,7 @@ export default function BoutiqueVentesPage() {
   const [commandesLigne, setCommandesLigne] = useState<CommandeEnLigne[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [isRefreshingStock, setIsRefreshingStock] = useState(false);
 
   // Mode Onglet pour Boutique (Comptoir / Livraisons)
   const [activeTab, setActiveTab] = useState<'comptoir' | 'livraisons'>('comptoir');
@@ -111,32 +114,34 @@ export default function BoutiqueVentesPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
+      setIsRefreshingStock(true);
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
       setCurrentUser(offlineDB.getCurrentUser());
       setClients(offlineDB.getClients());
       setCommandesLigne(offlineDB.getCommandesEnLigne());
 
-      // 1. AFFICHAGE IMMÉDIAT CACHE-FIRST (< 50ms, même hors-ligne)
+      // 1. Affichage immédiat cache-first
       const cachedProds = offlineDB.getProduits();
       setProduits(cachedProds);
 
-      // 2. RAFRAÎCHISSEMENT DISCRET EN ARRIÈRE-PLAN SANS BLOQUER L'ÉCRAN
+      // 2. Rafraîchissement direct depuis Supabase Cloud
       if (etab?.id) {
-        fetchArticlesFromCloud(etab.id)
-          .then(({ produits: cloudProds }) => {
-            if (cloudProds && cloudProds.length > 0) {
-              setProduits(cloudProds);
-            }
-          })
-          .catch((err) => {
-            console.warn('[Ventes] Background sync articles warning:', err);
-          });
+        try {
+          const { produits: cloudProds } = await fetchArticlesFromCloud(etab.id);
+          if (cloudProds && cloudProds.length > 0) {
+            setProduits(cloudProds);
+          }
+        } catch (err) {
+          console.warn('[Ventes] Background sync articles warning:', err);
+        }
       }
+      setIsRefreshingStock(false);
     } catch (e) {
       console.error(e);
+      setIsRefreshingStock(false);
     }
   };
 
@@ -214,7 +219,7 @@ export default function BoutiqueVentesPage() {
 
   const calculDetteOuReste = Math.max(0, cartTotalFinal - verseActuel);
 
-  const handleFinalizeEncaissement = (e: React.FormEvent) => {
+  const handleFinalizeEncaissement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0 || !etablissement) return;
     setClientValidationError('');
@@ -268,6 +273,7 @@ export default function BoutiqueVentesPage() {
           nom: newClientNom.trim(),
           telephone_whatsapp: newClientPhone.trim(),
         });
+        saveClientToCloud(newCl);
         targetClientId = newCl.id;
         clientName = newCl.nom;
         clientPhone = newCl.telephone_whatsapp || '';
@@ -329,12 +335,13 @@ export default function BoutiqueVentesPage() {
       });
     } else {
       const isPartielOuDette = paymentMode === 'credit' || resteDette > 0;
-      // Enregistrer la vente sur Supabase avec mouvements de stock et journal d'audit
-      recordSaleToCloud({
+      // Enregistrer la vente sur Supabase avec mouvements de stock, paiements et dettes
+      await recordSaleToCloud({
         activiteId: etablissement.id,
         numeroFacture: ticketNo,
         clientId: targetClientId || undefined,
         clientNom: clientName,
+        clientTelephone: clientPhone,
         totalHt: cartSousTotal,
         montantRemise: remiseInput,
         totalTtc: cartTotalFinal,
@@ -521,6 +528,15 @@ export default function BoutiqueVentesPage() {
             >
               <Truck className="w-4 h-4" />
               <span>À LIVRER ({commandesLigne.filter((c) => c.statut !== 'livree_payee').length})</span>
+            </button>
+
+            <button
+              onClick={() => loadData()}
+              disabled={isRefreshingStock}
+              className="p-2 rounded-xl border border-[#E2D5C3] bg-white hover:bg-[#EADECB] text-[#1B4332] transition-all cursor-pointer disabled:opacity-50"
+              title="Actualiser le stock Cloud"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshingStock ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>

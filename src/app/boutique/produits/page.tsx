@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import AppLayout from '@/components/AppLayout';
 import ArticleLabelPrinterModal from '@/components/ArticleLabelPrinterModal';
-import { Plus, Search, Check, Edit2, X, AlertTriangle, FileSpreadsheet, Printer, Bell } from 'lucide-react';
-import { offlineDB } from '@/lib/offlineDB';
+import { Plus, Search, Check, Edit2, X, AlertTriangle, FileSpreadsheet, Printer, Bell, RefreshCw } from 'lucide-react';
+import { offlineDB, generateUUID } from '@/lib/offlineDB';
 import { syncShopToCloud } from '@/lib/supabaseSync';
 import { fetchArticlesFromCloud, saveArticleToCloud, recordStockMouvementToCloud } from '@/lib/articlesSyncService';
 import { Produit, Etablissement, VarianteProduit, ModeSuiviStock, ExemplaireArticle, Utilisateur, AuditStockLog } from '@/types';
@@ -27,6 +27,8 @@ export default function BoutiqueProduitsPage() {
   const [isAiScanOpen, setIsAiScanOpen] = useState(false);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [labelModalProduit, setLabelModalProduit] = useState<Produit | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string>('');
 
   // Formulaire d'ajout d'article adaptatif
   const [nom, setNom] = useState('');
@@ -72,6 +74,7 @@ export default function BoutiqueProduitsPage() {
 
   const loadData = async () => {
     try {
+      setIsRefreshing(true);
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
       const user = offlineDB.getCurrentUser();
@@ -81,13 +84,16 @@ export default function BoutiqueProduitsPage() {
         const cloudRes = await fetchArticlesFromCloud(etab.id);
         if (cloudRes.success) {
           setProduits(cloudRes.produits);
+          setSyncStatusMsg(`Synchro Cloud OK (${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})`);
         } else {
           setProduits(offlineDB.getProduits());
+          setSyncStatusMsg(cloudRes.error ? `Avertissement: ${cloudRes.error}` : 'Mode local');
         }
       } else {
         const prods = offlineDB.getProduits();
         setProduits(prods);
       }
+      setIsRefreshing(false);
 
       const pending = offlineDB.getPendingConfirmationsForEmployee();
       setPendingLogs(pending);
@@ -116,12 +122,12 @@ export default function BoutiqueProduitsPage() {
     return matchCat && matchSearch;
   });
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nom.trim()) return;
 
     const etab = offlineDB.getEtablissement();
-    const prodId = `prod-${Date.now()}`;
+    const prodId = generateUUID();
     const firstCouleur = couleursInput.split(',')[0]?.trim();
 
     const finalOkoCode = customOkoCode.trim().toUpperCase() || offlineDB.generateStructuredOkoCode({
@@ -230,10 +236,10 @@ export default function BoutiqueProduitsPage() {
       confirme_le: isEmployee ? new Date().toISOString() : undefined,
     });
 
-    // Persistance Supabase Cloud (articles + couts_articles + mouvements_stock)
+    // Persistance Supabase Cloud (produits + couts_articles + mouvements_stock)
     if (etab) {
-      saveArticleToCloud(newProd, isEmployee ? undefined : prixAchatUnitaire);
-      recordStockMouvementToCloud({
+      await saveArticleToCloud(newProd, isEmployee ? undefined : prixAchatUnitaire);
+      await recordStockMouvementToCloud({
         activiteId: etab.id,
         articleId: newProd.id,
         typeMouvement: 'entree',
@@ -291,7 +297,7 @@ export default function BoutiqueProduitsPage() {
     setEditMotif('Ajustement manuel de stock');
   };
 
-  const handleSaveEditProduct = (e: React.FormEvent) => {
+  const handleSaveEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduit) return;
 
@@ -333,7 +339,23 @@ export default function BoutiqueProduitsPage() {
     }
 
     const etab = offlineDB.getEtablissement();
-    if (etab) syncShopToCloud(etab.id);
+    const updatedProd = updated.find((p) => p.id === editingProduit.id);
+    if (etab && updatedProd) {
+      await saveArticleToCloud(updatedProd, isEmployee ? undefined : editPrixAchatUnit);
+      if (diffQty !== 0) {
+        await recordStockMouvementToCloud({
+          activiteId: etab.id,
+          articleId: updatedProd.id,
+          typeMouvement: diffQty > 0 ? 'ajustement' : 'sortie',
+          quantite: diffQty,
+          motif: editMotif.trim() || (diffQty < 0 ? 'Retrait manuel' : 'Ajustement inventaire'),
+          auteurNom: currentUser?.nom || 'Patron',
+          quantiteAvant: oldQty,
+          quantiteApres: editStockTotal,
+        });
+      }
+      syncShopToCloud(etab.id);
+    }
     setEditingProduit(null);
     loadData();
   };
@@ -402,6 +424,16 @@ export default function BoutiqueProduitsPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => loadData()}
+              disabled={isRefreshing}
+              className="py-2.5 px-3.5 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Synchroniser avec Supabase Cloud"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-[#1B4332] ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isRefreshing ? 'Synchro...' : 'Actualiser'}</span>
+            </button>
+
             <button
               onClick={() => setIsExcelImportOpen(true)}
               className="py-2.5 px-4 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"

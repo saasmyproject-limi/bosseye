@@ -22,6 +22,7 @@ import AppLayout from '@/components/AppLayout';
 import { offlineDB } from '@/lib/offlineDB';
 import { Etablissement, Utilisateur, Produit, MouvementStock, Facture, Reservation } from '@/types';
 import ActivityWelcomeModal from '@/components/ActivityWelcomeModal';
+import { fetchArticlesFromCloud, recordStockMouvementToCloud } from '@/lib/articlesSyncService';
 
 export default function BoutiqueDashboardPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
@@ -46,7 +47,7 @@ export default function BoutiqueDashboardPage() {
     else setSalutation('Bonsoir');
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
       const etab = offlineDB.getEtablissement();
       const user = offlineDB.getCurrentUser();
@@ -59,6 +60,18 @@ export default function BoutiqueDashboardPage() {
       setProduits(prods);
       setMouvements(mvts.slice(0, 10));
       setLowStockProduits(alertes);
+
+      if (etab?.id) {
+        fetchArticlesFromCloud(etab.id)
+          .then(({ success, produits: liveProds }) => {
+            if (success && liveProds && liveProds.length > 0) {
+              setProduits(liveProds);
+              const liveAlertes = liveProds.filter((p) => p.quantite_totale <= p.seuil_alerte);
+              setLowStockProduits(liveAlertes);
+            }
+          })
+          .catch((err) => console.warn('[BoutiqueDashboard] Cloud fetch notice:', err));
+      }
 
       if (etab) {
         const welcomeKey = `oeko_welcome_seen_${etab.id}`;
@@ -99,13 +112,16 @@ export default function BoutiqueDashboardPage() {
 
   const isEmploye = currentUser?.role === 'Employé';
 
-  const handleAddMouvementRapide = (e: React.FormEvent) => {
+  const handleAddMouvementRapide = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetProdId = selectedProduitId || (produits[0] ? produits[0].id : '');
     if (!targetProdId || quantiteInput <= 0) return;
 
     const prod = produits.find((p) => p.id === targetProdId);
     if (!prod) return;
+
+    const mvtType = typeMvt === 'casse_perte' ? 'perte' : typeMvt;
+    const deltaQty = typeMvt === 'entree' ? quantiteInput : -quantiteInput;
 
     offlineDB.addMouvementStock({
       produit_id: targetProdId,
@@ -114,6 +130,17 @@ export default function BoutiqueDashboardPage() {
       utilisateur_id: currentUser?.id || 'user-1',
       note_motif: motifInput || `Ajustement rapide boutique ${typeMvt}`,
     });
+
+    if (etablissement?.id) {
+      await recordStockMouvementToCloud({
+        activiteId: etablissement.id,
+        articleId: targetProdId,
+        typeMouvement: mvtType as any,
+        quantite: deltaQty,
+        motif: motifInput || `Ajustement rapide boutique (${typeMvt})`,
+        auteurNom: currentUser?.nom || 'Patron',
+      });
+    }
 
     setMvtSuccessMsg(`Stock ajusté pour l'article "${prod.nom}" !`);
     setTimeout(() => setMvtSuccessMsg(''), 4000);
