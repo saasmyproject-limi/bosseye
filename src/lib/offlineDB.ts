@@ -36,12 +36,12 @@ import {
 const BLANK_ETABLISSEMENT: Etablissement = {
   id: '',
   nom: 'Boutique',
+  type: 'boutique',
   type_activite: 'boutique',
   secteur_boutique: 'Commerce général',
   ville: 'Douala',
   adresse: '',
   telephone: '',
-  devise: 'FCFA',
   plan: 'Basique',
   statut_abonnement: 'essai',
   date_fin_essai: new Date(Date.now() + 14 * 86400000).toISOString(),
@@ -56,6 +56,7 @@ const BLANK_USER: Utilisateur = {
   etablissement_id: '',
   nom: 'Utilisateur',
   role: 'Patron',
+  pin_code: '0000',
   actif: true,
 };
 import { hashPinSync, verifyPinSync } from './authPinService';
@@ -531,11 +532,11 @@ export const offlineDB = {
       }
 
       // 3. Compte Actuel
-      const rawActuel = localStorage.getItem(KEYS.COMPTE_ACTUEL);
+      const rawActuel = localStorage.getItem(KEYS.CURRENT_COMPTE);
       if (rawActuel) {
         const actuel = JSON.parse(rawActuel);
         if (actuel && (DEMO_COMPTE_IDS.includes(actuel.id) || DEMO_EMAILS.includes(actuel.email || ''))) {
-          localStorage.removeItem(KEYS.COMPTE_ACTUEL);
+          localStorage.removeItem(KEYS.CURRENT_COMPTE);
           removedCount++;
         }
       }
