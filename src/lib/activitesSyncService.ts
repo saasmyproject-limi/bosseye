@@ -53,9 +53,9 @@ export async function fetchActivitesFromCloud(): Promise<{
       telephone: row.telephone,
       email_patron: row.email_patron,
       plan: 'Basique',
-      statut_abonnement: row.statut_abonnement || 'essai',
-      date_fin_essai: row.fin_essai || row.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
-      date_prochain_paiement: row.fin_essai || row.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
+      statut_abonnement: row.statut_abonnement || (row.acces_bloque ? 'bloque' : 'essai'),
+      date_fin_essai: row.fin_essai || row.date_fin_essai || new Date(Date.now() + 7 * 86400000).toISOString(),
+      date_prochain_paiement: row.fin_essai || row.date_fin_essai || new Date(Date.now() + 7 * 86400000).toISOString(),
       tarif_mensuel: row.palier === 'Essentiel' ? 3000 : row.palier === 'Pro' ? 10000 : 5000,
       show_welcome_modal: false, // Jamais de welcome modal récurrent lors des reconnexions
       created_at: row.created_at,
@@ -95,9 +95,9 @@ export async function saveActiviteToCloud(etab: Etablissement): Promise<{ succes
       email_patron: userEmail || null,
       palier: etab.tarif_mensuel <= 3000 ? 'Essentiel' : etab.tarif_mensuel > 5000 ? 'Pro' : 'Standard',
       statut_abonnement: etab.statut_abonnement || 'essai',
-      date_fin_essai: etab.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
-      fin_essai: etab.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
-      acces_bloque: false,
+      date_fin_essai: etab.date_fin_essai || new Date(Date.now() + 7 * 86400000).toISOString(),
+      fin_essai: etab.date_fin_essai || new Date(Date.now() + 7 * 86400000).toISOString(),
+      acces_bloque: etab.statut_abonnement === 'bloque',
       updated_at: new Date().toISOString(),
     };
 
@@ -176,8 +176,8 @@ export async function fetchGlobalActivitesForSuperAdmin(): Promise<{
       email_patron: row.email_patron || (row.proprietaire_id ? `proprietaire_${row.proprietaire_id.slice(0, 6)}@gmail.com` : undefined),
       plan: 'Basique',
       statut_abonnement: row.statut_abonnement || (row.acces_bloque ? 'bloque' : 'essai'),
-      date_fin_essai: row.fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
-      date_prochain_paiement: row.fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
+      date_fin_essai: row.fin_essai || new Date(Date.now() + 7 * 86400000).toISOString(),
+      date_prochain_paiement: row.fin_essai || new Date(Date.now() + 7 * 86400000).toISOString(),
       tarif_mensuel: row.palier === 'Essentiel' ? 3000 : row.palier === 'Pro' ? 10000 : 5000,
       created_at: row.created_at || new Date().toISOString(),
     }));

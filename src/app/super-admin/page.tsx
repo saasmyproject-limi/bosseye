@@ -46,6 +46,51 @@ import {
   CompteUtilisateur,
 } from '@/types';
 
+function formatInscriptionDate(isoDate?: string, dateFinEssai?: string) {
+  let d: Date;
+  if (isoDate) {
+    d = new Date(isoDate);
+  } else if (dateFinEssai) {
+    d = new Date(new Date(dateFinEssai).getTime() - 7 * 24 * 3600 * 1000);
+  } else {
+    d = new Date();
+  }
+
+  const dateStr = d.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timeStr = d.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const diffMs = Date.now() - d.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  let badge = '';
+  if (diffHours < 24) {
+    badge = '✨ Aujourd\'hui';
+  } else if (diffDays === 1) {
+    badge = 'Hier';
+  } else if (diffDays < 7) {
+    badge = `Il y a ${diffDays}j`;
+  }
+
+  return { dateStr, timeStr, badge };
+}
+
+function formatFinEssaiDate(dateFinEssai?: string) {
+  const d = dateFinEssai ? new Date(dateFinEssai) : new Date(Date.now() + 7 * 24 * 3600 * 1000);
+  return d.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export default function SuperAdminDashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -82,6 +127,15 @@ export default function SuperAdminDashboardPage() {
   const [extendDaysInput, setExtendDaysInput] = useState<number>(7);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isAuth = sessionStorage.getItem('oeko_superadmin_auth') === 'true';
+      if (isAuth) {
+        setIsAuthenticated(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (isAuthenticated) {
       loadAdminData();
     }
@@ -102,6 +156,16 @@ export default function SuperAdminDashboardPage() {
         ? JSON.parse(dataPaiements)
         : [];
       setPaiements(parsedPaiements);
+
+      // Synchro cloud automatique pour charger les boutiques créées sur tous les appareils
+      fetchGlobalActivitesForSuperAdmin()
+        .then((res) => {
+          if (res.success && res.activites.length > 0) {
+            setEtablissements(res.activites);
+            setComptes(offlineDB.getComptesGlobal());
+          }
+        })
+        .catch((err) => console.warn('[SuperAdmin] fetchGlobalActivites auto-error:', err));
     } catch (e) {
       console.error(e);
     }
@@ -109,28 +173,46 @@ export default function SuperAdminDashboardPage() {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const configuredAdminPass = process.env.NEXT_PUBLIC_SUPER_ADMIN_PASSWORD || 'oeko2026';
+    const configuredAdminPass =
+      process.env.NEXT_PUBLIC_SUPERADMIN_PASSWORD ||
+      process.env.NEXT_PUBLIC_SUPER_ADMIN_PASSWORD ||
+      'oeko2026';
     if (adminPassword.trim() === configuredAdminPass.trim()) {
       setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('oeko_superadmin_auth', 'true');
+      }
       setAuthError('');
     } else {
       setAuthError('Mot de passe Super-Admin incorrect.');
     }
   };
 
+  const handleAdminLogout = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('oeko_superadmin_auth');
+    }
+    setIsAuthenticated(false);
+    setAdminPassword('');
+  };
+
   // Actions d'Abonnement Super-Admin
-  const handleConfirmPaiementDirect = (etab: Etablissement) => {
+  const handleConfirmPaiementDirect = async (etab: Etablissement) => {
     // Prolonger de 30 jours et passer en actif
     const currentNextPayment = new Date(etab.date_prochain_paiement || etab.date_fin_essai || Date.now()).getTime();
     const baseTime = currentNextPayment > Date.now() ? currentNextPayment : Date.now();
     const newDueDate = new Date(baseTime + 30 * 24 * 3600 * 1000).toISOString();
 
     const tarif = etab.tarif_mensuel || 5000;
-    offlineDB.updateEtablissement(etab.id, {
+    const updated = offlineDB.updateEtablissement(etab.id, {
       statut_abonnement: 'actif',
       date_prochain_paiement: newDueDate,
       date_fin_essai: newDueDate,
     });
+
+    if (updated) {
+      await saveActiviteToCloud(updated);
+    }
 
     // Enregistrer le paiement dans l'historique
     offlineDB.processMobileMoneyPayment({
@@ -164,26 +246,36 @@ export default function SuperAdminDashboardPage() {
     }
   };
 
-  const handleBlockEtab = (etab: Etablissement) => {
-    offlineDB.blockEtablissement(etab.id);
-    setSuccessMsg(`Le commerce "${etab.nom}" a été bloqué par l'administration. Ses données sont 100% conservées en sécurité.`);
+  const handleBlockEtab = async (etab: Etablissement) => {
+    const updated = offlineDB.blockEtablissement(etab.id);
+    if (updated) {
+      await saveActiviteToCloud(updated);
+    }
+    setSuccessMsg(`Boutique "${etab.nom}" BLOQUÉE manuellement. L'écran de suspension est actif pour le commerçant, 100% de ses données restent sécurisées.`);
     setTimeout(() => setSuccessMsg(''), 5000);
     loadAdminData();
   };
 
-  const handleUnblockEtab = (etab: Etablissement) => {
-    offlineDB.unblockEtablissement(etab.id);
-    setSuccessMsg(`Le commerce "${etab.nom}" a été débloqué et réactivé.`);
+  const handleUnblockEtab = async (etab: Etablissement) => {
+    const updated = offlineDB.unblockEtablissement(etab.id);
+    if (updated) {
+      await saveActiviteToCloud(updated);
+    }
+    setSuccessMsg(`Boutique "${etab.nom}" DÉBLOQUÉE manuellement. L'accès complet est immédiatement rétabli.`);
     setTimeout(() => setSuccessMsg(''), 5000);
     loadAdminData();
   };
 
-  const handleExtendTrial = (etabId: string) => {
+  const handleExtendTrial = async (etabId: string) => {
     const etab = etablissements.find((e) => e.id === etabId);
     if (!etab) return;
     const currentEnd = new Date(etab.date_fin_essai || Date.now()).getTime();
-    const newEnd = new Date(currentEnd + extendDaysInput * 24 * 3600 * 1000).toISOString();
-    offlineDB.updateEtablissement(etabId, { date_fin_essai: newEnd, statut_abonnement: 'essai' });
+    const baseTime = currentEnd > Date.now() ? currentEnd : Date.now();
+    const newEnd = new Date(baseTime + extendDaysInput * 24 * 3600 * 1000).toISOString();
+    const updated = offlineDB.updateEtablissement(etabId, { date_fin_essai: newEnd, statut_abonnement: 'essai' });
+    if (updated) {
+      await saveActiviteToCloud(updated);
+    }
     setSelectedEtabForAction(null);
     setSuccessMsg(`Essai prolongé de ${extendDaysInput} jours pour "${etab.nom}".`);
     setTimeout(() => setSuccessMsg(''), 4000);
@@ -480,7 +572,7 @@ export default function SuperAdminDashboardPage() {
 
           {/* Déconnexion */}
           <button
-            onClick={() => setIsAuthenticated(false)}
+            onClick={handleAdminLogout}
             className="py-2.5 px-4 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs cursor-pointer"
           >
             Déconnexion
@@ -641,13 +733,11 @@ export default function SuperAdminDashboardPage() {
             <table className="w-full text-left text-xs">
               <thead className="bg-[#FBF7EF] border-b border-[#E2D5C3] text-[11px] font-black text-[#1B4332] uppercase">
                 <tr>
-                  <th className="p-3">Activité / Commerce</th>
-                  <th className="p-3">Compte Patron</th>
-                  <th className="p-3">Articles & Palier</th>
-                  <th className="p-3">Ville & Adresse</th>
-                  <th className="p-3">Tarif Mensuel</th>
-                  <th className="p-3">Statut Abonnement</th>
-                  <th className="p-3 text-center">Actions Super-Admin</th>
+                  <th className="p-3.5">🏢 Boutique & Propriétaire</th>
+                  <th className="p-3.5">📅 Date d'inscription</th>
+                  <th className="p-3.5">⏳ Fin d'essai (7 jours)</th>
+                  <th className="p-3.5">💳 Statut de paiement</th>
+                  <th className="p-3.5 text-center">🔒 Blocage & Actions Super-Admin</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2D5C3]">
@@ -659,133 +749,213 @@ export default function SuperAdminDashboardPage() {
 
                   return (
                     <tr key={etab.id} className="hover:bg-[#FBF7EF]/50">
-                      <td className="p-3">
-                        <p className="font-bold text-[#1B4332] flex items-center gap-1.5">
-                          <span>👗</span>
-                          <span>{etab.nom}</span>
-                        </p>
-                        <p className="text-[10px] text-gray-500">{etab.secteur_boutique || 'Commerce'}</p>
+                      {/* 1. BOUTIQUE & PROPRIÉTAIRE */}
+                      <td className="p-3.5 align-top">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-10 h-10 rounded-2xl bg-[#0F291E] text-[#E8A33D] flex items-center justify-center text-lg font-black shrink-0 shadow-sm mt-0.5">
+                            👗
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-serif font-black text-sm text-[#1B4332]">{etab.nom}</span>
+                              <span className="text-[9px] font-black uppercase bg-[#F3ECE0] text-[#1B4332] px-2 py-0.5 rounded-full border border-[#E2D5C3]">
+                                {etab.secteur_boutique || 'Commerce'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-600 font-medium">
+                              📍 {etab.ville}{etab.adresse ? ` — ${etab.adresse}` : ''}
+                            </p>
+                            <div className="text-[11px] text-gray-700 space-y-0.5 pt-0.5">
+                              <p className="font-bold flex items-center gap-1 text-[#1B4332]">
+                                <span className="text-gray-400 font-normal">Patron :</span>
+                                <span>{etab.email_patron || 'Compte Google'}</span>
+                              </p>
+                              {etab.telephone && (
+                                <p className="text-[10px] text-gray-500 font-mono">
+                                  📞 {etab.telephone}
+                                </p>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-[#B8442C] font-bold">
+                              📦 {usage.distinctCount} article(s) • Palier {usage.recommendedTier.nom}
+                            </p>
+                          </div>
+                        </div>
                       </td>
 
-                      <td className="p-3">
-                        <span className="font-mono text-xs font-bold text-[#1B4332] block">
-                          {etab.email_patron || 'compte@gmail.com'}
-                        </span>
-                        <span className="text-[10px] text-gray-500">{etab.telephone || 'Non renseigné'}</span>
+                      {/* 2. DATE D'INSCRIPTION */}
+                      <td className="p-3.5 align-top">
+                        {(() => {
+                          const insc = formatInscriptionDate(etab.created_at, etab.date_fin_essai);
+                          return (
+                            <div className="space-y-1">
+                              <span className="font-serif font-black text-xs text-[#1B4332] block">
+                                {insc.dateStr}
+                              </span>
+                              <span className="font-mono text-[10px] text-gray-500 block">
+                                à {insc.timeStr}
+                              </span>
+                              {insc.badge && (
+                                <span className="inline-block text-[9px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-full">
+                                  {insc.badge}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
-                      <td className="p-3">
-                        <span className="font-bold text-[#1B4332] block">
-                          {usage.distinctCount} article(s)
-                        </span>
-                        <span className="text-[10px] font-bold text-[#B8442C]">
-                          Palier {usage.recommendedTier.nom}
-                        </span>
+                      {/* 3. FIN D'ESSAI (7 JOURS) */}
+                      <td className="p-3.5 align-top">
+                        {(() => {
+                          const finEssaiStr = formatFinEssaiDate(etab.date_fin_essai);
+                          const isPaid = etab.statut_abonnement === 'actif';
+                          const isExpired = offlineDB.isTrialExpired(etab);
+                          return (
+                            <div className="space-y-1.5">
+                              <span className="font-bold text-xs text-[#1B4332] block">
+                                {finEssaiStr}
+                              </span>
+                              <div>
+                                {isBlocked ? (
+                                  <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-red-950 text-red-200 border border-red-800">
+                                    ⛔ Accès Bloqué
+                                  </span>
+                                ) : isPaid ? (
+                                  <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                    ✅ Payé (+30j)
+                                  </span>
+                                ) : isExpired || daysLeft === 0 ? (
+                                  <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-red-100 text-red-900 border border-red-300">
+                                    🔴 Essai 7j expiré
+                                  </span>
+                                ) : daysLeft === 1 ? (
+                                  <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-950 border border-amber-400 font-extrabold animate-pulse">
+                                    ⚠️ Dernier jour (1j)
+                                  </span>
+                                ) : daysLeft <= 3 ? (
+                                  <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                                    🟠 {daysLeft} jours restants
+                                  </span>
+                                ) : (
+                                  <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                    🟢 {daysLeft} jours restants
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => setSelectedEtabForAction(etab)}
+                                title="Prolonger l'essai gratuit de cette boutique"
+                                className="text-[10px] text-gray-500 hover:text-[#1B4332] font-bold underline cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <span>+ Prolonger essai</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </td>
 
-                      <td className="p-3 font-medium text-gray-700">
-                        {etab.ville} — {etab.adresse}
-                      </td>
+                      {/* 4. STATUT DE PAIEMENT */}
+                      <td className="p-3.5 align-top">
+                        <div className="space-y-1.5">
+                          <div>
+                            {isBlocked ? (
+                              <span className="inline-block text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-red-950 text-red-200 border border-red-800">
+                                ⛔ Bloqué Manuel
+                              </span>
+                            ) : isPending ? (
+                              <span className="inline-block text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-200 text-amber-950 border border-amber-400 font-extrabold animate-pulse">
+                                🟠 En Attente Validation
+                              </span>
+                            ) : etab.statut_abonnement === 'actif' ? (
+                              <span className="inline-block text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                🟢 Payé & Actif (+30j)
+                              </span>
+                            ) : offlineDB.isTrialExpired(etab) ? (
+                              <span className="inline-block text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-red-100 text-red-900 border border-red-300">
+                                🔴 Impayé / Expiré
+                              </span>
+                            ) : (
+                              <span className="inline-block text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-300">
+                                🟡 Essai Gratuit (7j)
+                              </span>
+                            )}
+                          </div>
 
-                      <td className="p-3">
-                        <span className="font-serif font-black text-xs text-[#B8442C]">
-                          {(etab.tarif_mensuel || usage.recommendedTier.tarif_mensuel).toLocaleString('fr-FR')} FCFA
-                        </span>
-                      </td>
+                          <p className="font-serif font-black text-xs text-[#B8442C]">
+                            {(etab.tarif_mensuel || usage.recommendedTier.tarif_mensuel).toLocaleString('fr-FR')} FCFA <span className="text-[10px] text-gray-500 font-sans font-normal">/ mois</span>
+                          </p>
 
-                      <td className="p-3">
-                        <span
-                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
-                            isBlocked
-                              ? 'bg-red-950 text-red-200 border border-red-800'
-                              : isPending
-                              ? 'bg-amber-200 text-amber-950 border border-amber-400 font-extrabold animate-pulse'
-                              : etab.statut_abonnement === 'actif'
-                              ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                              : 'bg-amber-100 text-amber-900 border border-amber-300'
-                          }`}
-                        >
-                          {isBlocked
-                            ? 'Bloqué'
-                            : isPending
-                            ? 'En Attente Paiement'
-                            : etab.statut_abonnement === 'actif'
-                            ? 'Actif (+30j)'
-                            : `Essai (${daysLeft}j)`}
-                        </span>
-                      </td>
-
-                      <td className="p-3 text-center space-x-1.5 whitespace-nowrap">
-                        {/* Bouton Mode Inspection / Caméléon */}
-                        <button
-                          onClick={() => handleInspectShop(etab)}
-                          title="Naviguer dans la boutique exactement comme son patron pour support & diagnostic"
-                          className="px-2.5 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-[#E8A33D]" />
-                          <span>Inspecter</span>
-                        </button>
-
-                        {/* Bouton Rappel WhatsApp */}
-                        {etab.telephone && (
+                          {/* Bouton rapide Confirmer +30j */}
                           <button
-                            onClick={() => handleWhatsAppReminder(etab)}
-                            title="Envoyer un rappel de renouvellement d'abonnement au patron par WhatsApp"
-                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                            onClick={() => handleConfirmPaiementDirect(etab)}
+                            title="Confirmer la réception de 5 000 FCFA et prolonger de 30 jours"
+                            className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[10px] font-black transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
                           >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                            <span>WhatsApp</span>
+                            <CheckCircle2 className="w-3 h-3 text-emerald-200" />
+                            <span>Confirmer (+30j)</span>
                           </button>
-                        )}
+                        </div>
+                      </td>
 
-                        {/* Bouton Confirmer le paiement reçu (+30j) */}
-                        <button
-                          onClick={() => handleConfirmPaiementDirect(etab)}
-                          title="Confirmer la réception du paiement et prolonger l'abonnement d'un mois (+30 jours)"
-                          className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Confirmer (+30j)</span>
-                        </button>
+                      {/* 5. BLOCAGE / DÉBLOCAGE MANUEL & ACTIONS */}
+                      <td className="p-3.5 align-top text-center space-y-2 whitespace-nowrap">
+                        {/* BOUTON BLOQUER / DÉBLOQUER MANUELLEMENT */}
+                        <div>
+                          {isBlocked ? (
+                            <button
+                              onClick={() => handleUnblockEtab(etab)}
+                              title="Débloquer manuellement l'accès à cette boutique immédiatement"
+                              className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-transform active:scale-95 cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-md border border-emerald-500"
+                            >
+                              <Unlock className="w-4 h-4 text-white" />
+                              <span>Débloquer l'accès</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleBlockEtab(etab)}
+                              title="Bloquer manuellement l'accès (données 100% conservées en sécurité)"
+                              className="w-full py-2 px-3 bg-[#B8442C] hover:bg-[#9C3823] text-white rounded-xl text-xs font-black transition-transform active:scale-95 cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-md border border-red-700"
+                            >
+                              <Lock className="w-4 h-4 text-white" />
+                              <span>Bloquer l'accès</span>
+                            </button>
+                          )}
+                        </div>
 
-                        {/* Bouton Bloquer / Débloquer */}
-                        {isBlocked ? (
+                        {/* Actions complémentaires */}
+                        <div className="flex items-center justify-center gap-1.5 pt-1">
+                          {/* Mode Inspection */}
                           <button
-                            onClick={() => handleUnblockEtab(etab)}
-                            title="Débloquer l'accès pour ce commerce"
-                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1"
+                            onClick={() => handleInspectShop(etab)}
+                            title="Mode Caméléon : Inspecter la boutique exactement comme son patron"
+                            className="px-2.5 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
                           >
-                            <Unlock className="w-3.5 h-3.5" />
-                            <span>Débloquer</span>
+                            <Eye className="w-3.5 h-3.5 text-[#E8A33D]" />
+                            <span>Inspecter</span>
                           </button>
-                        ) : (
+
+                          {/* Rappel WhatsApp */}
+                          {etab.telephone && (
+                            <button
+                              onClick={() => handleWhatsAppReminder(etab)}
+                              title="Envoyer un rappel de paiement ou message sur WhatsApp"
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>WhatsApp</span>
+                            </button>
+                          )}
+
+                          {/* Supprimer (tests / nettoyage) */}
                           <button
-                            onClick={() => handleBlockEtab(etab)}
-                            title="Bloquer l'accès tout en conservant 100% des données intactes"
-                            className="px-2.5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1"
+                            onClick={() => handleDeleteEtab(etab)}
+                            title="Supprimer cette boutique (nettoyage test)"
+                            className="p-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center"
                           >
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>Bloquer</span>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
-
-                        {/* Prolonger l'essai */}
-                        <button
-                          onClick={() => setSelectedEtabForAction(etab)}
-                          title="Prolonger manuellement l'essai gratuit de ce commerce"
-                          className="px-2 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
-                        >
-                          +Jours
-                        </button>
-
-                        {/* Supprimer le commerce (test & manipulation) */}
-                        <button
-                          onClick={() => handleDeleteEtab(etab)}
-                          title="Supprimer ce commerce (nettoyage / test)"
-                          className="px-2 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-xl text-[11px] font-bold transition-all cursor-pointer inline-flex items-center"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </div>
                       </td>
                     </tr>
                   );
