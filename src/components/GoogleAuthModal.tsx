@@ -6,6 +6,7 @@ import { Mail, ArrowRight, X, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
 import { supabase } from '@/lib/supabase';
 import { CompteUtilisateur } from '@/types';
+import { fetchActivitesFromCloud } from '@/lib/activitesSyncService';
 
 interface GoogleAuthModalProps {
   isOpen: boolean;
@@ -69,7 +70,7 @@ export default function GoogleAuthModal({
     }
   };
 
-  const handleEmailQuickAccess = (e: React.FormEvent) => {
+  const handleEmailQuickAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -84,14 +85,20 @@ export default function GoogleAuthModal({
 
     if (onSuccess) onSuccess(compte);
 
-    const activites = offlineDB.getActivitesDuCompte(compte.id);
-    if (activites.length === 0) {
-      router.push('/activites?create=true');
-    } else {
-      offlineDB.switchEtablissement(activites[0].id);
-      router.push('/activites');
+    // Vérifier immédiatement si des boutiques existent déjà sur Supabase Cloud
+    try {
+      const res = await fetchActivitesFromCloud();
+      if (res.success && res.activites && res.activites.length > 0) {
+        offlineDB.switchEtablissement(res.activites[0].id);
+        router.push('/boutique/dashboard');
+        if (onClose) onClose();
+        return;
+      }
+    } catch (err) {
+      console.warn('Vérification cloud notice:', err);
     }
 
+    router.push('/activites?create=true');
     if (onClose) onClose();
   };
 

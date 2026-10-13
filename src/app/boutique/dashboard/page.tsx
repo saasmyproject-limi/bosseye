@@ -21,6 +21,7 @@ import {
 import AppLayout from '@/components/AppLayout';
 import { offlineDB } from '@/lib/offlineDB';
 import { Etablissement, Utilisateur, Produit, MouvementStock, Facture, Reservation } from '@/types';
+import ActivityWelcomeModal from '@/components/ActivityWelcomeModal';
 
 export default function BoutiqueDashboardPage() {
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
@@ -29,6 +30,7 @@ export default function BoutiqueDashboardPage() {
   const [mouvements, setMouvements] = useState<MouvementStock[]>([]);
   const [lowStockProduits, setLowStockProduits] = useState<Produit[]>([]);
   const [salutation, setSalutation] = useState<string>('Bonjour');
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
 
   const [selectedProduitId, setSelectedProduitId] = useState<string>('');
   const [typeMvt, setTypeMvt] = useState<'entree' | 'sortie' | 'casse_perte'>('entree');
@@ -58,11 +60,30 @@ export default function BoutiqueDashboardPage() {
       setMouvements(mvts.slice(0, 10));
       setLowStockProduits(alertes);
 
+      if (etab) {
+        const welcomeKey = `oeko_welcome_seen_${etab.id}`;
+        const alreadySeen = typeof window !== 'undefined' && localStorage.getItem(welcomeKey) === 'true';
+        if (etab.show_welcome_modal && !alreadySeen) {
+          setIsWelcomeModalOpen(true);
+        }
+      }
+
       if (prods.length > 0) {
         setSelectedProduitId(prods[0].id);
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleCloseWelcomeModal = () => {
+    setIsWelcomeModalOpen(false);
+    if (etablissement) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`oeko_welcome_seen_${etablissement.id}`, 'true');
+      }
+      offlineDB.dismissWelcomeModal(etablissement.id);
+      setEtablissement({ ...etablissement, show_welcome_modal: false });
     }
   };
 
@@ -438,6 +459,13 @@ export default function BoutiqueDashboardPage() {
             </div>
           </div>
         )}
+
+        {/* Modal de Bienvenue - Affiché une seule fois à la première connexion */}
+        <ActivityWelcomeModal
+          etablissement={etablissement}
+          isOpen={isWelcomeModalOpen}
+          onClose={handleCloseWelcomeModal}
+        />
     </AppLayout>
   );
 }

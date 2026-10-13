@@ -26,6 +26,7 @@ import { fetchActivitesFromCloud, deleteActiviteFromCloud } from '@/lib/activite
 import GoogleAuthModal from '@/components/GoogleAuthModal';
 import BarSelectorModal from '@/components/BarSelectorModal';
 import OfflineBadge from '@/components/OfflineBadge';
+import { supabase } from '@/lib/supabase';
 
 function ActivitesContent() {
   const router = useRouter();
@@ -47,28 +48,58 @@ function ActivitesContent() {
     setIsLoading(true);
     setServerError(null);
 
-    let currentCompte = offlineDB.getCompteActuel();
-    if (!currentCompte) {
-      setCompte(null);
-      setIsLoading(false);
-      setIsGoogleAuthOpen(true);
-      return;
-    }
-    setCompte(currentCompte);
+    // 1. Synchroniser la session Supabase Auth (source de vérité)
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const authUser = authData?.user;
 
-    // Charger la liste des activités depuis le Cloud Supabase (source de vérité)
+      let currentCompte = offlineDB.getCompteActuel();
+
+      if (authUser) {
+        currentCompte = offlineDB.loginWithGoogle(
+          authUser.email || 'utilisateur@gmail.com',
+          authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Patron',
+          authUser.user_metadata?.avatar_url,
+          authUser.id
+        );
+        setCompte(currentCompte);
+      } else if (!currentCompte) {
+        setCompte(null);
+        setIsLoading(false);
+        setIsGoogleAuthOpen(true);
+        return;
+      } else {
+        setCompte(currentCompte);
+      }
+    } catch (authErr) {
+      console.warn('[Activites] Auth check notice:', authErr);
+    }
+
+    // 2. Charger les boutiques existantes du compte depuis Supabase Cloud
     const res = await fetchActivitesFromCloud();
     setIsLoading(false);
 
-    if (res.success) {
+    if (res.success && res.activites && res.activites.length > 0) {
+      // EXIGENCE RÈGLE : À la reconnexion, même sur un autre appareil, retrouve les boutiques existantes du compte.
+      // Ne propose jamais d'en créer une nouvelle si elle existe !
       setActivites(res.activites);
-      if (autoCreate && res.activites.length === 0) {
-        setIsCreateModalOpen(true);
+      const activeShop = res.activites[0];
+      offlineDB.switchEtablissement(activeShop.id);
+      router.replace('/boutique/dashboard');
+      return;
+    }
+
+    // 3. Si AUCUNE boutique n'existe pour ce compte, ouvrir immédiatement la création
+    if (res.success && (!res.activites || res.activites.length === 0)) {
+      setActivites([]);
+      setIsCreateModalOpen(true);
+    } else if (!res.success) {
+      setServerError(res.error || 'Impossible de joindre le serveur Cloud.');
+      if (res.activites && res.activites.length > 0) {
+        setActivites(res.activites);
+        offlineDB.switchEtablissement(res.activites[0].id);
+        router.replace('/boutique/dashboard');
       }
-    } else {
-      setServerError(res.error || 'Impossible de joindre le serveur');
-      // En cas d'erreur serveur, conserver les activités en cache local sans vider artificiellement
-      setActivites(res.activites);
     }
   };
 

@@ -36,6 +36,8 @@ export default function BarSelectorModal({
   // Form State pour création d'un nouveau commerce œko (Boutique)
   const [selectedPalierCode, setSelectedPalierCode] = useState<'essentiel' | 'standard' | 'pro'>('standard');
   const [nomCommerce, setNomCommerce] = useState('');
+  const [ceQuelleVend, setCeQuelleVend] = useState('Vêtements, Mode & Prêt-à-porter');
+  const [autreSecteur, setAutreSecteur] = useState('');
   const [ville, setVille] = useState('Douala');
   const [adresse, setAdresse] = useState('');
   const [patronNom, setPatronNom] = useState('');
@@ -51,6 +53,7 @@ export default function BarSelectorModal({
 
     const tarifMap: Record<string, number> = { essentiel: 3000, standard: 5000, pro: 10000 };
     const selectedTarif = tarifMap[selectedPalierCode] || 5000;
+    const finalSecteur = ceQuelleVend === 'Autre commerce' ? (autreSecteur.trim() || 'Commerce général') : ceQuelleVend;
 
     setIsSubmitting(true);
 
@@ -58,7 +61,7 @@ export default function BarSelectorModal({
     const newEtab = offlineDB.createEtablissement({
       nom: nomCommerce.trim(),
       type_activite: 'boutique',
-      secteur_boutique: 'Commerce général',
+      secteur_boutique: finalSecteur,
       ville,
       adresse: adresse.trim(),
       patronNom: patronNom.trim(),
@@ -68,7 +71,7 @@ export default function BarSelectorModal({
       tarif_mensuel: selectedTarif,
     });
 
-    // Sauvegarder sur Supabase Cloud (Table activites + Sync Engine)
+    // Sauvegarder sur Supabase Cloud (Table etablissements + Sync Engine)
     saveActiviteToCloud(newEtab);
     syncShopToCloud(newEtab.id);
 
@@ -172,7 +175,7 @@ export default function BarSelectorModal({
           {/* Informations du commerce */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom du Commerce *</label>
+              <label className="text-xs font-bold text-[#1B4332] block mb-1">Nom de la Boutique *</label>
               <input
                 type="text"
                 placeholder="Ex: Boutique Élégance Akwa"
@@ -197,6 +200,37 @@ export default function BarSelectorModal({
                 <option value="Kribi">Kribi</option>
               </select>
             </div>
+          </div>
+
+          {/* Ce que vend la boutique */}
+          <div>
+            <label className="text-xs font-bold text-[#1B4332] block mb-1">
+              Ce que vend votre boutique (Activité commerciale) *
+            </label>
+            <select
+              value={ceQuelleVend}
+              onChange={(e) => setCeQuelleVend(e.target.value)}
+              className="w-full bg-white border border-[#E2D5C3] rounded-xl p-3 text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+            >
+              <option value="Vêtements, Mode & Prêt-à-porter">👗 Vêtements, Mode & Prêt-à-porter</option>
+              <option value="Chaussures, Sacs & Maroquinerie">👠 Chaussures, Sacs & Maroquinerie</option>
+              <option value="Téléphones, High-Tech & Électronique">📱 Téléphones, High-Tech & Électronique</option>
+              <option value="Cosmétiques, Parfumerie & Beauté">💄 Cosmétiques, Parfumerie & Beauté</option>
+              <option value="Alimentation générale & Épicerie">🛒 Alimentation générale & Épicerie</option>
+              <option value="Quincaillerie & Décoration maison">🔨 Quincaillerie, Outillage & Décoration</option>
+              <option value="Bijouterie & Accessoires">💍 Bijouterie & Accessoires</option>
+              <option value="Autre commerce">📦 Autre commerce de détail (préciser ci-dessous)</option>
+            </select>
+            {ceQuelleVend === 'Autre commerce' && (
+              <input
+                type="text"
+                placeholder="Ex: Matériel informatique, Jouets pour enfants, Librairie..."
+                value={autreSecteur}
+                onChange={(e) => setAutreSecteur(e.target.value)}
+                className="mt-2 w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                required
+              />
+            )}
           </div>
 
           <div>

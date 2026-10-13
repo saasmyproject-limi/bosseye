@@ -17,6 +17,13 @@ export default function ActivityWelcomeModal({ etablissement, isOpen, onClose }:
   const typeLabel = 'Boutique';
 
   const handleStart = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`oeko_welcome_seen_${etablissement.id}`, 'true');
+      } catch (e) {
+        console.warn('Storage notice:', e);
+      }
+    }
     offlineDB.dismissWelcomeModal(etablissement.id);
     onClose();
   };

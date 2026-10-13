@@ -59,6 +59,17 @@ const BLANK_USER: Utilisateur = {
   pin_code: '0000',
   actif: true,
 };
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 import { hashPinSync, verifyPinSync } from './authPinService';
 
 const KEYS = {
@@ -142,12 +153,12 @@ export const offlineDB = {
     }
   },
 
-  loginWithGoogle(email: string, nom: string, photo_url?: string): CompteUtilisateur {
+  loginWithGoogle(email: string, nom: string, photo_url?: string, supabaseUserId?: string): CompteUtilisateur {
     const cleanEmail = email.trim().toLowerCase();
     const allComptes = this.getComptesGlobal();
     const existing = allComptes.find((c) => c && c.email && c.email.toLowerCase() === cleanEmail);
 
-    const compteId = existing?.id || `compte-${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    const compteId = supabaseUserId || existing?.id || `compte-${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
 
     const compte: CompteUtilisateur = {
       id: compteId,
@@ -398,7 +409,7 @@ export const offlineDB = {
   }): Etablissement {
     const etabs = this.getEtablissements();
     const currentCompte = this.getCompteActuel();
-    const newId = `etab-${Date.now()}`;
+    const newId = (params as any).id || generateUUID();
     const act = params.type_activite;
     const tarif = params.tarif_mensuel || TARIFS_ABONNEMENT[act] || 5000;
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -429,7 +440,7 @@ export const offlineDB = {
     const hashedPin = hashPinSync(params.patronPin || '1234');
 
     const newPatron: Utilisateur = {
-      id: `user-patron-${Date.now()}`,
+      id: generateUUID(),
       etablissement_id: newId,
       nom: params.patronNom || 'Patron (Propriétaire)',
       role: patronRole,

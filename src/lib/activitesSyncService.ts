@@ -11,29 +11,30 @@ export async function fetchActivitesFromCloud(): Promise<{
   try {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id;
+    const userEmail = userData?.user?.email;
 
-    if (!userId) {
-      // Fallback local si pas encore connecté à Supabase Auth
+    let query = supabase.from('etablissements').select('*');
+
+    if (userId && userEmail) {
+      query = query.or(`proprietaire_id.eq.${userId},email_patron.eq.${userEmail}`);
+    } else if (userId) {
+      query = query.eq('proprietaire_id', userId);
+    } else if (userEmail) {
+      query = query.eq('email_patron', userEmail);
+    } else {
       const localCompte = offlineDB.getCompteActuel();
-      if (localCompte) {
-        return {
-          success: true,
-          activites: offlineDB.getActivitesDuCompte(localCompte.id),
-        };
+      if (localCompte?.email) {
+        query = query.eq('email_patron', localCompte.email);
       }
-      return { success: true, activites: offlineDB.getEtablissements() };
     }
 
-    const { data, error } = await supabase
-      .from('activites')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
-      console.warn('[ActivitesSyncService] Erreur Supabase select activites:', error.message);
+      console.warn('[ActivitesSyncService] Erreur Supabase select etablissements:', error.message);
       return {
         success: false,
-        activites: [],
+        activites: offlineDB.getEtablissements(),
         error: `Erreur Cloud Supabase: ${error.message}`,
       };
     }
@@ -45,27 +46,30 @@ export async function fetchActivitesFromCloud(): Promise<{
       nom: row.nom,
       type: 'boutique',
       type_activite: 'boutique',
-      secteur_boutique: row.secteur || 'Vêtements & Mode',
+      secteur_boutique: row.secteur || 'Commerce général',
       abrev_boutique: row.abbreviation_code || cleanCodeSegment(row.nom, 3),
       ville: row.ville || 'Douala',
       adresse: row.adresse || '',
       telephone: row.telephone,
+      email_patron: row.email_patron,
       plan: 'Basique',
       statut_abonnement: row.statut_abonnement || 'essai',
-      date_fin_essai: row.fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
-      date_prochain_paiement: row.fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
+      date_fin_essai: row.fin_essai || row.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
+      date_prochain_paiement: row.fin_essai || row.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
       tarif_mensuel: row.palier === 'Essentiel' ? 3000 : row.palier === 'Pro' ? 10000 : 5000,
+      show_welcome_modal: false, // Jamais de welcome modal récurrent lors des reconnexions
       created_at: row.created_at,
     }));
 
-    // Mettre à jour le cache local avec les données réelles du cloud
-    offlineDB.saveEtablissements(mapped);
+    if (mapped.length > 0) {
+      offlineDB.saveEtablissements(mapped);
+    }
     return { success: true, activites: mapped };
   } catch (err: any) {
     console.error('[ActivitesSyncService] Exception fetchActivitesFromCloud:', err);
     return {
       success: false,
-      activites: [],
+      activites: offlineDB.getEtablissements(),
       error: `Impossible de joindre le serveur Cloud: ${err?.message || 'Erreur réseau'}`,
     };
   }
@@ -75,19 +79,23 @@ export async function saveActiviteToCloud(etab: Etablissement): Promise<{ succes
   try {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData?.user?.id;
+    const userEmail = userData?.user?.email || etab.email_patron;
+    const finalProprietaireId = userId || (etab.compte_id && etab.compte_id.length === 36 ? etab.compte_id : null);
 
     const payload = {
       id: etab.id,
-      proprietaire_id: userId || etab.compte_id || '00000000-0000-0000-0000-000000000000',
+      proprietaire_id: finalProprietaireId,
       type_activite: 'boutique',
-      secteur: etab.secteur_boutique || 'Vêtements & Mode',
+      secteur: etab.secteur_boutique || 'Commerce général',
       nom: etab.nom,
       abbreviation_code: etab.abrev_boutique || cleanCodeSegment(etab.nom, 3),
       ville: etab.ville || 'Douala',
       adresse: etab.adresse || '',
       telephone: etab.telephone || '',
+      email_patron: userEmail || null,
       palier: etab.tarif_mensuel <= 3000 ? 'Essentiel' : etab.tarif_mensuel > 5000 ? 'Pro' : 'Standard',
       statut_abonnement: etab.statut_abonnement || 'essai',
+      date_fin_essai: etab.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
       fin_essai: etab.date_fin_essai || new Date(Date.now() + 14 * 86400000).toISOString(),
       acces_bloque: false,
       updated_at: new Date().toISOString(),
@@ -100,8 +108,15 @@ export async function saveActiviteToCloud(etab: Etablissement): Promise<{ succes
     else all.push(etab);
     offlineDB.saveEtablissements(all);
 
-    // 2. Enfiler dans le moteur de synchro Cloud
-    syncEngine.enqueue('activites', 'upsert', payload);
+    // 2. Écriture directe immédiate dans la table etablissements
+    try {
+      await supabase.from('etablissements').upsert(payload);
+    } catch (directErr) {
+      console.warn('[ActivitesSyncService] Écriture directe différée:', directErr);
+    }
+
+    // 3. Enfiler dans le moteur de synchro Cloud
+    syncEngine.enqueue('etablissements', 'upsert', payload);
 
     return { success: true };
   } catch (err: any) {

@@ -1,18 +1,27 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import GoogleAuthModal from '@/components/GoogleAuthModal';
 import PinLoginModal from '@/components/PinLoginModal';
 import OfflineBadge from '@/components/OfflineBadge';
 import { offlineDB } from '@/lib/offlineDB';
-import { Lock, UserPlus, LogIn, ArrowRight } from 'lucide-react';
+import { Etablissement } from '@/types';
+import { Lock, UserPlus, LogIn, ArrowRight, Store } from 'lucide-react';
 
 export default function LandingPage() {
   const router = useRouter();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [activeEtab, setActiveEtab] = useState<Etablissement | null>(null);
+
+  useEffect(() => {
+    const etab = offlineDB.getEtablissement();
+    if (etab && etab.id && etab.nom) {
+      setActiveEtab(etab);
+    }
+  }, []);
 
   const handleFullReset = async () => {
     if (typeof window !== 'undefined') {
@@ -104,28 +113,41 @@ export default function LandingPage() {
         </p>
 
         {/* Level 1 Account Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full max-w-sm mt-8 sm:mt-10">
-          <button
-            onClick={() => {
-              setAuthMode('register');
-              setIsAuthModalOpen(true);
-            }}
-            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-black text-sm shadow-md transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4 text-[#E8A33D]" />
-            <span>Crée ton compte</span>
-          </button>
+        <div className="flex flex-col items-center justify-center gap-3 w-full max-w-sm mt-8 sm:mt-10">
+          {activeEtab && (
+            <button
+              onClick={() => router.push('/boutique/dashboard')}
+              className="w-full py-3.5 px-6 rounded-2xl bg-[#E8A33D] hover:bg-[#d4902f] text-[#1B4332] font-black text-sm shadow-md transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2 cursor-pointer border border-[#1B4332]/20"
+            >
+              <Store className="w-4 h-4 text-[#1B4332]" />
+              <span className="truncate">Ouvrir ma boutique : {activeEtab.nom}</span>
+              <ArrowRight className="w-4 h-4 text-[#1B4332]" />
+            </button>
+          )}
 
-          <button
-            onClick={() => {
-              setAuthMode('login');
-              setIsAuthModalOpen(true);
-            }}
-            className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-white hover:bg-gray-50 border-2 border-[#E2D5C3] text-[#1B4332] font-bold text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <LogIn className="w-4 h-4 text-[#1B4332]" />
-            <span>Connecte-toi</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+            <button
+              onClick={() => {
+                setAuthMode('register');
+                setIsAuthModalOpen(true);
+              }}
+              className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-[#1B4332] hover:bg-[#143326] text-white font-black text-sm shadow-md transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4 text-[#E8A33D]" />
+              <span>Crée ton compte</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAuthMode('login');
+                setIsAuthModalOpen(true);
+              }}
+              className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-white hover:bg-gray-50 border-2 border-[#E2D5C3] text-[#1B4332] font-bold text-sm shadow-sm transition-all hover:scale-[1.02] active:scale-95 text-center flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <LogIn className="w-4 h-4 text-[#1B4332]" />
+              <span>Connecte-toi</span>
+            </button>
+          </div>
         </div>
       </section>
 
