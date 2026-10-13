@@ -434,13 +434,15 @@ export default function BoutiqueProduitsPage() {
               <span className="hidden sm:inline">{isRefreshing ? 'Synchro...' : 'Actualiser'}</span>
             </button>
 
-            <button
-              onClick={() => setIsExcelImportOpen(true)}
-              className="py-2.5 px-4 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-[#1B4332]" />
-              <span>📊 Import Excel/CSV</span>
-            </button>
+            {!isEmployee && (
+              <button
+                onClick={() => setIsExcelImportOpen(true)}
+                className="py-2.5 px-4 rounded-2xl bg-[#F3ECE0] hover:bg-[#EADECB] border border-[#E2D5C3] text-[#1B4332] font-bold text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-[#1B4332]" />
+                <span>📊 Import Excel/CSV</span>
+              </button>
+            )}
 
             <button
               onClick={() => setIsModalOpen(true)}

@@ -23,7 +23,8 @@ import {
   Truck,
   Eye,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  UserCheck
 } from 'lucide-react';
 import { offlineDB, getTerminology } from '@/lib/offlineDB';
 import { Utilisateur, Etablissement } from '@/types';
@@ -283,10 +284,10 @@ export default function Sidebar() {
 
           <button
             onClick={() => setIsPinModalOpen(true)}
-            className="w-full py-2 px-3 rounded-xl bg-[#2D6A4F] hover:bg-[#3E8E68] text-white font-bold text-[11px] flex items-center justify-center gap-2 transition-all"
+            className="w-full py-2 px-3 rounded-xl bg-[#2D6A4F] hover:bg-[#3E8E68] text-white font-bold text-[11px] flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
-            <Lock className="w-3.5 h-3.5 text-[#E8A33D]" />
-            <span>Changer PIN</span>
+            <UserCheck className="w-3.5 h-3.5 text-[#E8A33D]" />
+            <span>Changer de Profil (Patron / Employé)</span>
           </button>
 
           <button

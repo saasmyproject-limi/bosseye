@@ -76,6 +76,7 @@ export default function CommunEmployesPage() {
       telephone: telephone.trim(),
       photo_url: photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
       actif: true,
+      doit_definir_pin: true,
     });
 
     loadUsers();
@@ -297,16 +298,19 @@ export default function CommunEmployesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-[#1B4332] mb-1">Code PIN (4 chiffres) *</label>
+                  <label className="block text-xs font-bold text-[#1B4332] mb-1">Code PIN Provisoire (4 chiffres) *</label>
                   <input
                     type="password"
                     maxLength={4}
                     required
-                    placeholder="ex: 1234"
+                    placeholder="••••"
                     value={pinCode}
                     onChange={(e) => setPinCode(e.target.value)}
                     className="w-full bg-[#FBF7EF] border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                   />
+                  <span className="text-[10px] text-gray-500 font-medium block mt-0.5">
+                    🔒 Stocké haché. L'employé définira son PIN secret personnel à sa 1ère connexion.
+                  </span>
                 </div>
               </div>
 

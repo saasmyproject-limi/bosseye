@@ -17,8 +17,12 @@ import { Reservation, Etablissement, Facture } from '@/types';
 import { fetchReservationsFromCloud, solderReservationOnCloud } from '@/lib/reservationsSyncService';
 
 export default function BoutiqueReservationsPage() {
-  const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [etablissement, setEtablissement] = useState<Etablissement | null>(() =>
+    typeof window !== 'undefined' ? offlineDB.getEtablissement() : null
+  );
+  const [reservations, setReservations] = useState<Reservation[]>(() =>
+    typeof window !== 'undefined' ? offlineDB.getReservations() : []
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedResForWhatsApp, setSelectedResForWhatsApp] = useState<Reservation | null>(null);
   const [whatsappTemplate, setWhatsappTemplate] = useState<'courtois' | 'fin_de_mois' | 'vip'>('courtois');

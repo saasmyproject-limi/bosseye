@@ -127,9 +127,9 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
           <Lock className="w-6 h-6" />
         </div>
 
-        <h2 className="font-serif text-xl font-black text-[#1B4332]">Connexion Établissement & PIN</h2>
+        <h2 className="font-serif text-xl font-black text-[#1B4332]">Changement de Profil / Connexion PIN</h2>
         <p className="text-xs text-[#1B4332]/80 mt-1 mb-3 font-medium">
-          Choisissez votre commerce, sélectionnez votre profil, puis entrez votre code PIN.
+          Sélectionnez votre profil (Patron ou Employé) pour basculer de session en saisissant votre code PIN.
         </p>
 
         {/* 1. SÉLECTEUR DE COMMERCE / ÉTABLISSEMENT */}
@@ -161,10 +161,10 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
           </div>
         )}
 
-        {/* 2. SELECTEUR DE PROFIL / EMPLOYE */}
+        {/* 2. SELECTEUR DE PROFIL / EMPLOYE & PATRON */}
         <div className="space-y-2 mb-4">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#1B4332]/70 block text-left">
-            2. Sélectionner votre profil dans {selectedEtab?.nom || 'ce commerce'} :
+            2. Sélectionner votre profil dans {selectedEtab?.nom || 'ce commerce'} (Patron ou Employé) :
           </span>
 
           {users.length === 0 ? (
@@ -172,7 +172,7 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
               Aucun profil trouvé dans ce commerce. Connectez-vous avec le compte principal.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2 max-h-36 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
               {users.map((u) => {
                 const isSelected = selectedUser?.id === u.id;
                 const isPatron = u.role === 'Patron' || u.role === 'Patronne';
@@ -183,16 +183,20 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
                     onClick={() => handleSelectUser(u)}
                     className={`p-2.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
                       isSelected
-                        ? 'bg-[#FBF7EF] border-[#1B4332] shadow-sm'
+                        ? isPatron
+                          ? 'bg-amber-50 border-[#E8A33D] shadow-md ring-1 ring-[#E8A33D]'
+                          : 'bg-[#FBF7EF] border-[#1B4332] shadow-sm'
+                        : isPatron
+                        ? 'bg-amber-50/50 border-amber-200 hover:border-amber-400'
                         : 'bg-[#FBF7EF]/50 border-[#E2D5C3] hover:border-gray-400'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-[#1B4332] shrink-0">
+                      <div className={`w-8 h-8 rounded-full overflow-hidden border-2 shrink-0 ${isPatron ? 'border-[#E8A33D]' : 'border-[#1B4332]'}`}>
                         {u.photo_url ? (
                           <img src={u.photo_url} alt={u.nom} className="w-full h-full object-cover" />
                         ) : (
-                          <div className="w-full h-full bg-[#1B4332] text-white flex items-center justify-center font-bold text-xs">
+                          <div className={`w-full h-full text-white flex items-center justify-center font-bold text-xs ${isPatron ? 'bg-[#1B4332]' : 'bg-[#2D6A4F]'}`}>
                             {u.nom ? u.nom[0] : 'U'}
                           </div>
                         )}
@@ -200,16 +204,16 @@ export default function PinLoginModal({ isOpen, onClose, onSuccess }: PinLoginMo
                       <div className="text-left">
                         <h4 className="font-bold text-xs text-[#1B4332] flex items-center gap-1">
                           {u.nom}
-                          {isPatron && <Crown className="w-3 h-3 text-[#E8A33D]" />}
+                          {isPatron && <Crown className="w-3.5 h-3.5 text-[#E8A33D]" />}
                         </h4>
                         <span className={`text-[10px] font-extrabold uppercase ${isPatron ? 'text-[#B8442C]' : 'text-[#2D6A4F]'}`}>
-                          {u.role}
+                          {isPatron ? '👑 Patron (Propriétaire)' : u.role}
                         </span>
                       </div>
                     </div>
 
                     {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-[#1B4332] text-white flex items-center justify-center font-bold text-xs">
+                      <div className={`w-5 h-5 rounded-full text-white flex items-center justify-center font-bold text-xs ${isPatron ? 'bg-[#E8A33D] text-[#0F291E]' : 'bg-[#1B4332]'}`}>
                         <Check className="w-3.5 h-3.5" />
                       </div>
                     )}

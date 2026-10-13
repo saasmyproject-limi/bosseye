@@ -46,7 +46,11 @@ import { syncShopToCloud } from '@/lib/supabaseSync';
 import { recordSaleToCloud, fetchSalesFromCloud } from '@/lib/salesSyncService';
 import { fetchArticlesFromCloud } from '@/lib/articlesSyncService';
 import { saveClientToCloud } from '@/lib/clientsSyncService';
-import { saveReservationToCloud, saveCommandeEnLigneToCloud } from '@/lib/reservationsSyncService';
+import {
+  saveReservationToCloud,
+  saveCommandeEnLigneToCloud,
+  fetchCommandesEnLigneFromCloud,
+} from '@/lib/reservationsSyncService';
 
 export interface CartItem {
   produit: Produit;
@@ -56,11 +60,21 @@ export interface CartItem {
 }
 
 export default function BoutiqueVentesPage() {
-  const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
-  const [currentUser, setCurrentUser] = useState<Utilisateur | null>(null);
-  const [produits, setProduits] = useState<Produit[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [commandesLigne, setCommandesLigne] = useState<CommandeEnLigne[]>([]);
+  const [etablissement, setEtablissement] = useState<Etablissement | null>(() =>
+    typeof window !== 'undefined' ? offlineDB.getEtablissement() : null
+  );
+  const [currentUser, setCurrentUser] = useState<Utilisateur | null>(() =>
+    typeof window !== 'undefined' ? offlineDB.getCurrentUser() : null
+  );
+  const [produits, setProduits] = useState<Produit[]>(() =>
+    typeof window !== 'undefined' ? offlineDB.getProduits() : []
+  );
+  const [clients, setClients] = useState<Client[]>(() =>
+    typeof window !== 'undefined' ? offlineDB.getClients() : []
+  );
+  const [commandesLigne, setCommandesLigne] = useState<CommandeEnLigne[]>(() =>
+    typeof window !== 'undefined' ? offlineDB.getCommandesEnLigne() : []
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
   const [isRefreshingStock, setIsRefreshingStock] = useState(false);
@@ -116,29 +130,36 @@ export default function BoutiqueVentesPage() {
 
   const loadData = async () => {
     try {
-      setIsRefreshingStock(true);
       const etab = offlineDB.getEtablissement();
       setEtablissement(etab);
       setCurrentUser(offlineDB.getCurrentUser());
       setClients(offlineDB.getClients());
       setCommandesLigne(offlineDB.getCommandesEnLigne());
 
-      // 1. Affichage immédiat cache-first
+      // 1. Affichage immédiat cache-first (< 50ms)
       const cachedProds = offlineDB.getProduits();
       setProduits(cachedProds);
 
-      // 2. Rafraîchissement direct depuis Supabase Cloud
+      // 2. Rafraîchissement asynchrone non-bloquant depuis Supabase Cloud
       if (etab?.id) {
-        try {
-          const { produits: cloudProds } = await fetchArticlesFromCloud(etab.id);
-          if (cloudProds && cloudProds.length > 0) {
-            setProduits(cloudProds);
-          }
-        } catch (err) {
-          console.warn('[Ventes] Background sync articles warning:', err);
-        }
+        setIsRefreshingStock(true);
+        fetchArticlesFromCloud(etab.id)
+          .then(({ produits: cloudProds }) => {
+            if (cloudProds && cloudProds.length > 0) {
+              setProduits(cloudProds);
+            }
+          })
+          .catch((err) => console.warn('[Ventes] Background sync articles notice:', err))
+          .finally(() => setIsRefreshingStock(false));
+
+        fetchCommandesEnLigneFromCloud(etab.id)
+          .then(({ commandes: cloudCmds }) => {
+            if (cloudCmds && cloudCmds.length > 0) {
+              setCommandesLigne(cloudCmds);
+            }
+          })
+          .catch((err) => console.warn('[Ventes] Background sync livraisons notice:', err));
       }
-      setIsRefreshingStock(false);
     } catch (e) {
       console.error(e);
       setIsRefreshingStock(false);
@@ -230,27 +251,27 @@ export default function BoutiqueVentesPage() {
 
     const isDetteOuCredit = (paymentMode === 'credit' || calculDetteOuReste > 0) && paymentMode !== 'reservation';
 
-    // 1. CONTRÔLE STRICT POUR DETTE AU COMPTOIR : NOM ET NUMÉRO OBLIGATOIRES
+    // 1. CONTRÔLE STRICT POUR VENTE SANS ENCAISSEMENT / DETTE : NOM ET NUMÉRO OBLIGATOIRES
     if (isDetteOuCredit) {
       if (isNewClientMode) {
         if (!newClientNom.trim()) {
-          setClientValidationError('Le nom du client est obligatoire pour une vente avec dette ou solde restant dû.');
+          setClientValidationError('Le nom du client est obligatoire pour une vente sans encaissement (enregistrée dans Argent à récupérer).');
           return;
         }
         const cleanPhone = newClientPhone.replace(/[^0-9]/g, '');
         if (!cleanPhone || cleanPhone.length < 8) {
-          setClientValidationError('Un numéro de téléphone / WhatsApp valide (au moins 8 chiffres) est obligatoire pour le suivi de la dette.');
+          setClientValidationError('Un numéro de téléphone / WhatsApp valide (au moins 8 chiffres) est obligatoire pour enregistrer dans Argent à récupérer.');
           return;
         }
       } else {
         if (!selectedClientId) {
-          setClientValidationError('Veuillez sélectionner ou créer un client avec son nom et son numéro pour enregistrer une vente avec dette.');
+          setClientValidationError('Veuillez sélectionner ou créer un client avec son nom et son numéro pour enregistrer dans Argent à récupérer.');
           return;
         }
         const selCl = clients.find((c) => c.id === selectedClientId);
         const cleanPhone = (selCl?.telephone_whatsapp || '').replace(/[^0-9]/g, '');
         if (!cleanPhone || cleanPhone.length < 8) {
-          setClientValidationError(`Le client sélectionné (${selCl?.nom}) n'a pas de numéro de téléphone. Renseignez son numéro pour le suivi de la dette.`);
+          setClientValidationError(`Le client sélectionné (${selCl?.nom}) n'a pas de numéro de téléphone. Renseignez son numéro pour enregistrer dans Argent à récupérer.`);
           return;
         }
       }
@@ -477,9 +498,10 @@ export default function BoutiqueVentesPage() {
     if (etablissement) syncShopToCloud(etablissement.id);
     saveCommandeEnLigneToCloud(newCmd);
 
-    // Incrémentation immédiate et synchrone du compteur de l'onglet Livraisons
+    // Incrémentation immédiate et bascule directe sur l'onglet Livraisons
     const allUpdatedCmds = offlineDB.getCommandesEnLigne();
     setCommandesLigne(allUpdatedCmds);
+    setActiveTab('livraisons');
 
     setIsNewDeliveryModalOpen(false);
     setNewCmdClientNom('');
@@ -667,7 +689,7 @@ export default function BoutiqueVentesPage() {
 
                 <div className="space-y-2">
                   <span className="text-[11px] font-bold text-[#1B4332] block">Choisissez le type d'opération :</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       disabled={cart.length === 0}
                       onClick={() => {
@@ -679,6 +701,20 @@ export default function BoutiqueVentesPage() {
                     >
                       <CreditCard className="w-4 h-4 text-white" />
                       <span>Payé Comptant</span>
+                    </button>
+
+                    <button
+                      disabled={cart.length === 0}
+                      onClick={() => {
+                        setPaymentMode('credit');
+                        setMontantVerseInput(0);
+                        if (!selectedClientId) setIsNewClientMode(true);
+                        setIsPaymentModalOpen(true);
+                      }}
+                      className="py-3 px-2 rounded-2xl bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-black text-xs shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <CreditCard className="w-4 h-4 text-white" />
+                      <span>Sans Encaissement</span>
                     </button>
 
                     <button
@@ -958,7 +994,7 @@ export default function BoutiqueVentesPage() {
                     { id: 'cash', label: '💵 Espèces' },
                     { id: 'orange_money', label: '🟧 Orange Money' },
                     { id: 'mtn_momo', label: '🟡 MTN MoMo' },
-                    { id: 'credit', label: '💳 Vente avec Dette' },
+                    { id: 'credit', label: '💳 Sans Encaissement (Crédit)' },
                     { id: 'reservation', label: '🔖 Réservation (Acompte)' },
                   ].map((m) => (
                     <button
@@ -969,6 +1005,9 @@ export default function BoutiqueVentesPage() {
                         setClientValidationError('');
                         if (m.id === 'cash' || m.id === 'orange_money' || m.id === 'mtn_momo') {
                           setMontantVerseInput(cartTotalFinal);
+                        } else if (m.id === 'credit') {
+                          setMontantVerseInput(0);
+                          if (!selectedClientId) setIsNewClientMode(true);
                         } else if (m.id === 'reservation') {
                           setMontantVerseInput(0);
                         }
@@ -1019,18 +1058,30 @@ export default function BoutiqueVentesPage() {
                     type="number"
                     min="0"
                     onFocus={(e) => e.target.select()}
-                    value={montantVerseInput || ''}
+                    value={montantVerseInput ?? ''}
                     onChange={(e) => setMontantVerseInput(e.target.value === '' ? 0 : Number(e.target.value))}
-                    placeholder={paymentMode === 'reservation' ? '0' : `${cartTotalFinal}`}
+                    placeholder={paymentMode === 'reservation' || paymentMode === 'credit' ? '0' : `${cartTotalFinal}`}
                     className="w-full bg-white border-2 border-[#1B4332] rounded-xl p-2 text-xs font-bold text-[#1B4332]"
                   />
                 </div>
               </div>
 
-              {/* Recalcul Dette ou Reste */}
-              {calculDetteOuReste > 0 && paymentMode !== 'reservation' && (
+              {/* Recalcul Vente sans encaissement ou Reste */}
+              {paymentMode === 'credit' && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs font-bold space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span>💳 Vente sans encaissement immédiat :</span>
+                    <span className="text-sm font-black text-red-700">+{cartTotalFinal.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                  <p className="text-[11px] font-normal text-amber-900">
+                    Cette vente sera enregistrée dans <strong>"Argent à récupérer"</strong> (Crédits Clients). Le nom et le numéro de téléphone sont requis.
+                  </p>
+                </div>
+              )}
+
+              {calculDetteOuReste > 0 && paymentMode !== 'reservation' && paymentMode !== 'credit' && (
                 <div className="p-3.5 rounded-2xl bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between">
-                  <span>Dette restante à récupérer :</span>
+                  <span>Dette restante dans Argent à récupérer :</span>
                   <span className="text-sm font-black text-red-700">+{calculDetteOuReste.toLocaleString('fr-FR')} FCFA</span>
                 </div>
               )}
@@ -1038,7 +1089,7 @@ export default function BoutiqueVentesPage() {
               {paymentMode === 'reservation' && (
                 <div className="p-3.5 rounded-2xl bg-purple-100 border border-purple-300 text-purple-900 text-xs font-bold space-y-1">
                   <p>🔖 Réservation d'articles activée</p>
-                  <p className="text-[11px] font-normal opacity-90">Les articles seront immédiatement mis de côté (stock réservé), avec {montantVerseInput || 0} FCFA d'acompte et {Math.max(0, cartTotalFinal - (montantVerseInput || 0)).toLocaleString('fr-FR')} FCFA restant à solder.</p>
+                  <p className="text-[11px] font-normal opacity-90">Les articles seront immédiatement mis de côté (stock réservé), quel que soit le montant versé ({montantVerseInput || 0} FCFA). Annulation uniquement manuelle.</p>
                 </div>
               )}
 

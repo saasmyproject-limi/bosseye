@@ -173,3 +173,50 @@ export async function saveCommandeEnLigneToCloud(
     return { success: false, cmdId: '', error: err?.message || 'Erreur d\'enregistrement de la commande' };
   }
 }
+
+export async function fetchCommandesEnLigneFromCloud(
+  activiteId: string
+): Promise<{ success: boolean; commandes: CommandeEnLigne[]; error?: string }> {
+  try {
+    if (!activiteId) {
+      return { success: true, commandes: offlineDB.getCommandesEnLigne() };
+    }
+    const { data, error } = await supabase
+      .from('livraisons')
+      .select('*')
+      .eq('etablissement_id', activiteId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const mapped: CommandeEnLigne[] = (data || []).map((row: any) => ({
+      id: row.id,
+      etablissement_id: row.etablissement_id,
+      numero_commande: `CMD-${row.id.slice(-6)}`,
+      client_nom: row.client_nom || 'Client',
+      client_telephone: row.client_telephone || '',
+      adresse_livraison: row.adresse_livraison || '',
+      statut:
+        row.statut === 'terminee' || row.statut === 'livree'
+          ? 'livree_payee'
+          : row.statut === 'en_livraison'
+          ? 'en_livraison'
+          : 'en_attente_paiement',
+      montant_total: Number(row.montant_total || row.frais_livraison || 0),
+      created_at: row.created_at,
+      lignes: row.articles_json || [],
+    }));
+
+    const localCmds = offlineDB.getCommandesEnLigne();
+    const cmdMap = new Map<string, CommandeEnLigne>();
+    localCmds.forEach((c) => cmdMap.set(c.id, c));
+    mapped.forEach((c) => cmdMap.set(c.id, c));
+    const merged = Array.from(cmdMap.values());
+    offlineDB.saveCommandesEnLigne(merged);
+
+    return { success: true, commandes: merged };
+  } catch (err: any) {
+    console.warn('[ReservationsSyncService] fetchCommandesEnLigne notice:', err);
+    return { success: false, commandes: offlineDB.getCommandesEnLigne(), error: err?.message };
+  }
+}

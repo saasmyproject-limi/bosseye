@@ -452,7 +452,7 @@ export const offlineDB = {
       created_at: nowIso,
     };
 
-    const users = this.getUtilisateurs();
+    const users = this.getAllUtilisateursGlobal();
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify([newEtab, ...etabs]));
@@ -742,11 +742,8 @@ export const offlineDB = {
   getUtilisateurs(): Utilisateur[] {
     try {
       const etab = this.getEtablissement();
-      if (typeof window === 'undefined') return [];
-      const data = localStorage.getItem(KEYS.UTILISATEURS);
-      if (!data) return [];
-      const parsed: Utilisateur[] = JSON.parse(data);
-      return (parsed || []).filter((u) => u && u.etablissement_id === etab.id);
+      if (!etab || !etab.id) return [];
+      return this.getUtilisateursByEtablissementId(etab.id);
     } catch {
       return [];
     }
@@ -964,6 +961,14 @@ export const offlineDB = {
     return newCmd;
   },
 
+  saveCommandesEnLigne(commandes: CommandeEnLigne[]) {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(commandes));
+      }
+    } catch (e) { console.error(e); }
+  },
+
   updateStatutCommandeEnLigne(commandeId: string, newStatut: StatutLivraison, livreParNom?: string): CommandeEnLigne | null {
     const cmds = this.getCommandesEnLigne();
     const cmd = cmds.find((c) => c.id === commandeId);
@@ -1050,6 +1055,7 @@ export const offlineDB = {
             prix_achat_unitaire: 0,
             prix_achat_casier: 0,
             cout_achat_unitaire_cmp: 0,
+            variantes: pClean.variantes?.map((v) => ({ ...v, prix_achat_specifique: 0 })),
           };
         }
 
