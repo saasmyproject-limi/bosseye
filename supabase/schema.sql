@@ -314,10 +314,11 @@ FOR EACH ROW EXECUTE FUNCTION public.sync_etab_activite_id();
 
 -- --------------------------------------------------------------------
 -- VUES DE RÉTROCOMPATIBILITÉ (activites, articles, commandes_en_ligne)
+-- Avec security_invoker = on pour respecter strictement le RLS sous-jacent
 -- --------------------------------------------------------------------
-CREATE OR REPLACE VIEW public.activites AS SELECT * FROM public.etablissements;
-CREATE OR REPLACE VIEW public.articles AS SELECT * FROM public.produits;
-CREATE OR REPLACE VIEW public.commandes_en_ligne AS SELECT * FROM public.livraisons;
+CREATE OR REPLACE VIEW public.activites WITH (security_invoker = on) AS SELECT * FROM public.etablissements;
+CREATE OR REPLACE VIEW public.articles WITH (security_invoker = on) AS SELECT * FROM public.produits;
+CREATE OR REPLACE VIEW public.commandes_en_ligne WITH (security_invoker = on) AS SELECT * FROM public.livraisons;
 
 -- --------------------------------------------------------------------
 -- FONCTIONS SÉCURISÉES POUR LE CONTRÔLE RLS (Multi-Tenant)
