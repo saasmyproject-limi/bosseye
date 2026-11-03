@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Download, Wifi, WifiOff, X, Share, CheckCircle2, Sparkles, RefreshCcw } from 'lucide-react';
-import { offlineDB } from '@/lib/offlineDB';
+import { offlineDB, cleanLegacyDemoData } from '@/lib/offlineDB';
 
 export default function PWAInstaller() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -15,7 +15,15 @@ export default function PWAInstaller() {
 
   useEffect(() => {
     // Nettoyage immédiat au démarrage de toutes les anciennes données de démo
-    offlineDB.cleanLegacyDemoData();
+    try {
+      if (typeof cleanLegacyDemoData === 'function') {
+        cleanLegacyDemoData();
+      } else if (typeof offlineDB?.cleanLegacyDemoData === 'function') {
+        offlineDB.cleanLegacyDemoData();
+      }
+    } catch (err) {
+      console.warn('[PWAInstaller] Nettoyage données démo ignoré:', err);
+    }
 
     let registrationRef: ServiceWorkerRegistration | null = null;
 

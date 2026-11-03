@@ -33,6 +33,8 @@ import {
   AuditStockLog,
   InventaireReference,
 } from '@/types';
+import { hashPinSync, verifyPinSync } from './authPinService';
+
 const BLANK_ETABLISSEMENT: Etablissement = {
   id: '',
   nom: 'Boutique',
@@ -69,8 +71,6 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
-
-import { hashPinSync, verifyPinSync } from './authPinService';
 
 const KEYS = {
   ACTIVE_ETAB_ID: 'oeko_active_etab_id',
@@ -136,6 +136,155 @@ export function getTerminology(type_activite?: TypeActivite) {
     salesScreenTitle: 'Vente',
     salesScreenDesc: 'Vente directe au comptoir, gestion des déclinaisons (tailles/couleurs) et suivi des commandes en ligne.',
   };
+}
+
+export function cleanLegacyDemoData(): { cleaned: boolean; removedCount: number } {
+  if (typeof window === 'undefined') return { cleaned: false, removedCount: 0 };
+  try {
+    const DEMO_ETAB_IDS = ['etab-elegance-akwa', 'etab-eleganza-yaounde', 'etab-capitole-douala'];
+    const DEMO_EMAILS = ['patronne.demo@gmail.com', 'gerante.demo@gmail.com'];
+    const DEMO_USER_IDS = ['user-patron-defaut', 'user-gerante-akwa', 'user-vendeuse-akwa', 'user-patron-yaounde', 'user-vendeuse-yaounde'];
+    const DEMO_COMPTE_IDS = ['compte-google-demo'];
+
+    let removedCount = 0;
+
+    // 1. Établissements
+    const rawEtabs = localStorage.getItem(KEYS.ETABLISSEMENTS);
+    if (rawEtabs) {
+      const etabs: Etablissement[] = JSON.parse(rawEtabs);
+      const filtered = (etabs || []).filter((e) => e && !DEMO_ETAB_IDS.includes(e.id) && !DEMO_EMAILS.includes(e.email_patron || ''));
+      if (filtered.length !== etabs.length) {
+        removedCount += (etabs.length - filtered.length);
+        localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(filtered));
+      }
+    }
+
+    // 2. Comptes
+    const rawComptes = localStorage.getItem(KEYS.COMPTES_LIST);
+    if (rawComptes) {
+      const comptes: CompteUtilisateur[] = JSON.parse(rawComptes);
+      const filtered = (comptes || []).filter((c) => c && !DEMO_COMPTE_IDS.includes(c.id) && !DEMO_EMAILS.includes(c.email || ''));
+      if (filtered.length !== comptes.length) {
+        removedCount += (comptes.length - filtered.length);
+        localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(filtered));
+      }
+    }
+
+    // 3. Compte Actuel
+    const rawActuel = localStorage.getItem(KEYS.CURRENT_COMPTE);
+    if (rawActuel) {
+      const actuel = JSON.parse(rawActuel);
+      if (actuel && (DEMO_COMPTE_IDS.includes(actuel.id) || DEMO_EMAILS.includes(actuel.email || ''))) {
+        localStorage.removeItem(KEYS.CURRENT_COMPTE);
+        removedCount++;
+      }
+    }
+
+    // 4. Utilisateurs
+    const rawUsers = localStorage.getItem(KEYS.UTILISATEURS);
+    if (rawUsers) {
+      const users: Utilisateur[] = JSON.parse(rawUsers);
+      const filtered = (users || []).filter((u) => u && !DEMO_USER_IDS.includes(u.id) && !DEMO_ETAB_IDS.includes(u.etablissement_id));
+      if (filtered.length !== users.length) {
+        removedCount += (users.length - filtered.length);
+        localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(filtered));
+      }
+    }
+
+    // 5. Produits
+    const rawProds = localStorage.getItem(KEYS.PRODUITS);
+    if (rawProds) {
+      const prods: Produit[] = JSON.parse(rawProds);
+      const filtered = (prods || []).filter((p) => p && !DEMO_ETAB_IDS.includes(p.etablissement_id));
+      if (filtered.length !== prods.length) {
+        removedCount += (prods.length - filtered.length);
+        localStorage.setItem(KEYS.PRODUITS, JSON.stringify(filtered));
+      }
+    }
+
+    // 6. Factures
+    const rawFacs = localStorage.getItem(KEYS.FACTURES);
+    if (rawFacs) {
+      const facs: Facture[] = JSON.parse(rawFacs);
+      const filtered = (facs || []).filter((f) => f && !DEMO_ETAB_IDS.includes(f.etablissement_id));
+      if (filtered.length !== facs.length) {
+        removedCount += (facs.length - filtered.length);
+        localStorage.setItem(KEYS.FACTURES, JSON.stringify(filtered));
+      }
+    }
+
+    // 7. Mouvements Stock
+    const rawMvts = localStorage.getItem(KEYS.MOUVEMENTS);
+    if (rawMvts) {
+      const mvts: MouvementStock[] = JSON.parse(rawMvts);
+      const filtered = (mvts || []).filter((m) => m && !DEMO_ETAB_IDS.includes(m.etablissement_id));
+      if (filtered.length !== mvts.length) {
+        removedCount += (mvts.length - filtered.length);
+        localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(filtered));
+      }
+    }
+
+    // 8. Clients
+    const rawClients = localStorage.getItem(KEYS.CLIENTS);
+    if (rawClients) {
+      const clients: Client[] = JSON.parse(rawClients);
+      const filtered = (clients || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+      if (filtered.length !== clients.length) {
+        removedCount += (clients.length - filtered.length);
+        localStorage.setItem(KEYS.CLIENTS, JSON.stringify(filtered));
+      }
+    }
+
+    // 9. Charges
+    const rawCharges = localStorage.getItem(KEYS.CHARGES);
+    if (rawCharges) {
+      const charges: ChargeJournaliere[] = JSON.parse(rawCharges);
+      const filtered = (charges || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+      if (filtered.length !== charges.length) {
+        removedCount += (charges.length - filtered.length);
+        localStorage.setItem(KEYS.CHARGES, JSON.stringify(filtered));
+      }
+    }
+
+    // 10. Commandes en Ligne
+    const rawCmds = localStorage.getItem(KEYS.COMMANDES_LIGNE);
+    if (rawCmds) {
+      const cmds: CommandeEnLigne[] = JSON.parse(rawCmds);
+      const filtered = (cmds || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+      if (filtered.length !== cmds.length) {
+        removedCount += (cmds.length - filtered.length);
+        localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(filtered));
+      }
+    }
+
+    // 11. Caisses
+    const rawCaisses = localStorage.getItem(KEYS.CAISSES);
+    if (rawCaisses) {
+      const caisses: Caisse[] = JSON.parse(rawCaisses);
+      const filtered = (caisses || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
+      if (filtered.length !== caisses.length) {
+        removedCount += (caisses.length - filtered.length);
+        localStorage.setItem(KEYS.CAISSES, JSON.stringify(filtered));
+      }
+    }
+
+    // 12. Active Etab ID & Current User ID
+    const activeEtabId = localStorage.getItem(KEYS.ACTIVE_ETAB_ID);
+    if (activeEtabId && DEMO_ETAB_IDS.includes(activeEtabId)) {
+      localStorage.removeItem(KEYS.ACTIVE_ETAB_ID);
+      removedCount++;
+    }
+    const currentUserId = localStorage.getItem(KEYS.CURRENT_USER_ID);
+    if (currentUserId && DEMO_USER_IDS.includes(currentUserId)) {
+      localStorage.removeItem(KEYS.CURRENT_USER_ID);
+      removedCount++;
+    }
+
+    return { cleaned: removedCount > 0, removedCount };
+  } catch (e) {
+    console.error('[offlineDB] Erreur cleanLegacyDemoData:', e);
+    return { cleaned: false, removedCount: 0 };
+  }
 }
 
 export const offlineDB = {
@@ -511,152 +660,7 @@ export const offlineDB = {
     } catch (e) { console.error(e); }
   },
   cleanLegacyDemoData(): { cleaned: boolean; removedCount: number } {
-    if (typeof window === 'undefined') return { cleaned: false, removedCount: 0 };
-    try {
-      const DEMO_ETAB_IDS = ['etab-elegance-akwa', 'etab-eleganza-yaounde', 'etab-capitole-douala'];
-      const DEMO_EMAILS = ['patronne.demo@gmail.com', 'gerante.demo@gmail.com'];
-      const DEMO_USER_IDS = ['user-patron-defaut', 'user-gerante-akwa', 'user-vendeuse-akwa', 'user-patron-yaounde', 'user-vendeuse-yaounde'];
-      const DEMO_COMPTE_IDS = ['compte-google-demo'];
-
-      let removedCount = 0;
-
-      // 1. Établissements
-      const rawEtabs = localStorage.getItem(KEYS.ETABLISSEMENTS);
-      if (rawEtabs) {
-        const etabs: Etablissement[] = JSON.parse(rawEtabs);
-        const filtered = (etabs || []).filter((e) => e && !DEMO_ETAB_IDS.includes(e.id) && !DEMO_EMAILS.includes(e.email_patron || ''));
-        if (filtered.length !== etabs.length) {
-          removedCount += (etabs.length - filtered.length);
-          localStorage.setItem(KEYS.ETABLISSEMENTS, JSON.stringify(filtered));
-        }
-      }
-
-      // 2. Comptes
-      const rawComptes = localStorage.getItem(KEYS.COMPTES_LIST);
-      if (rawComptes) {
-        const comptes: CompteUtilisateur[] = JSON.parse(rawComptes);
-        const filtered = (comptes || []).filter((c) => c && !DEMO_COMPTE_IDS.includes(c.id) && !DEMO_EMAILS.includes(c.email || ''));
-        if (filtered.length !== comptes.length) {
-          removedCount += (comptes.length - filtered.length);
-          localStorage.setItem(KEYS.COMPTES_LIST, JSON.stringify(filtered));
-        }
-      }
-
-      // 3. Compte Actuel
-      const rawActuel = localStorage.getItem(KEYS.CURRENT_COMPTE);
-      if (rawActuel) {
-        const actuel = JSON.parse(rawActuel);
-        if (actuel && (DEMO_COMPTE_IDS.includes(actuel.id) || DEMO_EMAILS.includes(actuel.email || ''))) {
-          localStorage.removeItem(KEYS.CURRENT_COMPTE);
-          removedCount++;
-        }
-      }
-
-      // 4. Utilisateurs
-      const rawUsers = localStorage.getItem(KEYS.UTILISATEURS);
-      if (rawUsers) {
-        const users: Utilisateur[] = JSON.parse(rawUsers);
-        const filtered = (users || []).filter((u) => u && !DEMO_USER_IDS.includes(u.id) && !DEMO_ETAB_IDS.includes(u.etablissement_id));
-        if (filtered.length !== users.length) {
-          removedCount += (users.length - filtered.length);
-          localStorage.setItem(KEYS.UTILISATEURS, JSON.stringify(filtered));
-        }
-      }
-
-      // 5. Produits
-      const rawProds = localStorage.getItem(KEYS.PRODUITS);
-      if (rawProds) {
-        const prods: Produit[] = JSON.parse(rawProds);
-        const filtered = (prods || []).filter((p) => p && !DEMO_ETAB_IDS.includes(p.etablissement_id));
-        if (filtered.length !== prods.length) {
-          removedCount += (prods.length - filtered.length);
-          localStorage.setItem(KEYS.PRODUITS, JSON.stringify(filtered));
-        }
-      }
-
-      // 6. Factures
-      const rawFacs = localStorage.getItem(KEYS.FACTURES);
-      if (rawFacs) {
-        const facs: Facture[] = JSON.parse(rawFacs);
-        const filtered = (facs || []).filter((f) => f && !DEMO_ETAB_IDS.includes(f.etablissement_id));
-        if (filtered.length !== facs.length) {
-          removedCount += (facs.length - filtered.length);
-          localStorage.setItem(KEYS.FACTURES, JSON.stringify(filtered));
-        }
-      }
-
-      // 7. Mouvements Stock
-      const rawMvts = localStorage.getItem(KEYS.MOUVEMENTS);
-      if (rawMvts) {
-        const mvts: MouvementStock[] = JSON.parse(rawMvts);
-        const filtered = (mvts || []).filter((m) => m && !DEMO_ETAB_IDS.includes(m.etablissement_id));
-        if (filtered.length !== mvts.length) {
-          removedCount += (mvts.length - filtered.length);
-          localStorage.setItem(KEYS.MOUVEMENTS, JSON.stringify(filtered));
-        }
-      }
-
-      // 8. Clients
-      const rawClients = localStorage.getItem(KEYS.CLIENTS);
-      if (rawClients) {
-        const clients: Client[] = JSON.parse(rawClients);
-        const filtered = (clients || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
-        if (filtered.length !== clients.length) {
-          removedCount += (clients.length - filtered.length);
-          localStorage.setItem(KEYS.CLIENTS, JSON.stringify(filtered));
-        }
-      }
-
-      // 9. Charges
-      const rawCharges = localStorage.getItem(KEYS.CHARGES);
-      if (rawCharges) {
-        const charges: ChargeJournaliere[] = JSON.parse(rawCharges);
-        const filtered = (charges || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
-        if (filtered.length !== charges.length) {
-          removedCount += (charges.length - filtered.length);
-          localStorage.setItem(KEYS.CHARGES, JSON.stringify(filtered));
-        }
-      }
-
-      // 10. Commandes en Ligne
-      const rawCmds = localStorage.getItem(KEYS.COMMANDES_LIGNE);
-      if (rawCmds) {
-        const cmds: CommandeEnLigne[] = JSON.parse(rawCmds);
-        const filtered = (cmds || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
-        if (filtered.length !== cmds.length) {
-          removedCount += (cmds.length - filtered.length);
-          localStorage.setItem(KEYS.COMMANDES_LIGNE, JSON.stringify(filtered));
-        }
-      }
-
-      // 11. Caisses
-      const rawCaisses = localStorage.getItem(KEYS.CAISSES);
-      if (rawCaisses) {
-        const caisses: Caisse[] = JSON.parse(rawCaisses);
-        const filtered = (caisses || []).filter((c) => c && !DEMO_ETAB_IDS.includes(c.etablissement_id));
-        if (filtered.length !== caisses.length) {
-          removedCount += (caisses.length - filtered.length);
-          localStorage.setItem(KEYS.CAISSES, JSON.stringify(filtered));
-        }
-      }
-
-      // 12. Active Etab ID & Current User ID
-      const activeEtabId = localStorage.getItem(KEYS.ACTIVE_ETAB_ID);
-      if (activeEtabId && DEMO_ETAB_IDS.includes(activeEtabId)) {
-        localStorage.removeItem(KEYS.ACTIVE_ETAB_ID);
-        removedCount++;
-      }
-      const currentUserId = localStorage.getItem(KEYS.CURRENT_USER_ID);
-      if (currentUserId && DEMO_USER_IDS.includes(currentUserId)) {
-        localStorage.removeItem(KEYS.CURRENT_USER_ID);
-        removedCount++;
-      }
-
-      return { cleaned: removedCount > 0, removedCount };
-    } catch (e) {
-      console.error('[offlineDB] Erreur cleanLegacyDemoData:', e);
-      return { cleaned: false, removedCount: 0 };
-    }
+    return cleanLegacyDemoData();
   },
 
   isTrialExpired(etab: Etablissement): boolean {

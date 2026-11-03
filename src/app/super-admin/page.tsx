@@ -34,7 +34,7 @@ import {
   Trash2,
   User,
 } from 'lucide-react';
-import { offlineDB } from '@/lib/offlineDB';
+import { offlineDB, cleanLegacyDemoData } from '@/lib/offlineDB';
 import { fetchGlobalActivitesForSuperAdmin, saveActiviteToCloud, deleteActiviteFromCloud } from '@/lib/activitesSyncService';
 import {
   Etablissement,
@@ -143,7 +143,15 @@ export default function SuperAdminDashboardPage() {
 
   const loadAdminData = () => {
     try {
-      offlineDB.cleanLegacyDemoData();
+      try {
+        if (typeof cleanLegacyDemoData === 'function') {
+          cleanLegacyDemoData();
+        } else if (typeof offlineDB?.cleanLegacyDemoData === 'function') {
+          offlineDB.cleanLegacyDemoData();
+        }
+      } catch (errDemo) {
+        console.warn('[SuperAdmin] Nettoyage données démo ignoré:', errDemo);
+      }
       const etabs = offlineDB.getEtablissements();
       setEtablissements(etabs);
       setComptes(offlineDB.getComptesGlobal());
