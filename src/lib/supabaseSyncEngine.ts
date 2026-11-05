@@ -112,12 +112,28 @@ class SupabaseSyncEngine {
     this.isSyncingStatus = true;
     this.notify();
 
+    // Récupérer l'utilisateur actuellement authentifié dans Supabase Cloud
+    let currentAuthUserId: string | null = null;
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      currentAuthUserId = authData?.user?.id || null;
+    } catch (e) {
+      // Ignorer si hors-ligne
+    }
+
     const remainingQueue: SyncQueueItem[] = [];
 
     for (const item of queue) {
       try {
         let targetTable = item.table;
         let payload = { ...item.payload };
+
+        // Si l'utilisateur est authentifié, attacher son vrai UUID aux activités créées
+        if (currentAuthUserId && (targetTable === 'etablissements' || targetTable === 'activites')) {
+          if (!payload.proprietaire_id || payload.proprietaire_id.length !== 36) {
+            payload.proprietaire_id = currentAuthUserId;
+          }
+        }
 
         if (targetTable === 'articles') targetTable = 'produits';
         if (targetTable === 'commandes_en_ligne') targetTable = 'livraisons';

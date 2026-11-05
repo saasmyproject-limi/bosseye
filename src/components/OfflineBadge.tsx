@@ -40,7 +40,7 @@ export default function OfflineBadge() {
           onClick={handleManualSync}
           disabled={status.isSyncing || !status.isOnline}
           className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold hover:bg-amber-500/30 transition-all cursor-pointer disabled:opacity-50"
-          title="Cliquez pour forcer l'envoi vers Supabase Cloud"
+          title={status.lastError ? `Détail : ${status.lastError} (Cliquez pour réessayer)` : "Cliquez pour forcer l'envoi vers Supabase Cloud"}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${status.isSyncing ? 'animate-spin' : ''}`} />
           <span>{status.pendingCount} élément{status.pendingCount > 1 ? 's' : ''} en attente d'envoi</span>
