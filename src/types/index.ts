@@ -169,7 +169,7 @@ export interface Etablissement {
   plan: 'Basique' | 'Premium';
   statut_abonnement: StatutAbonnement;
   delai_grace_jours?: number; // Défaut 3-5 jours
-  date_fin_essai: string; // ISO String (7 jours pour œko)
+  date_fin_essai: string; // ISO String (30 jours pour la phase test)
   date_prochain_paiement: string; // ISO String
   tarif_mensuel: number; // 3000, 5000 ou 10000 FCFA
   palier_actuel_id?: string;

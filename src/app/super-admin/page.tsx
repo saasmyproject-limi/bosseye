@@ -51,7 +51,7 @@ function formatInscriptionDate(isoDate?: string, dateFinEssai?: string) {
   if (isoDate) {
     d = new Date(isoDate);
   } else if (dateFinEssai) {
-    d = new Date(new Date(dateFinEssai).getTime() - 7 * 24 * 3600 * 1000);
+    d = new Date(new Date(dateFinEssai).getTime() - 30 * 24 * 3600 * 1000);
   } else {
     d = new Date();
   }
@@ -83,7 +83,7 @@ function formatInscriptionDate(isoDate?: string, dateFinEssai?: string) {
 }
 
 function formatFinEssaiDate(dateFinEssai?: string) {
-  const d = dateFinEssai ? new Date(dateFinEssai) : new Date(Date.now() + 7 * 24 * 3600 * 1000);
+  const d = dateFinEssai ? new Date(dateFinEssai) : new Date(Date.now() + 30 * 24 * 3600 * 1000);
   return d.toLocaleDateString('fr-FR', {
     day: '2-digit',
     month: 'short',
@@ -743,7 +743,7 @@ export default function SuperAdminDashboardPage() {
                 <tr>
                   <th className="p-3.5">🏢 Boutique & Propriétaire</th>
                   <th className="p-3.5">📅 Date d'inscription</th>
-                  <th className="p-3.5">⏳ Fin d'essai (7 jours)</th>
+                  <th className="p-3.5">⏳ Fin d'essai (30 jours)</th>
                   <th className="p-3.5">💳 Statut de paiement</th>
                   <th className="p-3.5 text-center">🔒 Blocage & Actions Super-Admin</th>
                 </tr>
@@ -1685,7 +1685,7 @@ export default function SuperAdminDashboardPage() {
                     onChange={(e) => setNewStatutAbonnement(e.target.value as 'essai' | 'actif')}
                     className="w-full bg-white border border-[#E2D5C3] rounded-xl p-2.5 text-xs font-bold text-[#1B4332]"
                   >
-                    <option value="essai">Essai gratuit (7 jours)</option>
+                    <option value="essai">Essai gratuit (30 jours / 1 mois)</option>
                     <option value="actif">Actif (+30 jours)</option>
                   </select>
                 </div>

@@ -561,9 +561,9 @@ export const offlineDB = {
     const newId = (params as any).id || generateUUID();
     const act = params.type_activite;
     const tarif = params.tarif_mensuel || TARIFS_ABONNEMENT[act] || 5000;
-    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const TRIAL_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours (1 mois) pour la phase de test
     const nowIso = new Date().toISOString();
-    const endTrialIso = new Date(Date.now() + SEVEN_DAYS_MS).toISOString();
+    const endTrialIso = new Date(Date.now() + TRIAL_DAYS_MS).toISOString();
 
     const newEtab: Etablissement = {
       id: newId,

@@ -103,7 +103,7 @@ export default function BarSelectorModal({
               Création d'une nouvelle Boutique
             </h2>
             <p className="text-xs text-gray-600 font-semibold">
-              Configurez votre commerce. Essai gratuit de 7 jours inclus sans engagement.
+              Configurez votre commerce. Essai gratuit de 30 jours (1 mois) inclus sans engagement.
             </p>
           </div>
         </div>

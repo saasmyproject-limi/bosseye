@@ -61,9 +61,9 @@ export default function ActivityWelcomeModal({ etablissement, isOpen, onClose }:
               🎁
             </div>
             <div>
-              <h4 className="font-bold text-sm text-[#1B4332]">Essai Gratuit de 7 Jours Démarre</h4>
+              <h4 className="font-bold text-sm text-[#1B4332]">Essai Gratuit de 30 Jours (1 Mois) Démarre</h4>
               <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
-                Profitez de toutes les fonctionnalités premium sans engagement pendant 7 jours. Votre palier tarifaire (Essentiel, Standard ou Pro) sera automatiquement ajusté selon votre usage réel.
+                Profitez de toutes les fonctionnalités premium sans engagement pendant 30 jours. Votre palier tarifaire (Essentiel, Standard ou Pro) sera automatiquement ajusté selon votre usage réel.
               </p>
             </div>
           </div>
