@@ -107,7 +107,7 @@ export default function Sidebar() {
       icon: Truck,
     },
     {
-      name: 'Rayons & Articles',
+      name: 'Stock des articles',
       href: '/boutique/produits',
       icon: Package,
       badge: lowStockCount > 0 ? `${lowStockCount} bas` : null,
